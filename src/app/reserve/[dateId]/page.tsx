@@ -103,7 +103,7 @@ export default function ProductSelectionPage() {
       <div className="bg-white border-b border-stone-200 sticky top-0 z-10">
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center gap-3">
           <Link
-            href="/reserve"
+            href="/"
             className="text-stone-400 hover:text-stone-600 transition-colors"
           >
             <svg

@@ -95,44 +95,104 @@ export default async function EventTopPage() {
           </div>
         </div>
 
-        {/* Date Cards */}
+        {/* Date Selection - Click to Reserve */}
         {dates.length > 0 && (
           <div className="mb-6">
             <h2 className="text-sm font-bold text-stone-500 uppercase tracking-wider mb-3">
-              受取日一覧
+              受取日を選んで予約
             </h2>
-            <div className="grid grid-cols-2 gap-3">
+            <p className="text-xs text-stone-400 mb-4">
+              ご希望の受取日をタップすると、商品選択に進みます。
+            </p>
+            <div className="space-y-3">
               {dates.map((d) => {
                 const status = getStatusLabel(d.reservation_status);
-                return (
-                  <div
-                    key={d.id}
-                    className="bg-white rounded-xl border border-stone-200 p-3 flex items-center justify-between"
-                  >
-                    <span className="text-stone-800 font-semibold text-sm">
-                      {formatDate(d.pickup_date)}
-                    </span>
-                    <span
-                      className={`text-xs font-medium px-2 py-0.5 rounded-full ${status.color}`}
+                const isClickable =
+                  d.reservation_status === "open" ||
+                  d.reservation_status === "few_left";
+                const dayNum = new Date(d.pickup_date + "T00:00:00").getDate();
+
+                if (!isClickable) {
+                  return (
+                    <div
+                      key={d.id}
+                      className="w-full rounded-2xl border border-stone-200 bg-stone-100 p-4 opacity-60 cursor-not-allowed"
                     >
-                      {status.label}
-                    </span>
-                  </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-xl bg-stone-200 text-stone-400 flex items-center justify-center text-lg font-bold">
+                            {dayNum}
+                          </div>
+                          <div>
+                            <p className="font-bold text-base text-stone-400">
+                              {formatDate(d.pickup_date)}
+                            </p>
+                            <p className="text-xs text-stone-400 mt-0.5">受取日</p>
+                          </div>
+                        </div>
+                        <span
+                          className={`text-xs font-semibold px-3 py-1 rounded-full ${status.color}`}
+                        >
+                          {status.label}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <Link
+                    key={d.id}
+                    href={`/reserve/${d.id}`}
+                    className="block w-full rounded-2xl border border-stone-200 bg-white p-4 hover:border-amber-400 hover:shadow-md active:scale-[0.98] transition-all"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center text-lg font-bold">
+                          {dayNum}
+                        </div>
+                        <div>
+                          <p className="font-bold text-base text-stone-800">
+                            {formatDate(d.pickup_date)}
+                          </p>
+                          <p className="text-xs text-stone-400 mt-0.5">受取日</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-xs font-semibold px-3 py-1 rounded-full ${status.color}`}
+                        >
+                          {status.label}
+                        </span>
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-4 w-4 text-stone-300"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M9 5l7 7-7 7"
+                          />
+                        </svg>
+                      </div>
+                    </div>
+                  </Link>
                 );
               })}
             </div>
           </div>
         )}
 
-        {/* CTA */}
-        <div className="pb-10">
-          <Link
-            href="/reserve"
-            className="block w-full text-center bg-amber-700 hover:bg-amber-800 active:bg-amber-900 text-white font-bold py-4 rounded-2xl text-lg shadow-lg shadow-amber-700/20 transition-colors"
-          >
-            予約する
-          </Link>
-        </div>
+        {dates.length === 0 && (
+          <div className="text-center py-8 text-stone-400 mb-6">
+            <p className="text-4xl mb-3">&#128197;</p>
+            <p>予約可能な日程がまだありません</p>
+          </div>
+        )}
       </div>
     </main>
   );
