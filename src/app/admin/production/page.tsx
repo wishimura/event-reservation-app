@@ -116,9 +116,9 @@ export default function ProductionPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">製造指示</h2>
+          <h2 className="text-2xl font-bold text-slate-800">製造計画</h2>
           <p className="text-sm text-slate-500 mt-1">
-            日付ごとに何を何個作るか確認できます
+            予約状況に応じて、日付ごとの製造数を確認できます
           </p>
         </div>
         <div className="flex bg-slate-100 rounded-lg p-1">
@@ -148,6 +148,11 @@ export default function ProductionPage() {
       {viewMode === "all" ? (
         /* ===== All Dates Overview ===== */
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="px-5 py-3 border-b border-slate-100 bg-slate-50">
+            <p className="text-xs text-slate-500">
+              ※ 受注生産のため、<span className="font-medium text-slate-700">予約数 ＝ 製造数</span>です。受付上限はその日に受け付けられる最大数を示します。
+            </p>
+          </div>
           {allLoading ? (
             <div className="p-12 text-center text-slate-400">読み込み中...</div>
           ) : (
@@ -181,28 +186,36 @@ export default function ProductionPage() {
                         const inv = allInventories
                           .get(d.id)
                           ?.find((i) => i.product.id === p.id);
-                        const qty = inv?.production_quantity ?? 0;
                         const reserved = inv?.reserved_quantity ?? 0;
+                        const limit = inv?.production_quantity ?? 0;
                         return (
                           <td key={d.id} className="text-center px-3 py-3">
-                            <div className="text-slate-800 font-bold text-base">
-                              {qty}
+                            <div className={`font-bold text-base ${reserved > 0 ? "text-indigo-700" : "text-slate-300"}`}>
+                              {reserved}
                             </div>
-                            {reserved > 0 && (
-                              <div className="text-xs text-amber-600 mt-0.5">
-                                予約{reserved}
-                              </div>
-                            )}
+                            <div className="text-xs text-slate-400 mt-0.5">
+                              / {limit}
+                            </div>
                           </td>
                         );
                       })}
-                      <td className="text-center px-4 py-3 bg-indigo-50/50 font-bold text-indigo-700">
-                        {eventDates.reduce((sum, d) => {
-                          const inv = allInventories
-                            .get(d.id)
-                            ?.find((i) => i.product.id === p.id);
-                          return sum + (inv?.production_quantity ?? 0);
-                        }, 0)}
+                      <td className="text-center px-4 py-3 bg-indigo-50/50">
+                        <div className="font-bold text-indigo-700">
+                          {eventDates.reduce((sum, d) => {
+                            const inv = allInventories
+                              .get(d.id)
+                              ?.find((i) => i.product.id === p.id);
+                            return sum + (inv?.reserved_quantity ?? 0);
+                          }, 0)}
+                        </div>
+                        <div className="text-xs text-slate-400 mt-0.5">
+                          / {eventDates.reduce((sum, d) => {
+                            const inv = allInventories
+                              .get(d.id)
+                              ?.find((i) => i.product.id === p.id);
+                            return sum + (inv?.production_quantity ?? 0);
+                          }, 0)}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -213,29 +226,29 @@ export default function ProductionPage() {
                     </td>
                     {eventDates.map((d) => {
                       const invs = allInventories.get(d.id) || [];
-                      const total = invs.reduce(
-                        (s, i) => s + i.production_quantity,
-                        0
-                      );
                       const totalReserved = invs.reduce(
                         (s, i) => s + i.reserved_quantity,
                         0
                       );
+                      const totalLimit = invs.reduce(
+                        (s, i) => s + i.production_quantity,
+                        0
+                      );
                       return (
                         <td key={d.id} className="text-center px-3 py-3">
-                          <div className="text-slate-800">{total}</div>
-                          {totalReserved > 0 && (
-                            <div className="text-xs text-amber-600 mt-0.5">
-                              予約{totalReserved}
-                            </div>
-                          )}
+                          <div className={`${totalReserved > 0 ? "text-slate-800" : "text-slate-300"}`}>
+                            {totalReserved}
+                          </div>
+                          <div className="text-xs text-slate-400 mt-0.5">
+                            / {totalLimit}
+                          </div>
                         </td>
                       );
                     })}
                     <td className="text-center px-4 py-3 bg-indigo-50/50 text-indigo-700">
                       {eventDates.reduce((sum, d) => {
                         const invs = allInventories.get(d.id) || [];
-                        return sum + invs.reduce((s, i) => s + i.production_quantity, 0);
+                        return sum + invs.reduce((s, i) => s + i.reserved_quantity, 0);
                       }, 0)}
                     </td>
                   </tr>
@@ -243,6 +256,12 @@ export default function ProductionPage() {
               </table>
             </div>
           )}
+          {/* Legend */}
+          <div className="px-5 py-3 border-t border-slate-100 bg-slate-50 flex items-center gap-4 text-xs text-slate-500">
+            <span>表の見方：</span>
+            <span><span className="font-bold text-indigo-700">太字</span> ＝ 予約数（＝製造数）</span>
+            <span><span className="text-slate-400">/ 数字</span> ＝ 受付上限</span>
+          </div>
         </div>
       ) : (
         /* ===== Single Date Detail ===== */
@@ -267,6 +286,12 @@ export default function ProductionPage() {
             </div>
           </div>
 
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+            <p className="text-sm text-amber-800">
+              📋 受注生産のため、<span className="font-bold">予約数 ＝ その日の製造数</span>です。
+            </p>
+          </div>
+
           {/* Production Detail Cards */}
           <div className="space-y-4">
             {inventories.map((inv) => {
@@ -287,19 +312,21 @@ export default function ProductionPage() {
                         {formatPrice(inv.product.price)} / 個
                       </p>
                     </div>
-                    <div className="text-right">
-                      <div className="text-3xl font-bold text-indigo-600">
-                        {inv.production_quantity}
+                    {inv.reserved_quantity > 0 && (
+                      <div className="text-right">
+                        <div className="text-3xl font-bold text-indigo-600">
+                          {inv.reserved_quantity}
+                        </div>
+                        <div className="text-xs text-indigo-500">個 つくる</div>
                       </div>
-                      <div className="text-xs text-slate-400">製造数</div>
-                    </div>
+                    )}
                   </div>
 
                   {/* Progress bar */}
                   <div className="mb-3">
                     <div className="flex justify-between text-xs text-slate-500 mb-1">
-                      <span>予約済 {inv.reserved_quantity} 個</span>
-                      <span>残り {Math.max(0, remaining)} 個</span>
+                      <span>予約 {inv.reserved_quantity} / 上限 {inv.production_quantity}</span>
+                      <span>あと {Math.max(0, remaining)} 個受付可</span>
                     </div>
                     <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
                       <div
@@ -321,16 +348,16 @@ export default function ProductionPage() {
                   </div>
 
                   <div className="flex gap-4 text-sm">
-                    <div className="flex-1 bg-slate-50 rounded-lg p-3 text-center">
-                      <div className="text-xs text-slate-400 mb-1">製造予定</div>
-                      <div className="text-xl font-bold text-slate-800">
-                        {inv.production_quantity}
+                    <div className="flex-1 bg-indigo-50 rounded-lg p-3 text-center">
+                      <div className="text-xs text-indigo-500 mb-1">予約数（＝製造数）</div>
+                      <div className="text-xl font-bold text-indigo-700">
+                        {inv.reserved_quantity}
                       </div>
                     </div>
-                    <div className="flex-1 bg-amber-50 rounded-lg p-3 text-center">
-                      <div className="text-xs text-amber-600 mb-1">予約済</div>
-                      <div className="text-xl font-bold text-amber-700">
-                        {inv.reserved_quantity}
+                    <div className="flex-1 bg-slate-50 rounded-lg p-3 text-center">
+                      <div className="text-xs text-slate-400 mb-1">受付上限</div>
+                      <div className="text-xl font-bold text-slate-600">
+                        {inv.production_quantity}
                       </div>
                     </div>
                     <div
@@ -351,7 +378,7 @@ export default function ProductionPage() {
                             : "text-emerald-600"
                         }`}
                       >
-                        残り
+                        残り受付枠
                       </div>
                       <div
                         className={`text-xl font-bold ${
@@ -380,15 +407,15 @@ export default function ProductionPage() {
               <div className="grid grid-cols-3 gap-4">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-indigo-700">
-                    {inventories.reduce((s, i) => s + i.production_quantity, 0)}
-                  </div>
-                  <div className="text-xs text-indigo-500 mt-1">製造合計</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-amber-700">
                     {inventories.reduce((s, i) => s + i.reserved_quantity, 0)}
                   </div>
-                  <div className="text-xs text-amber-600 mt-1">予約合計</div>
+                  <div className="text-xs text-indigo-500 mt-1">製造数（＝予約数）</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-slate-600">
+                    {inventories.reduce((s, i) => s + i.production_quantity, 0)}
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">受付上限</div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-emerald-700">
@@ -399,7 +426,7 @@ export default function ProductionPage() {
                       0
                     )}
                   </div>
-                  <div className="text-xs text-emerald-600 mt-1">残り合計</div>
+                  <div className="text-xs text-emerald-600 mt-1">残り受付枠</div>
                 </div>
               </div>
             </div>

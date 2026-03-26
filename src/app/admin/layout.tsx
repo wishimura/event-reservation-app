@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 const navItems = [
   { href: "/admin", label: "ダッシュボード", icon: "📊" },
   { href: "/admin/inventory", label: "在庫管理", icon: "📦" },
-  { href: "/admin/production", label: "製造指示", icon: "🍳" },
+  { href: "/admin/production", label: "製造計画", icon: "🍳" },
   { href: "/admin/orders", label: "注文一覧", icon: "📋" },
   { href: "/admin/pickup", label: "受取管理", icon: "🛒" },
 ];

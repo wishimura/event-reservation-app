@@ -185,7 +185,7 @@ export default function AdminDashboard() {
               <div key={item.id} className="flex items-center justify-between text-sm">
                 <span className="text-amber-900">{item.product?.name}</span>
                 <span className="text-amber-700 font-medium">
-                  残り {getRemainingQuantity(item)} / {item.production_quantity}
+                  残り {getRemainingQuantity(item)} / 上限{item.production_quantity}
                 </span>
               </div>
             ))}
@@ -234,7 +234,7 @@ export default function AdminDashboard() {
           className="bg-indigo-600 text-white rounded-xl p-5 text-center hover:bg-indigo-700 transition-colors"
         >
           <p className="font-bold">在庫管理</p>
-          <p className="text-xs text-indigo-200 mt-1">製造数・在庫の設定</p>
+          <p className="text-xs text-indigo-200 mt-1">受付上限・在庫の設定</p>
         </Link>
         <Link
           href="/admin/orders"

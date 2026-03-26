@@ -245,7 +245,7 @@ export default function InventoryPage() {
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="text-left px-5 py-3 font-medium text-slate-500">商品名</th>
-                <th className="text-center px-5 py-3 font-medium text-slate-500 w-32">製造数</th>
+                <th className="text-center px-5 py-3 font-medium text-slate-500 w-32">受付上限</th>
                 <th className="text-center px-5 py-3 font-medium text-slate-500 w-24">予約数</th>
                 <th className="text-center px-5 py-3 font-medium text-slate-500 w-24">残り</th>
                 <th className="text-center px-5 py-3 font-medium text-slate-500 w-32">ステータス</th>
