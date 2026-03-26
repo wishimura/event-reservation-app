@@ -36,6 +36,8 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  const [csvDownloading, setCsvDownloading] = useState(false);
+
   // Filters
   const [filterDate, setFilterDate] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
@@ -102,6 +104,30 @@ export default function OrdersPage() {
     setFilteredOrders(result);
   }
 
+  async function handleCSVDownload() {
+    setCsvDownloading(true);
+    try {
+      const res = await fetch("/api/admin/orders/csv");
+      if (!res.ok) throw new Error("CSV download failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const now = new Date();
+      const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+      a.download = `orders_${dateStr}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("CSV download error:", err);
+      alert("CSVダウンロードに失敗しました");
+    } finally {
+      setCsvDownloading(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -114,7 +140,19 @@ export default function OrdersPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-slate-800">注文一覧</h2>
-        <span className="text-sm text-slate-500">{filteredOrders.length} 件</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-slate-500">{filteredOrders.length} 件</span>
+          <button
+            onClick={handleCSVDownload}
+            disabled={csvDownloading}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            {csvDownloading ? "ダウンロード中..." : "CSV一括ダウンロード"}
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
