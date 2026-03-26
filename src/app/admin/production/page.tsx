@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { formatDate, formatPrice } from "@/lib/utils";
-import type { EventDate, DailyProductInventory } from "@/lib/types";
+import type { EventDate, DailyProductInventory, Product } from "@/lib/types";
 
-interface InventoryWithProduct extends DailyProductInventory {
-  product: { id: string; name: string; price: number; sort_order: number };
-}
+type InventoryWithProduct = DailyProductInventory & {
+  product: Product;
+};
 
 export default function ProductionPage() {
   const [eventDates, setEventDates] = useState<EventDate[]>([]);
