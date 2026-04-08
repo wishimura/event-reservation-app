@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3927
+    },
+    {
+      "name": "mock-server",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "mock", "-l", "3928"],
+      "port": 3928
     }
   ]
 }

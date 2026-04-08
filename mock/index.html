@@ -3,931 +3,1003 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>設備マッチングサービス - HTMLモック</title>
+<title>SETSUBI CONNECT</title>
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
   :root {
-    --primary: #1a56db;
-    --primary-light: #e8eefb;
-    --danger: #dc2626;
-    --success: #16a34a;
-    --warning: #f59e0b;
-    --gray-50: #f9fafb;
-    --gray-100: #f3f4f6;
-    --gray-200: #e5e7eb;
-    --gray-300: #d1d5db;
-    --gray-400: #9ca3af;
-    --gray-500: #6b7280;
-    --gray-600: #4b5563;
-    --gray-700: #374151;
-    --gray-800: #1f2937;
-    --gray-900: #111827;
-    --radius: 8px;
+    --bg: #0b0f1a;
+    --bg-card: #111827;
+    --bg-card-hover: #1a2332;
+    --bg-surface: #151d2e;
+    --bg-input: #1a2332;
+    --border: #1e293b;
+    --border-light: #293548;
+    --text: #e2e8f0;
+    --text-dim: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #6366f1;
+    --accent-light: #818cf8;
+    --accent-glow: rgba(99,102,241,.15);
+    --accent-glow2: rgba(99,102,241,.08);
+    --green: #22c55e;
+    --green-dim: rgba(34,197,94,.12);
+    --red: #ef4444;
+    --red-dim: rgba(239,68,68,.12);
+    --amber: #f59e0b;
+    --amber-dim: rgba(245,158,11,.12);
+    --blue: #3b82f6;
+    --blue-dim: rgba(59,130,246,.12);
+    --cyan: #06b6d4;
+    --radius: 10px;
+    --radius-lg: 14px;
+    --shadow: 0 4px 24px rgba(0,0,0,.3);
+    --shadow-sm: 0 2px 8px rgba(0,0,0,.2);
+    --sidebar-w: 230px;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, 'Hiragino Sans', 'Meiryo', sans-serif; background: var(--gray-100); color: var(--gray-800); font-size: 14px; }
+  body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
 
-  /* Nav */
-  .top-nav { background: var(--gray-900); color: #fff; padding: 0 24px; display: flex; align-items: center; height: 56px; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
-  .top-nav h1 { font-size: 16px; font-weight: 700; letter-spacing: .5px; }
-  .top-nav .nav-links { display: flex; gap: 8px; }
-  .top-nav .nav-links button { background: transparent; border: 1px solid var(--gray-600); color: #fff; padding: 6px 14px; border-radius: var(--radius); cursor: pointer; font-size: 13px; transition: .15s; }
-  .top-nav .nav-links button:hover, .top-nav .nav-links button.active { background: var(--primary); border-color: var(--primary); }
-
-  /* Screen selector */
-  .screen-selector { background: #fff; border-bottom: 1px solid var(--gray-200); padding: 12px 24px; display: flex; gap: 8px; flex-wrap: wrap; }
-  .screen-selector button { background: var(--gray-100); border: 1px solid var(--gray-200); padding: 8px 16px; border-radius: 20px; cursor: pointer; font-size: 13px; transition: .15s; }
-  .screen-selector button:hover { border-color: var(--primary); color: var(--primary); }
-  .screen-selector button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
-
-  /* Layout */
-  .screen { display: none; padding: 24px; max-width: 1200px; margin: 0 auto; }
-  .screen.active { display: block; }
-  .card { background: #fff; border-radius: var(--radius); border: 1px solid var(--gray-200); padding: 24px; margin-bottom: 20px; }
-  .card h2 { font-size: 18px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--gray-200); }
-  .card h3 { font-size: 15px; margin-bottom: 12px; color: var(--gray-700); }
-
-  /* Form */
-  .form-group { margin-bottom: 16px; }
-  .form-group label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 13px; color: var(--gray-700); }
-  .form-group label .req { color: var(--danger); margin-left: 4px; font-size: 11px; }
-  .form-group input, .form-group select, .form-group textarea {
-    width: 100%; padding: 10px 12px; border: 1px solid var(--gray-300); border-radius: var(--radius); font-size: 14px; outline: none;
+  /* ── Top Nav ── */
+  .top-nav {
+    background: rgba(11,15,26,.92); backdrop-filter: blur(20px) saturate(180%);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px; display: flex; align-items: center; height: 56px;
+    justify-content: space-between; position: fixed; top: 0; left: 0; right: 0; z-index: 200;
   }
-  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,86,219,.1); }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-icon { width: 30px; height: 30px; background: linear-gradient(135deg, var(--accent), var(--cyan)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12px; color: #fff; }
+  .logo span { font-size: 14px; font-weight: 700; letter-spacing: 1.5px; background: linear-gradient(135deg, #e2e8f0, #94a3b8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .nav-links { display: flex; gap: 4px; background: var(--bg-surface); border-radius: var(--radius); padding: 3px; }
+  .nav-links button {
+    background: transparent; border: none; color: var(--text-dim); padding: 7px 16px;
+    border-radius: 7px; cursor: pointer; font-size: 12px; font-weight: 500;
+    transition: all .2s; font-family: inherit;
+  }
+  .nav-links button:hover { color: var(--text); background: var(--bg-card); }
+  .nav-links button.active { color: #fff; background: var(--accent); box-shadow: 0 2px 12px rgba(99,102,241,.3); }
+
+  /* ── Sidebar + Main Layout ── */
+  .app-layout { display: flex; padding-top: 56px; min-height: 100vh; }
+  .sidebar {
+    width: var(--sidebar-w); min-width: var(--sidebar-w); background: var(--bg-card);
+    border-right: 1px solid var(--border); position: fixed; top: 56px; bottom: 0; left: 0;
+    overflow-y: auto; z-index: 100; padding: 16px 0;
+  }
+  .sidebar .section-title {
+    padding: 18px 20px 6px; font-size: 10px; font-weight: 700;
+    color: var(--text-muted); text-transform: uppercase; letter-spacing: 1.5px;
+  }
+  .sidebar a {
+    display: flex; align-items: center; gap: 10px; padding: 10px 20px;
+    color: var(--text-muted); text-decoration: none; font-size: 13px;
+    transition: all .15s; cursor: pointer; font-weight: 500; border-left: 3px solid transparent;
+  }
+  .sidebar a:hover { background: var(--bg-surface); color: var(--text); }
+  .sidebar a.active { color: var(--accent-light); background: var(--accent-glow); border-left-color: var(--accent); font-weight: 600; }
+  .sidebar .nav-icon { font-size: 16px; width: 22px; text-align: center; }
+  .main { flex: 1; margin-left: var(--sidebar-w); padding: 28px; overflow-y: auto; }
+
+  /* ── Cards & UI ── */
+  .card {
+    background: var(--bg-card); border-radius: var(--radius-lg);
+    border: 1px solid var(--border); padding: 24px; margin-bottom: 20px;
+    box-shadow: var(--shadow-sm);
+  }
+  .card h2 { font-size: 16px; font-weight: 700; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border); color: var(--text); }
+  .card h3 { font-size: 14px; font-weight: 600; margin-bottom: 14px; color: var(--text-dim); }
+
+  /* ── Form ── */
+  .form-group { margin-bottom: 18px; }
+  .form-group label { display: block; font-weight: 600; margin-bottom: 7px; font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .5px; }
+  .form-group label .req { color: var(--red); margin-left: 4px; font-size: 10px; }
+  .form-group input, .form-group select, .form-group textarea {
+    width: 100%; padding: 11px 14px; border: 1px solid var(--border);
+    border-radius: var(--radius); font-size: 14px; outline: none;
+    background: var(--bg-input); color: var(--text); font-family: inherit; transition: all .2s;
+  }
+  .form-group input::placeholder, .form-group textarea::placeholder { color: var(--text-muted); }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+  .form-group select { cursor: pointer; }
+  .form-group select option { background: var(--bg-card); }
   .form-group textarea { min-height: 80px; resize: vertical; }
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
-  .checkbox-group { display: flex; flex-wrap: wrap; gap: 12px; }
-  .checkbox-group label { display: flex; align-items: center; gap: 6px; font-weight: 400; cursor: pointer; padding: 6px 12px; border: 1px solid var(--gray-200); border-radius: var(--radius); }
-  .checkbox-group label:has(input:checked) { background: var(--primary-light); border-color: var(--primary); }
+  .checkbox-group { display: flex; flex-wrap: wrap; gap: 10px; }
+  .checkbox-group label { display: flex; align-items: center; gap: 7px; font-weight: 400; cursor: pointer; padding: 7px 14px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; color: var(--text-dim); transition: all .2s; text-transform: none; letter-spacing: 0; }
+  .checkbox-group label:hover { border-color: var(--accent); }
+  .checkbox-group label:has(input:checked) { background: var(--accent-glow); border-color: var(--accent); color: var(--accent-light); }
+  .checkbox-group input[type="checkbox"] { width: auto; accent-color: var(--accent); }
 
-  /* Buttons */
-  .btn { padding: 10px 20px; border: none; border-radius: var(--radius); cursor: pointer; font-size: 14px; font-weight: 600; transition: .15s; display: inline-flex; align-items: center; gap: 6px; }
-  .btn-primary { background: var(--primary); color: #fff; }
-  .btn-primary:hover { background: #1648b5; }
-  .btn-success { background: var(--success); color: #fff; }
-  .btn-danger { background: var(--danger); color: #fff; }
-  .btn-outline { background: #fff; border: 1px solid var(--gray-300); color: var(--gray-700); }
-  .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
-  .btn-sm { padding: 6px 12px; font-size: 12px; }
-  .btn-group { display: flex; gap: 8px; margin-top: 16px; }
+  /* ── Buttons ── */
+  .btn { padding: 10px 22px; border: none; border-radius: var(--radius); cursor: pointer; font-size: 13px; font-weight: 600; transition: all .2s; display: inline-flex; align-items: center; gap: 7px; font-family: inherit; }
+  .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 2px 12px rgba(99,102,241,.25); }
+  .btn-primary:hover { background: var(--accent-light); transform: translateY(-1px); }
+  .btn-success { background: var(--green); color: #fff; box-shadow: 0 2px 12px rgba(34,197,94,.25); }
+  .btn-success:hover { transform: translateY(-1px); }
+  .btn-danger { background: var(--red); color: #fff; }
+  .btn-warning { background: var(--amber); color: #fff; }
+  .btn-outline { background: transparent; border: 1px solid var(--border-light); color: var(--text-dim); }
+  .btn-outline:hover { border-color: var(--accent); color: var(--accent-light); background: var(--accent-glow2); }
+  .btn-sm { padding: 6px 14px; font-size: 12px; }
+  .btn-lg { padding: 16px 32px; font-size: 15px; border-radius: var(--radius-lg); }
+  .btn-group { display: flex; gap: 10px; margin-top: 20px; }
+  .btn-block { width: 100%; justify-content: center; }
 
-  /* Table */
+  /* ── Table ── */
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { background: var(--gray-50); text-align: left; padding: 10px 12px; font-weight: 600; border-bottom: 2px solid var(--gray-200); white-space: nowrap; }
-  td { padding: 10px 12px; border-bottom: 1px solid var(--gray-100); }
-  tr:hover td { background: var(--gray-50); }
+  th { background: var(--bg-surface); text-align: left; padding: 12px 14px; font-weight: 600; border-bottom: 1px solid var(--border); white-space: nowrap; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .8px; }
+  td { padding: 14px; border-bottom: 1px solid var(--border); color: var(--text-dim); }
+  tr { transition: background .15s; }
+  tr:hover td { background: var(--bg-card-hover); }
+  .link { color: var(--accent-light); cursor: pointer; text-decoration: none; font-weight: 500; }
+  .link:hover { text-decoration: underline; }
 
-  /* Badge */
-  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-  .badge-pending { background: #fef3c7; color: #92400e; }
-  .badge-approved { background: #d1fae5; color: #065f46; }
-  .badge-rejected { background: #fee2e2; color: #991b1b; }
-  .badge-new { background: #dbeafe; color: #1e40af; }
-  .badge-inprogress { background: #e0e7ff; color: #3730a3; }
-  .badge-ordered { background: #d1fae5; color: #065f46; }
-  .badge-cancelled { background: var(--gray-200); color: var(--gray-600); }
+  /* ── Badge ── */
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; letter-spacing: .3px; }
+  .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; }
+  .badge-pending { background: var(--amber-dim); color: var(--amber); }
+  .badge-pending::before { background: var(--amber); }
+  .badge-approved { background: var(--green-dim); color: var(--green); }
+  .badge-approved::before { background: var(--green); }
+  .badge-rejected { background: var(--red-dim); color: var(--red); }
+  .badge-rejected::before { background: var(--red); }
+  .badge-new { background: var(--blue-dim); color: var(--blue); }
+  .badge-new::before { background: var(--blue); }
+  .badge-inprogress { background: var(--accent-glow); color: var(--accent-light); }
+  .badge-inprogress::before { background: var(--accent-light); }
+  .badge-ordered { background: var(--green-dim); color: var(--green); }
+  .badge-ordered::before { background: var(--green); }
 
-  /* Chat */
-  .chat-container { display: flex; flex-direction: column; height: 400px; border: 1px solid var(--gray-200); border-radius: var(--radius); overflow: hidden; }
-  .chat-header { background: var(--gray-50); padding: 12px 16px; border-bottom: 1px solid var(--gray-200); font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
-  .chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-  .chat-msg { max-width: 70%; padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.5; }
-  .chat-msg.mine { background: var(--primary); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
-  .chat-msg.theirs { background: var(--gray-100); align-self: flex-start; border-bottom-left-radius: 4px; }
-  .chat-msg .meta { font-size: 11px; opacity: .7; margin-top: 4px; }
-  .chat-input { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--gray-200); background: #fff; }
-  .chat-input input { flex: 1; }
+  /* ── Chat ── */
+  .chat-container { display: flex; flex-direction: column; height: 420px; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+  .chat-header { background: var(--bg-surface); padding: 14px 18px; border-bottom: 1px solid var(--border); font-weight: 600; display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+  .chat-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; background: var(--bg); }
+  .chat-msg { max-width: 72%; padding: 12px 16px; border-radius: 14px; font-size: 13px; line-height: 1.6; }
+  .chat-msg.mine { background: linear-gradient(135deg, var(--accent), #4f46e5); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; box-shadow: 0 2px 12px rgba(99,102,241,.2); }
+  .chat-msg.theirs { background: var(--bg-surface); color: var(--text); align-self: flex-start; border-bottom-left-radius: 4px; border: 1px solid var(--border); }
+  .chat-msg .meta { font-size: 11px; opacity: .5; margin-top: 6px; }
+  .chat-input { display: flex; gap: 8px; padding: 14px; border-top: 1px solid var(--border); background: var(--bg-card); }
+  .chat-input input { flex: 1; background: var(--bg-input); border: 1px solid var(--border); color: var(--text); padding: 10px 14px; border-radius: var(--radius); font-family: inherit; outline: none; }
+  .chat-input input:focus { border-color: var(--accent); }
 
-  /* Stats */
-  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
-  .stat-card { background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius); padding: 20px; }
-  .stat-card .stat-label { font-size: 12px; color: var(--gray-500); margin-bottom: 4px; }
-  .stat-card .stat-value { font-size: 28px; font-weight: 700; }
-  .stat-card .stat-sub { font-size: 12px; color: var(--gray-400); margin-top: 2px; }
+  /* ── Stats ── */
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 22px; position: relative; overflow: hidden; transition: all .2s; }
+  .stat-card:hover { border-color: var(--border-light); transform: translateY(-2px); box-shadow: var(--shadow); }
+  .stat-card::after { content: ''; position: absolute; top: 0; right: 0; width: 80px; height: 80px; border-radius: 50%; filter: blur(40px); opacity: .15; }
+  .stat-card:nth-child(1)::after { background: var(--accent); }
+  .stat-card:nth-child(2)::after { background: var(--amber); }
+  .stat-card:nth-child(3)::after { background: var(--green); }
+  .stat-card:nth-child(4)::after { background: var(--blue); }
+  .stat-card .stat-label { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+  .stat-card .stat-value { font-size: 32px; font-weight: 800; letter-spacing: -1px; }
+  .stat-card .stat-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
 
-  /* Sidebar layout */
-  .sidebar-layout { display: grid; grid-template-columns: 220px 1fr; min-height: calc(100vh - 56px); }
-  .sidebar { background: #fff; border-right: 1px solid var(--gray-200); padding: 16px 0; }
-  .sidebar a { display: flex; align-items: center; gap: 10px; padding: 10px 20px; color: var(--gray-600); text-decoration: none; font-size: 13px; transition: .1s; cursor: pointer; }
-  .sidebar a:hover { background: var(--gray-50); color: var(--gray-900); }
-  .sidebar a.active { background: var(--primary-light); color: var(--primary); font-weight: 600; border-right: 3px solid var(--primary); }
-  .sidebar .section-title { padding: 20px 20px 8px; font-size: 11px; font-weight: 700; color: var(--gray-400); text-transform: uppercase; letter-spacing: 1px; }
-  .main-content { padding: 24px; overflow-y: auto; }
+  /* ── Detail ── */
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; }
+  .detail-item { margin-bottom: 14px; }
+  .detail-item dt { font-size: 11px; color: var(--text-muted); margin-bottom: 3px; text-transform: uppercase; letter-spacing: .5px; font-weight: 600; }
+  .detail-item dd { font-size: 14px; font-weight: 500; color: var(--text); }
 
-  /* Detail */
-  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .detail-item { margin-bottom: 12px; }
-  .detail-item dt { font-size: 12px; color: var(--gray-500); margin-bottom: 2px; }
-  .detail-item dd { font-size: 14px; font-weight: 500; }
-
-  /* Misc */
-  .empty-state { text-align: center; padding: 48px; color: var(--gray-400); }
-  .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-  .page-header h2 { font-size: 20px; margin: 0; border: none; padding: 0; }
-  .search-bar { display: flex; gap: 8px; margin-bottom: 16px; }
+  /* ── Misc ── */
+  .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+  .page-header h2 { font-size: 20px; margin: 0; border: none; padding: 0; font-weight: 700; }
+  .search-bar { display: flex; gap: 8px; margin-bottom: 18px; }
+  .search-bar input, .search-bar select { background: var(--bg-input); border: 1px solid var(--border); color: var(--text); padding: 10px 14px; border-radius: var(--radius); font-family: inherit; outline: none; }
   .search-bar input { flex: 1; }
-  .tab-bar { display: flex; gap: 0; border-bottom: 2px solid var(--gray-200); margin-bottom: 20px; }
-  .tab-bar button { background: none; border: none; padding: 10px 20px; cursor: pointer; font-size: 14px; color: var(--gray-500); border-bottom: 2px solid transparent; margin-bottom: -2px; }
-  .tab-bar button.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
-  .alert { padding: 12px 16px; border-radius: var(--radius); margin-bottom: 16px; font-size: 13px; }
-  .alert-info { background: #dbeafe; color: #1e40af; }
-  .alert-warning { background: #fef3c7; color: #92400e; }
-  .flow-diagram { background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: var(--radius); padding: 24px; margin-bottom: 20px; }
-  .flow-step { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: #fff; border: 1px solid var(--gray-300); border-radius: var(--radius); font-size: 13px; }
-  .flow-arrow { margin: 0 8px; color: var(--gray-400); }
-
-  @media (max-width: 768px) {
-    .form-row, .form-row-3, .stats-grid, .detail-grid { grid-template-columns: 1fr; }
-    .sidebar-layout { grid-template-columns: 1fr; }
-    .sidebar { display: none; }
-  }
+  .search-bar input:focus { border-color: var(--accent); }
+  .tab-bar { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+  .tab-bar button { background: none; border: none; padding: 12px 22px; cursor: pointer; font-size: 13px; color: var(--text-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; font-family: inherit; font-weight: 500; transition: all .2s; }
+  .tab-bar button:hover { color: var(--text); }
+  .tab-bar button.active { color: var(--accent-light); border-bottom-color: var(--accent); font-weight: 600; }
+  .alert { padding: 14px 18px; border-radius: var(--radius); margin-bottom: 18px; font-size: 13px; display: flex; align-items: center; gap: 10px; }
+  .alert-icon { font-size: 14px; font-weight: 800; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; border-radius: 50%; flex-shrink: 0; font-size: 12px; }
+  .alert-info { background: rgba(59,130,246,.08); color: var(--blue); border: 1px solid rgba(59,130,246,.15); }
+  .alert-info .alert-icon { background: rgba(59,130,246,.15); }
+  .alert-warning { background: rgba(245,158,11,.08); color: var(--amber); border: 1px solid rgba(245,158,11,.15); }
+  .alert-warning .alert-icon { background: rgba(245,158,11,.15); }
+  .breadcrumb { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; display: flex; align-items: center; gap: 6px; }
+  .breadcrumb a { color: var(--text-muted); text-decoration: none; cursor: pointer; }
+  .breadcrumb a:hover { color: var(--accent-light); }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .screen { display: none; }
+  .screen.active { display: block; }
+  .role-section { display: none; }
+  .role-section.active { display: flex; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+  @media (max-width: 768px) { .form-row, .form-row-3, .stats-grid, .detail-grid, .two-col { grid-template-columns: 1fr; } .sidebar { display: none; } .main { margin-left: 0; } }
 </style>
 </head>
 <body>
 
+<!-- ── Top Nav ── -->
 <div class="top-nav">
-  <h1>設備マッチング</h1>
+  <div class="logo"><div class="logo-icon">SC</div><span>SETSUBI CONNECT</span></div>
   <div class="nav-links">
-    <button class="active" onclick="switchRole('overview')">要件概要</button>
-    <button onclick="switchRole('equipment')">設備会社</button>
-    <button onclick="switchRole('property')">物件管理会社</button>
+    <button class="active" onclick="switchRole('eq')">設備会社</button>
+    <button onclick="switchRole('pm')">物件管理会社</button>
     <button onclick="switchRole('admin')">運営管理</button>
   </div>
 </div>
 
 <!-- ============================================ -->
-<!-- 要件概要 -->
+<!-- 設備会社 -->
 <!-- ============================================ -->
-<div id="role-overview" class="role-section" style="display:block;">
-  <div style="max-width: 960px; margin: 0 auto; padding: 24px;">
+<div id="role-eq" class="app-layout role-section active">
+  <div class="sidebar" id="sidebar-eq">
+    <div class="section-title">メイン</div>
+    <a class="active" onclick="nav('eq','eq-dashboard')"><span class="nav-icon">📊</span>ダッシュボード</a>
+    <div class="section-title">案件管理</div>
+    <a onclick="nav('eq','eq-cases')"><span class="nav-icon">📋</span>紹介案件一覧</a>
+    <div class="section-title">アカウント</div>
+    <a onclick="nav('eq','eq-register')"><span class="nav-icon">📝</span>会員登録</a>
+  </div>
+  <div class="main">
 
-    <div class="card">
-      <h2>サービス概要</h2>
-      <p style="color: var(--gray-600); line-height: 1.8; margin-bottom: 16px;">
-        設備会社と物件管理会社をつなぐマッチングプラットフォーム。<br>
-        一般的な一括見積もり型マッチングとは異なり、<strong>運営者が審査・仲介</strong>することで質の高いマッチングを実現する。<br>
-        物件管理会社は「案件」単位ではなく<strong>「建物」単位</strong>で情報を登録し、将来の案件予測・定期メンテ営業に活用できる。
-      </p>
-      <div class="flow-diagram">
-        <span class="flow-step">設備会社登録</span><span class="flow-arrow">→</span>
-        <span class="flow-step">審査</span><span class="flow-arrow">→</span>
-        <span class="flow-step">管理会社が建物・案件登録</span><span class="flow-arrow">→</span>
-        <span class="flow-step">運営者がマッチング</span><span class="flow-arrow">→</span>
-        <span class="flow-step">設備会社に案件紹介</span><span class="flow-arrow">→</span>
-        <span class="flow-step">チャットでやりとり</span><span class="flow-arrow">→</span>
-        <span class="flow-step">発注確定</span>
-      </div>
-    </div>
-
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-      <div class="card">
-        <h2>1stフェーズ機能</h2>
-        <h3>設備会社側</h3>
-        <ul style="list-style: none; line-height: 2;">
-          <li>- 会員登録フォーム（審査用の詳細情報）</li>
-          <li>- 紹介された案件の閲覧</li>
-          <li>- チャット（管理会社と1:1）</li>
-          <li>- 発注確定の受け取り</li>
-        </ul>
-        <h3 style="margin-top: 16px;">物件管理会社側</h3>
-        <ul style="list-style: none; line-height: 2;">
-          <li>- 会員登録フォーム（審査あり）</li>
-          <li>- 建物情報の登録・管理</li>
-          <li>- 案件の新規登録（建物に紐づく）</li>
-          <li>- チャット（設備会社と1:1）</li>
-          <li>- 発注ボタン</li>
-          <li>- 過去発注先への再依頼</li>
-        </ul>
-        <h3 style="margin-top: 16px;">運営者側</h3>
-        <ul style="list-style: none; line-height: 2;">
-          <li>- 設備会社の審査・管理</li>
-          <li>- 管理会社の審査・管理</li>
-          <li>- 案件と設備会社のマッチング（紹介）</li>
-          <li>- 受注一覧・CSVダウンロード</li>
-        </ul>
+    <!-- 設備：ダッシュボード -->
+    <div id="eq-dashboard" class="screen active">
+      <div class="page-header"><h2>ダッシュボード</h2></div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">紹介案件</div><div class="stat-value" style="color:var(--accent-light)">5</div><div class="stat-sub">今月: 2件</div></div>
+        <div class="stat-card"><div class="stat-label">商談中</div><div class="stat-value" style="color:var(--amber)">2</div></div>
+        <div class="stat-card"><div class="stat-label">受注確定</div><div class="stat-value" style="color:var(--green)">3</div></div>
+        <div class="stat-card"><div class="stat-label">未読メッセージ</div><div class="stat-value" style="color:var(--blue)">1</div></div>
       </div>
       <div class="card">
-        <h2>2ndフェーズ機能（将来）</h2>
-        <ul style="list-style: none; line-height: 2;">
-          <li>- プラットフォーム上での見積もりやりとり</li>
-          <li>- 成約時のフィー徴収</li>
-          <li>- 建物データからの案件予測</li>
-          <li>- 定期メンテナンスのリマインド</li>
-        </ul>
-        <h3 style="margin-top: 24px;">ビジネスモデル</h3>
-        <table style="margin-top: 8px;">
-          <tr><td style="font-weight: 600;">収益</td><td>案件成立時のフィー</td></tr>
-          <tr><td style="font-weight: 600;">請求</td><td>システム外</td></tr>
-          <tr><td style="font-weight: 600;">キャンセル</td><td>要相談</td></tr>
-        </table>
-        <h3 style="margin-top: 24px;">費用・スケジュール</h3>
-        <table style="margin-top: 8px;">
-          <tr><td style="font-weight: 600;">初期開発</td><td>300〜400万円</td></tr>
-          <tr><td style="font-weight: 600;">ランニング</td><td>月6万円〜（税抜）+ ツール費用</td></tr>
-          <tr><td style="font-weight: 600;">納期</td><td>3ヶ月</td></tr>
-        </table>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>ポイント：一般マッチングとの差別化</h2>
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
-        <div>
-          <h3 style="color: var(--danger);">一般的なマッチングサービス</h3>
-          <ul style="list-style: none; line-height: 2; color: var(--gray-600);">
-            <li>- 誰でも登録可能</li>
-            <li>- 一括見積もりで複数社に自動送信</li>
-            <li>- 価格競争になりがち</li>
-            <li>- 設備会社の質にばらつき</li>
-          </ul>
-        </div>
-        <div>
-          <h3 style="color: var(--success);">本サービス</h3>
-          <ul style="list-style: none; line-height: 2; color: var(--gray-600);">
-            <li>- <strong>設備会社を審査</strong>（質を担保）</li>
-            <li>- <strong>運営者が手動で紹介</strong>（最適なマッチング）</li>
-            <li>- 設備会社一覧は非公開（直接営業不可）</li>
-            <li>- <strong>建物ベース</strong>の管理（将来の案件予測）</li>
-            <li>- 1:1チャットで丁寧なやりとり</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-
-  </div>
-</div>
-
-<!-- ============================================ -->
-<!-- 設備会社側 -->
-<!-- ============================================ -->
-<div id="role-equipment" class="role-section" style="display:none;">
-  <div class="screen-selector" id="eq-screens">
-    <button class="active" onclick="showScreen('eq', 'eq-register')">会員登録</button>
-    <button onclick="showScreen('eq', 'eq-dashboard')">ダッシュボード</button>
-    <button onclick="showScreen('eq', 'eq-cases')">紹介案件一覧</button>
-    <button onclick="showScreen('eq', 'eq-case-detail')">案件詳細・チャット</button>
-  </div>
-
-  <!-- 設備会社：会員登録 -->
-  <div id="eq-register" class="screen active">
-    <div class="card" style="max-width: 800px; margin: 0 auto;">
-      <h2>設備会社 会員登録（審査申請）</h2>
-      <div class="alert alert-info">ご登録後、運営事務局にて審査を行います。審査通過後にログイン可能となります。</div>
-
-      <h3>基本情報</h3>
-      <div class="form-row">
-        <div class="form-group"><label>会社名（正式名称）<span class="req">必須</span></label><input placeholder="株式会社○○設備"></div>
-        <div class="form-group"><label>会社名（カナ）<span class="req">必須</span></label><input placeholder="カブシキガイシャ○○セツビ"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label>代表者名<span class="req">必須</span></label><input placeholder="山田 太郎"></div>
-        <div class="form-group"><label>設立年月<span class="req">必須</span></label><input type="month"></div>
-      </div>
-      <div class="form-group"><label>本社所在地<span class="req">必須</span></label><input placeholder="東京都渋谷区○○1-2-3 ○○ビル5F"></div>
-      <div class="form-row">
-        <div class="form-group"><label>電話番号<span class="req">必須</span></label><input placeholder="03-1234-5678"></div>
-        <div class="form-group"><label>FAX番号</label><input placeholder="03-1234-5679"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label>メールアドレス<span class="req">必須</span></label><input type="email" placeholder="info@example.co.jp"></div>
-        <div class="form-group"><label>ホームページURL</label><input placeholder="https://example.co.jp"></div>
-      </div>
-
-      <h3 style="margin-top: 24px;">担当者情報</h3>
-      <div class="form-row">
-        <div class="form-group"><label>担当者名<span class="req">必須</span></label><input placeholder="鈴木 一郎"></div>
-        <div class="form-group"><label>担当者メール<span class="req">必須</span></label><input type="email" placeholder="suzuki@example.co.jp"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label>担当者電話番号<span class="req">必須</span></label><input placeholder="090-1234-5678"></div>
-        <div class="form-group"><label>担当者役職</label><input placeholder="営業部長"></div>
-      </div>
-
-      <h3 style="margin-top: 24px;">事業情報（審査用）</h3>
-      <div class="form-row">
-        <div class="form-group"><label>資本金<span class="req">必須</span></label><input placeholder="1,000万円"></div>
-        <div class="form-group"><label>従業員数<span class="req">必須</span></label><input type="number" placeholder="50"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label>年間売上高<span class="req">必須</span></label><input placeholder="5億円"></div>
-        <div class="form-group"><label>建設業許可番号<span class="req">必須</span></label><input placeholder="東京都知事許可 第○○○○号"></div>
-      </div>
-
-      <div class="form-group">
-        <label>対応可能な設備分野<span class="req">必須</span></label>
-        <div class="checkbox-group">
-          <label><input type="checkbox"> 空調設備</label>
-          <label><input type="checkbox"> 給排水設備</label>
-          <label><input type="checkbox"> 電気設備</label>
-          <label><input type="checkbox"> 消防設備</label>
-          <label><input type="checkbox"> エレベーター</label>
-          <label><input type="checkbox"> 建築全般</label>
-          <label><input type="checkbox"> 防犯・セキュリティ</label>
-          <label><input type="checkbox"> 通信設備</label>
-        </div>
-      </div>
-      <div class="form-group">
-        <label>対応可能エリア<span class="req">必須</span></label>
-        <div class="checkbox-group">
-          <label><input type="checkbox"> 東京23区</label>
-          <label><input type="checkbox"> 東京都下</label>
-          <label><input type="checkbox"> 神奈川県</label>
-          <label><input type="checkbox"> 千葉県</label>
-          <label><input type="checkbox"> 埼玉県</label>
-          <label><input type="checkbox"> その他関東</label>
-          <label><input type="checkbox"> 全国対応可</label>
-        </div>
-      </div>
-      <div class="form-group"><label>保有資格（複数可）</label><textarea placeholder="管工事施工管理技士 1級: ○名&#10;電気工事施工管理技士 1級: ○名&#10;消防設備士: ○名"></textarea></div>
-      <div class="form-group"><label>主な実績・施工事例<span class="req">必須</span></label><textarea placeholder="過去の主要な施工実績を記載してください。&#10;例）○○ビル 空調設備更新工事（2024年）"></textarea></div>
-      <div class="form-group"><label>損害賠償保険の加入状況<span class="req">必須</span></label>
-        <select><option>選択してください</option><option>加入済み</option><option>未加入</option></select>
-      </div>
-      <div class="form-group"><label>会社パンフレット・資料（PDF）</label><input type="file" accept=".pdf"></div>
-
-      <h3 style="margin-top: 24px;">ログイン情報</h3>
-      <div class="form-row">
-        <div class="form-group"><label>パスワード<span class="req">必須</span></label><input type="password" placeholder="8文字以上"></div>
-        <div class="form-group"><label>パスワード（確認）<span class="req">必須</span></label><input type="password"></div>
-      </div>
-
-      <div class="btn-group">
-        <button class="btn btn-primary">審査申請する</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 設備会社：ダッシュボード -->
-  <div id="eq-dashboard" class="screen">
-    <div class="stats-grid">
-      <div class="stat-card"><div class="stat-label">紹介案件数</div><div class="stat-value">5</div><div class="stat-sub">今月: 2件</div></div>
-      <div class="stat-card"><div class="stat-label">商談中</div><div class="stat-value" style="color: var(--warning);">2</div></div>
-      <div class="stat-card"><div class="stat-label">受注確定</div><div class="stat-value" style="color: var(--success);">3</div></div>
-      <div class="stat-card"><div class="stat-label">未読メッセージ</div><div class="stat-value" style="color: var(--primary);">1</div></div>
-    </div>
-    <div class="card">
-      <h2>新着案件</h2>
-      <div class="alert alert-info">運営者から新しい案件が紹介されました。</div>
-      <table>
-        <thead><tr><th>案件名</th><th>カテゴリ</th><th>エリア</th><th>紹介日</th><th>ステータス</th><th></th></tr></thead>
-        <tbody>
-          <tr><td>○○マンション 空調設備更新</td><td>空調設備</td><td>東京都港区</td><td>2026/03/25</td><td><span class="badge badge-new">新着</span></td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
-          <tr><td>△△ビル 消防設備点検</td><td>消防設備</td><td>東京都新宿区</td><td>2026/03/20</td><td><span class="badge badge-inprogress">商談中</span></td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- 設備会社：紹介案件一覧 -->
-  <div id="eq-cases" class="screen">
-    <div class="page-header"><h2>紹介案件一覧</h2></div>
-    <div class="alert alert-warning">管理会社一覧は閲覧できません。運営者からの紹介のみ表示されます。</div>
-    <div class="tab-bar">
-      <button class="active">すべて (5)</button>
-      <button>新着 (1)</button>
-      <button>商談中 (2)</button>
-      <button>受注確定 (2)</button>
-    </div>
-    <table>
-      <thead><tr><th>案件ID</th><th>案件名</th><th>カテゴリ</th><th>エリア</th><th>紹介日</th><th>ステータス</th><th></th></tr></thead>
-      <tbody>
-        <tr><td>#C-001</td><td>○○マンション 空調設備更新</td><td>空調設備</td><td>東京都港区</td><td>2026/03/25</td><td><span class="badge badge-new">新着</span></td><td><button class="btn btn-sm btn-primary">詳細</button></td></tr>
-        <tr><td>#C-002</td><td>△△ビル 消防設備点検</td><td>消防設備</td><td>東京都新宿区</td><td>2026/03/20</td><td><span class="badge badge-inprogress">商談中</span></td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
-        <tr><td>#C-003</td><td>□□タワー 給排水設備修繕</td><td>給排水設備</td><td>東京都中央区</td><td>2026/03/10</td><td><span class="badge badge-inprogress">商談中</span></td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
-        <tr><td>#C-004</td><td>◎◎レジデンス エレベーター点検</td><td>エレベーター</td><td>東京都渋谷区</td><td>2026/02/15</td><td><span class="badge badge-ordered">受注確定</span></td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
-        <tr><td>#C-005</td><td>▲▲ビル 電気設備改修</td><td>電気設備</td><td>東京都品川区</td><td>2026/01/20</td><td><span class="badge badge-ordered">受注確定</span></td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <!-- 設備会社：案件詳細 + チャット -->
-  <div id="eq-case-detail" class="screen">
-    <div class="page-header">
-      <h2>案件詳細: ○○マンション 空調設備更新</h2>
-      <span class="badge badge-new">新着</span>
-    </div>
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-      <div class="card">
-        <h3>案件情報</h3>
-        <dl class="detail-grid">
-          <div class="detail-item"><dt>案件ID</dt><dd>#C-001</dd></div>
-          <div class="detail-item"><dt>カテゴリ</dt><dd>空調設備</dd></div>
-          <div class="detail-item"><dt>建物名</dt><dd>○○マンション</dd></div>
-          <div class="detail-item"><dt>所在地</dt><dd>東京都港区○○ 1-2-3</dd></div>
-          <div class="detail-item"><dt>築年数</dt><dd>15年</dd></div>
-          <div class="detail-item"><dt>階数</dt><dd>地上10階 / 地下1階</dd></div>
-          <div class="detail-item"><dt>希望時期</dt><dd>2026年5月〜</dd></div>
-          <div class="detail-item"><dt>紹介日</dt><dd>2026/03/25</dd></div>
-        </dl>
-        <h3 style="margin-top: 16px;">案件概要</h3>
-        <p style="color: var(--gray-600); line-height: 1.8;">築15年のマンションにて、共用部の空調設備の更新工事を検討中。現在の設備は故障が増えており、省エネ性能の高い機器への入替を希望。</p>
-      </div>
-      <div>
-        <div class="card" style="padding: 0;">
-          <div class="chat-container">
-            <div class="chat-header">
-              <span>チャット: ○○管理会社</span>
-              <span style="font-size: 12px; color: var(--gray-400);">案件 #C-001</span>
-            </div>
-            <div class="chat-messages">
-              <div class="chat-msg theirs">
-                はじめまして、○○管理会社の田中です。空調設備の更新について相談させてください。
-                <div class="meta">田中（管理会社） 3/25 10:00</div>
-              </div>
-              <div class="chat-msg mine">
-                はじめまして。ご紹介いただきありがとうございます。詳細をお伺いしたいのですが、一度Zoomでお話しできますか？
-                <div class="meta">鈴木（自社） 3/25 10:30</div>
-              </div>
-              <div class="chat-msg theirs">
-                ぜひお願いします。明日の14時はいかがでしょうか？
-                <div class="meta">田中（管理会社） 3/25 11:00</div>
-              </div>
-              <div class="chat-msg mine">
-                承知しました。ZoomのURLをお送りしますね。<br>https://zoom.us/j/xxxxxxxxxx
-                <div class="meta">鈴木（自社） 3/25 11:15</div>
-              </div>
-            </div>
-            <div class="chat-input">
-              <input placeholder="メッセージを入力...">
-              <button class="btn btn-primary btn-sm">送信</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ============================================ -->
-<!-- 物件管理会社側 -->
-<!-- ============================================ -->
-<div id="role-property" class="role-section" style="display:none;">
-  <div class="screen-selector" id="pm-screens">
-    <button class="active" onclick="showScreen('pm', 'pm-register')">会員登録</button>
-    <button onclick="showScreen('pm', 'pm-dashboard')">ダッシュボード</button>
-    <button onclick="showScreen('pm', 'pm-buildings')">建物管理</button>
-    <button onclick="showScreen('pm', 'pm-building-register')">建物登録</button>
-    <button onclick="showScreen('pm', 'pm-case-register')">案件登録</button>
-    <button onclick="showScreen('pm', 'pm-cases')">案件一覧</button>
-    <button onclick="showScreen('pm', 'pm-case-chat')">案件チャット</button>
-    <button onclick="showScreen('pm', 'pm-past-orders')">過去発注先</button>
-  </div>
-
-  <!-- 管理会社：会員登録 -->
-  <div id="pm-register" class="screen active">
-    <div class="card" style="max-width: 800px; margin: 0 auto;">
-      <h2>物件管理会社 会員登録（審査申請）</h2>
-      <div class="alert alert-info">ご登録後、運営事務局にて審査を行います。</div>
-      <div class="form-row">
-        <div class="form-group"><label>会社名<span class="req">必須</span></label><input placeholder="○○管理株式会社"></div>
-        <div class="form-group"><label>代表者名<span class="req">必須</span></label><input placeholder="佐藤 花子"></div>
-      </div>
-      <div class="form-group"><label>所在地<span class="req">必須</span></label><input placeholder="東京都千代田区○○1-1-1"></div>
-      <div class="form-row">
-        <div class="form-group"><label>電話番号<span class="req">必須</span></label><input placeholder="03-1111-2222"></div>
-        <div class="form-group"><label>メールアドレス<span class="req">必須</span></label><input type="email"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label>管理戸数・棟数<span class="req">必須</span></label><input placeholder="約500戸 / 30棟"></div>
-        <div class="form-group"><label>管理物件の種類<span class="req">必須</span></label>
-          <select><option>選択してください</option><option>マンション</option><option>オフィスビル</option><option>商業施設</option><option>複合施設</option><option>その他</option></select>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label>担当者名<span class="req">必須</span></label><input></div>
-        <div class="form-group"><label>担当者メール<span class="req">必須</span></label><input type="email"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label>パスワード<span class="req">必須</span></label><input type="password"></div>
-        <div class="form-group"><label>パスワード（確認）<span class="req">必須</span></label><input type="password"></div>
-      </div>
-      <div class="btn-group"><button class="btn btn-primary">審査申請する</button></div>
-    </div>
-  </div>
-
-  <!-- 管理会社：ダッシュボード -->
-  <div id="pm-dashboard" class="screen">
-    <div class="stats-grid">
-      <div class="stat-card"><div class="stat-label">登録建物数</div><div class="stat-value">12</div></div>
-      <div class="stat-card"><div class="stat-label">進行中案件</div><div class="stat-value" style="color: var(--warning);">3</div></div>
-      <div class="stat-card"><div class="stat-label">発注済み</div><div class="stat-value" style="color: var(--success);">8</div></div>
-      <div class="stat-card"><div class="stat-label">未読メッセージ</div><div class="stat-value" style="color: var(--primary);">2</div></div>
-    </div>
-    <div class="card">
-      <h2>最近の案件</h2>
-      <table>
-        <thead><tr><th>案件名</th><th>建物</th><th>マッチング状況</th><th>ステータス</th><th></th></tr></thead>
-        <tbody>
-          <tr><td>空調設備更新</td><td>○○マンション</td><td>設備会社紹介済み</td><td><span class="badge badge-inprogress">商談中</span></td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
-          <tr><td>消防設備点検</td><td>△△ビル</td><td>マッチング中</td><td><span class="badge badge-pending">運営確認中</span></td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- 管理会社：建物管理 -->
-  <div id="pm-buildings" class="screen">
-    <div class="page-header">
-      <h2>建物管理</h2>
-      <button class="btn btn-primary" onclick="showScreen('pm', 'pm-building-register')">+ 建物を登録</button>
-    </div>
-    <div class="alert alert-info">建物を登録しておくと、その建物に紐づく案件を素早く作成できます。建物情報は将来の案件予測にも活用されます。</div>
-    <table>
-      <thead><tr><th>建物名</th><th>種別</th><th>所在地</th><th>築年数</th><th>階数</th><th>案件数</th><th></th></tr></thead>
-      <tbody>
-        <tr><td>○○マンション</td><td>マンション</td><td>東京都港区○○ 1-2-3</td><td>15年</td><td>10階</td><td>3</td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
-        <tr><td>△△ビル</td><td>オフィスビル</td><td>東京都新宿区△△ 4-5-6</td><td>8年</td><td>20階</td><td>2</td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
-        <tr><td>□□タワー</td><td>複合施設</td><td>東京都中央区□□ 7-8-9</td><td>25年</td><td>30階</td><td>5</td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
-        <tr><td>◎◎レジデンス</td><td>マンション</td><td>東京都渋谷区◎◎ 2-3-4</td><td>3年</td><td>15階</td><td>1</td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <!-- 管理会社：建物登録 -->
-  <div id="pm-building-register" class="screen">
-    <div class="card" style="max-width: 800px; margin: 0 auto;">
-      <h2>建物情報 登録</h2>
-      <h3>基本情報</h3>
-      <div class="form-row">
-        <div class="form-group"><label>建物名<span class="req">必須</span></label><input placeholder="○○マンション"></div>
-        <div class="form-group"><label>建物種別<span class="req">必須</span></label>
-          <select><option>選択してください</option><option>マンション</option><option>オフィスビル</option><option>商業施設</option><option>複合施設</option><option>工場・倉庫</option><option>その他</option></select>
-        </div>
-      </div>
-      <div class="form-group"><label>所在地<span class="req">必須</span></label><input placeholder="東京都○○区○○ 1-2-3"></div>
-      <div class="form-row-3">
-        <div class="form-group"><label>竣工年<span class="req">必須</span></label><input type="number" placeholder="2010"></div>
-        <div class="form-group"><label>地上階数<span class="req">必須</span></label><input type="number" placeholder="10"></div>
-        <div class="form-group"><label>地下階数</label><input type="number" placeholder="1"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label>延床面積（m²）</label><input placeholder="5,000"></div>
-        <div class="form-group"><label>戸数 / テナント数</label><input placeholder="50"></div>
-      </div>
-      <div class="form-group"><label>構造</label>
-        <select><option>選択してください</option><option>RC造</option><option>SRC造</option><option>S造</option><option>木造</option><option>その他</option></select>
-      </div>
-
-      <h3 style="margin-top: 24px;">設備情報</h3>
-      <div class="form-group">
-        <label>設置済み設備</label>
-        <div class="checkbox-group">
-          <label><input type="checkbox"> エレベーター</label>
-          <label><input type="checkbox"> 空調（セントラル）</label>
-          <label><input type="checkbox"> 空調（個別）</label>
-          <label><input type="checkbox"> 消防設備</label>
-          <label><input type="checkbox"> 給排水</label>
-          <label><input type="checkbox"> 電気設備</label>
-          <label><input type="checkbox"> 防犯カメラ</label>
-          <label><input type="checkbox"> オートロック</label>
-          <label><input type="checkbox"> 機械式駐車場</label>
-        </div>
-      </div>
-      <div class="form-group"><label>備考</label><textarea placeholder="特記事項があれば記載してください"></textarea></div>
-
-      <div class="btn-group">
-        <button class="btn btn-primary">登録する</button>
-        <button class="btn btn-outline">キャンセル</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 管理会社：案件登録 -->
-  <div id="pm-case-register" class="screen">
-    <div class="card" style="max-width: 800px; margin: 0 auto;">
-      <h2>案件登録</h2>
-      <div class="alert alert-info">登録後、運営者がマッチする設備会社を探し紹介します。</div>
-      <div class="form-group"><label>対象建物<span class="req">必須</span></label>
-        <select><option>選択してください</option><option>○○マンション（東京都港区）</option><option>△△ビル（東京都新宿区）</option><option>□□タワー（東京都中央区）</option><option>◎◎レジデンス（東京都渋谷区）</option></select>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label>案件名<span class="req">必須</span></label><input placeholder="空調設備更新工事"></div>
-        <div class="form-group"><label>カテゴリ<span class="req">必須</span></label>
-          <select><option>選択してください</option><option>空調設備</option><option>給排水設備</option><option>電気設備</option><option>消防設備</option><option>エレベーター</option><option>建築全般</option><option>防犯・セキュリティ</option><option>その他</option></select>
-        </div>
-      </div>
-      <div class="form-group"><label>案件概要<span class="req">必須</span></label><textarea placeholder="工事内容、現状の課題、希望条件などを記載してください"></textarea></div>
-      <div class="form-row">
-        <div class="form-group"><label>希望時期<span class="req">必須</span></label><input type="month"></div>
-        <div class="form-group"><label>予算感</label>
-          <select><option>未定</option><option>〜100万円</option><option>100〜500万円</option><option>500〜1,000万円</option><option>1,000万円〜</option></select>
-        </div>
-      </div>
-      <div class="form-group"><label>緊急度</label>
-        <select><option>通常</option><option>やや急ぎ</option><option>至急</option></select>
-      </div>
-      <div class="form-group"><label>添付資料</label><input type="file" multiple></div>
-      <div class="btn-group">
-        <button class="btn btn-primary">案件を登録する</button>
-        <button class="btn btn-outline">キャンセル</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 管理会社：案件一覧 -->
-  <div id="pm-cases" class="screen">
-    <div class="page-header">
-      <h2>案件一覧</h2>
-      <button class="btn btn-primary" onclick="showScreen('pm', 'pm-case-register')">+ 案件を登録</button>
-    </div>
-    <div class="alert alert-warning">設備会社一覧は閲覧できません。過去に発注した会社のみ再依頼が可能です。</div>
-    <table>
-      <thead><tr><th>案件ID</th><th>案件名</th><th>建物</th><th>カテゴリ</th><th>ステータス</th><th>設備会社</th><th></th></tr></thead>
-      <tbody>
-        <tr><td>#C-001</td><td>空調設備更新</td><td>○○マンション</td><td>空調設備</td><td><span class="badge badge-inprogress">商談中</span></td><td>ABC設備（株）</td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
-        <tr><td>#C-006</td><td>消防設備点検</td><td>△△ビル</td><td>消防設備</td><td><span class="badge badge-pending">運営確認中</span></td><td>-</td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
-        <tr><td>#C-004</td><td>エレベーター点検</td><td>◎◎レジデンス</td><td>エレベーター</td><td><span class="badge badge-ordered">発注済み</span></td><td>DEF設備（株）</td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <!-- 管理会社：案件チャット（発注ボタンあり） -->
-  <div id="pm-case-chat" class="screen">
-    <div class="page-header">
-      <h2>案件: 空調設備更新 - ABC設備（株）</h2>
-      <span class="badge badge-inprogress">商談中</span>
-    </div>
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-      <div class="card" style="padding: 0;">
-        <div class="chat-container">
-          <div class="chat-header">
-            <span>チャット: ABC設備（株）</span>
-          </div>
-          <div class="chat-messages">
-            <div class="chat-msg mine">
-              はじめまして、○○管理会社の田中です。空調設備の更新について相談させてください。
-              <div class="meta">田中（自社） 3/25 10:00</div>
-            </div>
-            <div class="chat-msg theirs">
-              はじめまして。ご紹介いただきありがとうございます。Zoomでお話しできますか？
-              <div class="meta">鈴木（ABC設備） 3/25 10:30</div>
-            </div>
-            <div class="chat-msg mine">
-              ぜひお願いします。明日の14時はいかがでしょうか？
-              <div class="meta">田中（自社） 3/25 11:00</div>
-            </div>
-            <div class="chat-msg theirs">
-              承知しました。ZoomのURLをお送りしますね。<br>https://zoom.us/j/xxxxxxxxxx
-              <div class="meta">鈴木（ABC設備） 3/25 11:15</div>
-            </div>
-            <div class="chat-msg theirs">
-              先ほどのZoomありがとうございました。お見積りを来週中にお送りいたします。
-              <div class="meta">鈴木（ABC設備） 3/26 15:00</div>
-            </div>
-          </div>
-          <div class="chat-input">
-            <input placeholder="メッセージを入力...">
-            <button class="btn btn-primary btn-sm">送信</button>
-          </div>
-        </div>
-      </div>
-      <div class="card">
-        <h3>発注アクション</h3>
-        <p style="color: var(--gray-600); margin-bottom: 16px; line-height: 1.8;">この設備会社に発注を確定する場合は、下のボタンを押してください。<br>発注確定後の請求・施工管理はシステム外で行います。</p>
-        <button class="btn btn-success" style="width: 100%; padding: 16px; font-size: 16px;" onclick="alert('発注を確定しますか？（確認ダイアログ）')">この会社に発注する</button>
-        <p style="text-align: center; color: var(--gray-400); font-size: 12px; margin-top: 8px;">※ 発注後のキャンセルについては運営にお問い合わせください</p>
-      </div>
-    </div>
-  </div>
-
-  <!-- 管理会社：過去発注先 -->
-  <div id="pm-past-orders" class="screen">
-    <div class="page-header"><h2>過去の発注先</h2></div>
-    <div class="alert alert-info">過去に発注確定した設備会社のみ表示されます。再依頼が可能です。</div>
-    <table>
-      <thead><tr><th>設備会社名</th><th>過去案件</th><th>最終発注日</th><th></th></tr></thead>
-      <tbody>
-        <tr><td>ABC設備（株）</td><td>空調設備更新（○○マンション）</td><td>2026/02/20</td><td><button class="btn btn-sm btn-primary">再依頼する</button></td></tr>
-        <tr><td>DEF設備（株）</td><td>エレベーター点検（◎◎レジデンス）</td><td>2026/01/15</td><td><button class="btn btn-sm btn-primary">再依頼する</button></td></tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<!-- ============================================ -->
-<!-- 運営管理画面 -->
-<!-- ============================================ -->
-<div id="role-admin" class="role-section" style="display:none;">
-  <div class="sidebar-layout">
-    <div class="sidebar">
-      <div class="section-title">ダッシュボード</div>
-      <a class="active" onclick="showAdminScreen('admin-dashboard')">概要</a>
-      <div class="section-title">会員管理</div>
-      <a onclick="showAdminScreen('admin-eq-list')">設備会社一覧</a>
-      <a onclick="showAdminScreen('admin-eq-detail')">設備会社詳細</a>
-      <a onclick="showAdminScreen('admin-pm-list')">管理会社一覧</a>
-      <div class="section-title">案件管理</div>
-      <a onclick="showAdminScreen('admin-cases')">案件一覧</a>
-      <a onclick="showAdminScreen('admin-matching')">マッチング</a>
-      <div class="section-title">受注管理</div>
-      <a onclick="showAdminScreen('admin-orders')">受注一覧</a>
-    </div>
-    <div class="main-content">
-
-      <!-- 運営：ダッシュボード -->
-      <div id="admin-dashboard" class="admin-screen" style="display:block;">
-        <h2 style="font-size: 20px; margin-bottom: 20px;">運営ダッシュボード</h2>
-        <div class="stats-grid">
-          <div class="stat-card"><div class="stat-label">設備会社</div><div class="stat-value">24</div><div class="stat-sub">審査待ち: 3</div></div>
-          <div class="stat-card"><div class="stat-label">管理会社</div><div class="stat-value">18</div><div class="stat-sub">審査待ち: 1</div></div>
-          <div class="stat-card"><div class="stat-label">進行中案件</div><div class="stat-value" style="color: var(--warning);">7</div><div class="stat-sub">未マッチング: 2</div></div>
-          <div class="stat-card"><div class="stat-label">今月の受注</div><div class="stat-value" style="color: var(--success);">5</div></div>
-        </div>
-        <div class="card">
-          <h2>審査待ち一覧</h2>
-          <table>
-            <thead><tr><th>種別</th><th>会社名</th><th>申請日</th><th></th></tr></thead>
-            <tbody>
-              <tr><td><span class="badge badge-new">設備会社</span></td><td>GHI設備工業（株）</td><td>2026/03/25</td><td><button class="btn btn-sm btn-primary">審査する</button></td></tr>
-              <tr><td><span class="badge badge-new">設備会社</span></td><td>JKL空調サービス（株）</td><td>2026/03/24</td><td><button class="btn btn-sm btn-primary">審査する</button></td></tr>
-              <tr><td><span class="badge badge-new">設備会社</span></td><td>MNO電設（株）</td><td>2026/03/23</td><td><button class="btn btn-sm btn-primary">審査する</button></td></tr>
-              <tr><td><span class="badge badge-inprogress">管理会社</span></td><td>PQR管理（株）</td><td>2026/03/24</td><td><button class="btn btn-sm btn-primary">審査する</button></td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- 運営：設備会社一覧 -->
-      <div id="admin-eq-list" class="admin-screen" style="display:none;">
-        <div class="page-header"><h2>設備会社一覧</h2></div>
-        <div class="search-bar">
-          <input placeholder="会社名・エリア・分野で検索...">
-          <select><option>全ステータス</option><option>審査待ち</option><option>承認済み</option><option>否認</option></select>
-          <button class="btn btn-primary">検索</button>
-        </div>
+        <h2>新着案件</h2>
+        <div class="alert alert-info"><span class="alert-icon">i</span>運営者から新しい案件が紹介されました。</div>
         <table>
-          <thead><tr><th>会社名</th><th>対応分野</th><th>エリア</th><th>従業員数</th><th>ステータス</th><th></th></tr></thead>
+          <thead><tr><th>案件名</th><th>カテゴリ</th><th>エリア</th><th>紹介日</th><th>ステータス</th><th></th></tr></thead>
           <tbody>
-            <tr><td>ABC設備（株）</td><td>空調, 給排水</td><td>東京23区</td><td>50名</td><td><span class="badge badge-approved">承認済み</span></td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
-            <tr><td>DEF設備（株）</td><td>エレベーター</td><td>東京23区, 神奈川</td><td>120名</td><td><span class="badge badge-approved">承認済み</span></td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
-            <tr><td>GHI設備工業（株）</td><td>消防設備</td><td>東京23区</td><td>30名</td><td><span class="badge badge-pending">審査待ち</span></td><td><button class="btn btn-sm btn-primary">審査</button></td></tr>
-            <tr><td>JKL空調サービス（株）</td><td>空調</td><td>関東全域</td><td>80名</td><td><span class="badge badge-pending">審査待ち</span></td><td><button class="btn btn-sm btn-primary">審査</button></td></tr>
+            <tr><td><a class="link" onclick="nav('eq','eq-case-detail')">○○マンション 空調設備更新</a></td><td>空調設備</td><td>東京都港区</td><td>2026/03/25</td><td><span class="badge badge-new">新着</span></td><td><button class="btn btn-sm btn-primary" onclick="nav('eq','eq-case-detail')">詳細</button></td></tr>
+            <tr><td><a class="link" onclick="nav('eq','eq-case-detail-accepted')">△△ビル 消防設備点検</a></td><td>消防設備</td><td>東京都新宿区</td><td>2026/03/20</td><td><span class="badge badge-inprogress">商談中</span></td><td><button class="btn btn-sm btn-outline" onclick="nav('eq','eq-case-detail-accepted')">詳細</button></td></tr>
           </tbody>
         </table>
       </div>
+    </div>
 
-      <!-- 運営：設備会社詳細（審査画面） -->
-      <div id="admin-eq-detail" class="admin-screen" style="display:none;">
-        <div class="page-header">
-          <h2>設備会社詳細: GHI設備工業（株）</h2>
-          <span class="badge badge-pending">審査待ち</span>
-        </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+    <!-- 設備：紹介案件一覧 -->
+    <div id="eq-cases" class="screen">
+      <div class="page-header"><h2>紹介案件一覧</h2></div>
+      <div class="alert alert-warning"><span class="alert-icon">!</span>管理会社一覧は閲覧できません。運営者からの紹介のみ表示されます。</div>
+      <div class="tab-bar">
+        <button class="active">すべて (5)</button>
+        <button>新着 (1)</button>
+        <button>商談中 (2)</button>
+        <button>受注確定 (2)</button>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <table>
+          <thead><tr><th>案件ID</th><th>案件名</th><th>カテゴリ</th><th>エリア</th><th>紹介日</th><th>ステータス</th><th></th></tr></thead>
+          <tbody>
+            <tr><td class="link" onclick="nav('eq','eq-case-detail')">#C-001</td><td><a class="link" onclick="nav('eq','eq-case-detail')">○○マンション 空調設備更新</a></td><td>空調設備</td><td>東京都港区</td><td>2026/03/25</td><td><span class="badge badge-new">新着</span></td><td><button class="btn btn-sm btn-primary" onclick="nav('eq','eq-case-detail')">詳細</button></td></tr>
+            <tr><td class="link" onclick="nav('eq','eq-case-detail-accepted')">#C-002</td><td><a class="link" onclick="nav('eq','eq-case-detail-accepted')">△△ビル 消防設備点検</a></td><td>消防設備</td><td>東京都新宿区</td><td>2026/03/20</td><td><span class="badge badge-inprogress">商談中</span></td><td><button class="btn btn-sm btn-outline" onclick="nav('eq','eq-case-detail-accepted')">詳細</button></td></tr>
+            <tr><td>#C-003</td><td>□□タワー 給排水設備修繕</td><td>給排水設備</td><td>東京都中央区</td><td>2026/03/10</td><td><span class="badge badge-inprogress">商談中</span></td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
+            <tr><td>#C-004</td><td>◎◎レジデンス エレベーター点検</td><td>エレベーター</td><td>東京都渋谷区</td><td>2026/02/15</td><td><span class="badge badge-ordered">受注確定</span></td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
+            <tr><td>#C-005</td><td>▲▲ビル 電気設備改修</td><td>電気設備</td><td>東京都品川区</td><td>2026/01/20</td><td><span class="badge badge-ordered">受注確定</span></td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 設備：案件詳細（新着 → 承認ボタンあり） -->
+    <div id="eq-case-detail" class="screen">
+      <div class="breadcrumb"><a onclick="nav('eq','eq-cases')">紹介案件一覧</a> <span>›</span> <span style="color:var(--text)">案件詳細</span></div>
+      <div class="page-header">
+        <h2>○○マンション 空調設備更新</h2>
+        <span class="badge badge-new">新着</span>
+      </div>
+      <div class="two-col">
+        <div>
           <div class="card">
-            <h3>基本情報</h3>
-            <dl>
-              <div class="detail-item"><dt>会社名</dt><dd>GHI設備工業株式会社</dd></div>
-              <div class="detail-item"><dt>代表者</dt><dd>高橋 次郎</dd></div>
-              <div class="detail-item"><dt>所在地</dt><dd>東京都文京区○○ 3-4-5</dd></div>
-              <div class="detail-item"><dt>設立</dt><dd>2005年4月</dd></div>
-              <div class="detail-item"><dt>電話番号</dt><dd>03-3333-4444</dd></div>
-              <div class="detail-item"><dt>ホームページ</dt><dd style="color: var(--primary);">https://ghi-setubi.co.jp</dd></div>
+            <h3>案件情報</h3>
+            <dl class="detail-grid">
+              <div class="detail-item"><dt>案件ID</dt><dd>#C-001</dd></div>
+              <div class="detail-item"><dt>カテゴリ</dt><dd>空調設備</dd></div>
+              <div class="detail-item"><dt>建物名</dt><dd>○○マンション</dd></div>
+              <div class="detail-item"><dt>所在地</dt><dd>東京都港区○○ 1-2-3</dd></div>
+              <div class="detail-item"><dt>築年数</dt><dd>15年</dd></div>
+              <div class="detail-item"><dt>階数</dt><dd>地上10階 / 地下1階</dd></div>
+              <div class="detail-item"><dt>希望時期</dt><dd>2026年5月〜</dd></div>
+              <div class="detail-item"><dt>紹介日</dt><dd>2026/03/25</dd></div>
             </dl>
+            <h3 style="margin-top:20px">案件概要</h3>
+            <p style="color:var(--text-dim);line-height:1.8">築15年のマンションにて、共用部の空調設備の更新工事を検討中。現在の設備は故障が増えており、省エネ性能の高い機器への入替を希望。</p>
           </div>
           <div class="card">
-            <h3>事業情報</h3>
-            <dl>
-              <div class="detail-item"><dt>資本金</dt><dd>3,000万円</dd></div>
-              <div class="detail-item"><dt>従業員数</dt><dd>30名</dd></div>
-              <div class="detail-item"><dt>年間売上高</dt><dd>2億円</dd></div>
-              <div class="detail-item"><dt>建設業許可</dt><dd>東京都知事許可 第12345号</dd></div>
-              <div class="detail-item"><dt>対応分野</dt><dd>消防設備、電気設備</dd></div>
-              <div class="detail-item"><dt>対応エリア</dt><dd>東京23区</dd></div>
-              <div class="detail-item"><dt>損害賠償保険</dt><dd>加入済み</dd></div>
-            </dl>
+            <h3>この案件を受けますか？</h3>
+            <p style="color:var(--text-dim);margin-bottom:16px;line-height:1.8">「承認する」を押すと管理会社とのチャットルームが開設され、商談が開始されます。</p>
+            <div class="btn-group">
+              <button class="btn btn-success btn-lg" onclick="nav('eq','eq-case-detail-accepted')">承認する（商談開始）</button>
+              <button class="btn btn-outline btn-lg" onclick="alert('辞退確認ダイアログ')">辞退する</button>
+            </div>
           </div>
         </div>
-        <div class="card">
-          <h3>保有資格</h3>
-          <p style="color: var(--gray-600);">消防設備士 甲種: 5名、電気工事施工管理技士 1級: 3名</p>
+        <div class="card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-muted);min-height:300px">
+          <div style="font-size:40px;margin-bottom:12px">💬</div>
+          <p>承認後にチャットルームが開設されます</p>
         </div>
+      </div>
+    </div>
+
+    <!-- 設備：案件詳細（承認済み → チャットあり） -->
+    <div id="eq-case-detail-accepted" class="screen">
+      <div class="breadcrumb"><a onclick="nav('eq','eq-cases')">紹介案件一覧</a> <span>›</span> <span style="color:var(--text)">案件詳細</span></div>
+      <div class="page-header">
+        <h2>△△ビル 消防設備点検</h2>
+        <span class="badge badge-inprogress">商談中</span>
+      </div>
+      <div class="two-col">
         <div class="card">
-          <h3>施工実績</h3>
-          <p style="color: var(--gray-600); line-height: 1.8;">・○○ビル 消防設備更新工事（2025年）<br>・△△マンション 電気設備改修（2024年）<br>・□□商業施設 消防設備点検（2024年）</p>
+          <h3>案件情報</h3>
+          <dl class="detail-grid">
+            <div class="detail-item"><dt>案件ID</dt><dd>#C-002</dd></div>
+            <div class="detail-item"><dt>カテゴリ</dt><dd>消防設備</dd></div>
+            <div class="detail-item"><dt>建物名</dt><dd>△△ビル</dd></div>
+            <div class="detail-item"><dt>所在地</dt><dd>東京都新宿区△△ 4-5-6</dd></div>
+            <div class="detail-item"><dt>築年数</dt><dd>8年</dd></div>
+            <div class="detail-item"><dt>階数</dt><dd>地上20階</dd></div>
+            <div class="detail-item"><dt>希望時期</dt><dd>2026年5月</dd></div>
+            <div class="detail-item"><dt>紹介日</dt><dd>2026/03/20</dd></div>
+          </dl>
+          <h3 style="margin-top:20px">概要</h3>
+          <p style="color:var(--text-dim);line-height:1.8">定期点検。共用部全体の消防設備点検を実施希望。</p>
         </div>
-        <div class="card">
-          <h3>審査アクション</h3>
-          <div class="form-group"><label>審査コメント</label><textarea placeholder="審査結果のコメントを記入"></textarea></div>
-          <div class="btn-group">
-            <button class="btn btn-success">承認する</button>
-            <button class="btn btn-danger">否認する</button>
+        <div>
+          <div class="chat-container">
+            <div class="chat-header"><span>○○管理会社</span><span style="font-size:12px;color:var(--text-muted)">#C-002</span></div>
+            <div class="chat-messages">
+              <div class="chat-msg theirs">はじめまして、○○管理会社の田中です。消防設備点検についてご相談させてください。<div class="meta">田中（管理会社） 3/20 10:00</div></div>
+              <div class="chat-msg mine">はじめまして。ご紹介ありがとうございます。一度Zoomでお話しできますか？<div class="meta">鈴木（自社） 3/20 10:30</div></div>
+              <div class="chat-msg theirs">ぜひお願いします。明日の14時はいかがでしょうか？<div class="meta">田中（管理会社） 3/20 11:00</div></div>
+              <div class="chat-msg mine">承知しました。URLをお送りします。<br>https://zoom.us/j/xxxxxxxxxx<div class="meta">鈴木（自社） 3/20 11:15</div></div>
+            </div>
+            <div class="chat-input"><input placeholder="メッセージを入力..."><button class="btn btn-primary btn-sm">送信</button></div>
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- 運営：管理会社一覧 -->
-      <div id="admin-pm-list" class="admin-screen" style="display:none;">
-        <div class="page-header"><h2>物件管理会社一覧</h2></div>
-        <div class="search-bar">
-          <input placeholder="会社名で検索...">
-          <select><option>全ステータス</option><option>審査待ち</option><option>承認済み</option></select>
-          <button class="btn btn-primary">検索</button>
+    <!-- 設備：会員登録 -->
+    <div id="eq-register" class="screen">
+      <div class="card" style="max-width:840px">
+        <h2>設備会社 会員登録（審査申請）</h2>
+        <div class="alert alert-info"><span class="alert-icon">i</span>ご登録後、運営事務局にて審査を行います。審査通過後にログイン可能となります。</div>
+        <h3>基本情報</h3>
+        <div class="form-row">
+          <div class="form-group"><label>会社名（正式名称）<span class="req">必須</span></label><input placeholder="株式会社○○設備"></div>
+          <div class="form-group"><label>会社名（カナ）<span class="req">必須</span></label><input placeholder="カブシキガイシャ○○セツビ"></div>
         </div>
+        <div class="form-row">
+          <div class="form-group"><label>代表者名<span class="req">必須</span></label><input placeholder="山田 太郎"></div>
+          <div class="form-group"><label>設立年月<span class="req">必須</span></label><input type="month"></div>
+        </div>
+        <div class="form-group"><label>本社所在地<span class="req">必須</span></label><input placeholder="東京都渋谷区○○1-2-3 ○○ビル5F"></div>
+        <div class="form-row">
+          <div class="form-group"><label>電話番号<span class="req">必須</span></label><input placeholder="03-1234-5678"></div>
+          <div class="form-group"><label>メールアドレス<span class="req">必須</span></label><input type="email" placeholder="info@example.co.jp"></div>
+        </div>
+        <h3 style="margin-top:28px">担当者情報</h3>
+        <div class="form-row">
+          <div class="form-group"><label>担当者名<span class="req">必須</span></label><input placeholder="鈴木 一郎"></div>
+          <div class="form-group"><label>担当者メール<span class="req">必須</span></label><input type="email"></div>
+        </div>
+        <h3 style="margin-top:28px">事業情報（審査用）</h3>
+        <div class="form-row">
+          <div class="form-group"><label>資本金<span class="req">必須</span></label><input placeholder="1,000万円"></div>
+          <div class="form-group"><label>従業員数<span class="req">必須</span></label><input type="number" placeholder="50"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>年間売上高<span class="req">必須</span></label><input placeholder="5億円"></div>
+          <div class="form-group"><label>建設業許可番号<span class="req">必須</span></label><input placeholder="東京都知事許可 第○○○○号"></div>
+        </div>
+        <div class="form-group"><label>対応可能な設備分野<span class="req">必須</span></label>
+          <div class="checkbox-group">
+            <label><input type="checkbox"> 空調設備</label><label><input type="checkbox"> 給排水設備</label><label><input type="checkbox"> 電気設備</label><label><input type="checkbox"> 消防設備</label><label><input type="checkbox"> エレベーター</label><label><input type="checkbox"> 建築全般</label><label><input type="checkbox"> 防犯・セキュリティ</label><label><input type="checkbox"> 通信設備</label>
+          </div>
+        </div>
+        <div class="form-group"><label>対応可能エリア<span class="req">必須</span></label>
+          <div class="checkbox-group">
+            <label><input type="checkbox"> 東京23区</label><label><input type="checkbox"> 東京都下</label><label><input type="checkbox"> 神奈川県</label><label><input type="checkbox"> 千葉県</label><label><input type="checkbox"> 埼玉県</label><label><input type="checkbox"> その他関東</label><label><input type="checkbox"> 全国対応可</label>
+          </div>
+        </div>
+        <div class="form-group"><label>保有資格</label><textarea placeholder="管工事施工管理技士 1級: ○名&#10;電気工事施工管理技士 1級: ○名"></textarea></div>
+        <div class="form-group"><label>主な実績・施工事例<span class="req">必須</span></label><textarea placeholder="過去の主要な施工実績を記載してください。"></textarea></div>
+        <div class="form-group"><label>損害賠償保険<span class="req">必須</span></label><select><option>選択してください</option><option>加入済み</option><option>未加入</option></select></div>
+        <h3 style="margin-top:28px">ログイン情報</h3>
+        <div class="form-row">
+          <div class="form-group"><label>パスワード<span class="req">必須</span></label><input type="password" placeholder="8文字以上"></div>
+          <div class="form-group"><label>パスワード（確認）<span class="req">必須</span></label><input type="password"></div>
+        </div>
+        <div class="btn-group"><button class="btn btn-primary">審査申請する</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- 物件管理会社 -->
+<!-- ============================================ -->
+<div id="role-pm" class="app-layout role-section">
+  <div class="sidebar" id="sidebar-pm">
+    <div class="section-title">メイン</div>
+    <a class="active" onclick="nav('pm','pm-dashboard')"><span class="nav-icon">📊</span>ダッシュボード</a>
+    <div class="section-title">建物・案件</div>
+    <a onclick="nav('pm','pm-buildings')"><span class="nav-icon">🏢</span>建物管理</a>
+    <a onclick="nav('pm','pm-cases')"><span class="nav-icon">📋</span>案件一覧</a>
+    <a onclick="nav('pm','pm-past-orders')"><span class="nav-icon">🔄</span>過去の発注先</a>
+    <div class="section-title">アカウント</div>
+    <a onclick="nav('pm','pm-register')"><span class="nav-icon">📝</span>会員登録</a>
+  </div>
+  <div class="main">
+
+    <!-- 管理会社：ダッシュボード -->
+    <div id="pm-dashboard" class="screen active">
+      <div class="page-header"><h2>ダッシュボード</h2></div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">登録建物数</div><div class="stat-value" style="color:var(--accent-light)">12</div></div>
+        <div class="stat-card"><div class="stat-label">進行中案件</div><div class="stat-value" style="color:var(--amber)">3</div></div>
+        <div class="stat-card"><div class="stat-label">発注済み</div><div class="stat-value" style="color:var(--green)">8</div></div>
+        <div class="stat-card"><div class="stat-label">未読メッセージ</div><div class="stat-value" style="color:var(--blue)">2</div></div>
+      </div>
+      <div class="card">
+        <h2>最近の案件</h2>
+        <table>
+          <thead><tr><th>案件名</th><th>建物</th><th>状況</th><th>ステータス</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><a class="link" onclick="nav('pm','pm-case-detail')">空調設備更新</a></td><td>○○マンション</td><td>設備会社紹介済み</td><td><span class="badge badge-inprogress">商談中</span></td><td><button class="btn btn-sm btn-outline" onclick="nav('pm','pm-case-detail')">詳細</button></td></tr>
+            <tr><td>消防設備点検</td><td>△△ビル</td><td>マッチング中</td><td><span class="badge badge-pending">運営確認中</span></td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 管理会社：建物管理 -->
+    <div id="pm-buildings" class="screen">
+      <div class="page-header">
+        <h2>建物管理</h2>
+        <button class="btn btn-primary" onclick="nav('pm','pm-building-register')">+ 建物を登録</button>
+      </div>
+      <div class="alert alert-info"><span class="alert-icon">i</span>建物を登録しておくと、その建物に紐づく案件を素早く作成できます。</div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <table>
+          <thead><tr><th>建物名</th><th>種別</th><th>所在地</th><th>築年数</th><th>階数</th><th>案件数</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><a class="link" onclick="nav('pm','pm-building-detail')">○○マンション</a></td><td>マンション</td><td>東京都港区○○ 1-2-3</td><td>15年</td><td>10階</td><td style="color:var(--accent-light);font-weight:600">3</td><td><button class="btn btn-sm btn-outline" onclick="nav('pm','pm-building-detail')">詳細</button></td></tr>
+            <tr><td><a class="link">△△ビル</a></td><td>オフィスビル</td><td>東京都新宿区△△ 4-5-6</td><td>8年</td><td>20階</td><td style="color:var(--accent-light);font-weight:600">2</td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
+            <tr><td><a class="link">□□タワー</a></td><td>複合施設</td><td>東京都中央区□□ 7-8-9</td><td>25年</td><td>30階</td><td style="color:var(--accent-light);font-weight:600">5</td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 管理会社：建物詳細 -->
+    <div id="pm-building-detail" class="screen">
+      <div class="breadcrumb"><a onclick="nav('pm','pm-buildings')">建物管理</a> <span>›</span> <span style="color:var(--text)">○○マンション</span></div>
+      <div class="page-header">
+        <h2>○○マンション</h2>
+        <button class="btn btn-primary" onclick="nav('pm','pm-case-register')">+ この建物の案件を登録</button>
+      </div>
+      <div class="two-col">
+        <div class="card">
+          <h3>基本情報</h3>
+          <dl class="detail-grid">
+            <div class="detail-item"><dt>建物名</dt><dd>○○マンション</dd></div>
+            <div class="detail-item"><dt>種別</dt><dd>マンション</dd></div>
+            <div class="detail-item"><dt>所在地</dt><dd>東京都港区○○ 1-2-3</dd></div>
+            <div class="detail-item"><dt>竣工年</dt><dd>2011年</dd></div>
+            <div class="detail-item"><dt>階数</dt><dd>地上10階 / 地下1階</dd></div>
+            <div class="detail-item"><dt>構造</dt><dd>RC造</dd></div>
+            <div class="detail-item"><dt>延床面積</dt><dd>5,000 m²</dd></div>
+            <div class="detail-item"><dt>戸数</dt><dd>50戸</dd></div>
+          </dl>
+        </div>
+        <div class="card">
+          <h3>設備情報</h3>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <span class="badge badge-approved">エレベーター</span>
+            <span class="badge badge-approved">空調（個別）</span>
+            <span class="badge badge-approved">消防設備</span>
+            <span class="badge badge-approved">給排水</span>
+            <span class="badge badge-approved">防犯カメラ</span>
+            <span class="badge badge-approved">オートロック</span>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>この建物の案件履歴</h3>
+        <table>
+          <thead><tr><th>案件ID</th><th>案件名</th><th>カテゴリ</th><th>ステータス</th><th>設備会社</th><th></th></tr></thead>
+          <tbody>
+            <tr><td class="link" onclick="nav('pm','pm-case-detail')">#C-001</td><td><a class="link" onclick="nav('pm','pm-case-detail')">空調設備更新</a></td><td>空調設備</td><td><span class="badge badge-inprogress">商談中</span></td><td>ABC設備（株）</td><td><button class="btn btn-sm btn-outline" onclick="nav('pm','pm-case-detail')">詳細</button></td></tr>
+            <tr><td>#C-007</td><td>防犯カメラ設置</td><td>防犯</td><td><span class="badge badge-pending">運営確認中</span></td><td>-</td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
+            <tr><td>#C-010</td><td>エレベーター定期点検</td><td>エレベーター</td><td><span class="badge badge-ordered">発注済み</span></td><td>DEF設備（株）</td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 管理会社：建物登録 -->
+    <div id="pm-building-register" class="screen">
+      <div class="breadcrumb"><a onclick="nav('pm','pm-buildings')">建物管理</a> <span>›</span> <span style="color:var(--text)">新規登録</span></div>
+      <div class="card" style="max-width:840px">
+        <h2>建物情報 登録</h2>
+        <h3>基本情報</h3>
+        <div class="form-row">
+          <div class="form-group"><label>建物名<span class="req">必須</span></label><input placeholder="○○マンション"></div>
+          <div class="form-group"><label>建物種別<span class="req">必須</span></label><select><option>選択してください</option><option>マンション</option><option>オフィスビル</option><option>商業施設</option><option>複合施設</option></select></div>
+        </div>
+        <div class="form-group"><label>所在地<span class="req">必須</span></label><input placeholder="東京都○○区○○ 1-2-3"></div>
+        <div class="form-row-3">
+          <div class="form-group"><label>竣工年<span class="req">必須</span></label><input type="number" placeholder="2010"></div>
+          <div class="form-group"><label>地上階数<span class="req">必須</span></label><input type="number" placeholder="10"></div>
+          <div class="form-group"><label>地下階数</label><input type="number" placeholder="1"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>延床面積（m²）</label><input placeholder="5,000"></div>
+          <div class="form-group"><label>戸数 / テナント数</label><input placeholder="50"></div>
+        </div>
+        <div class="form-group"><label>構造</label><select><option>選択してください</option><option>RC造</option><option>SRC造</option><option>S造</option><option>木造</option></select></div>
+        <h3 style="margin-top:28px">設備情報</h3>
+        <div class="form-group"><label>設置済み設備</label>
+          <div class="checkbox-group">
+            <label><input type="checkbox"> エレベーター</label><label><input type="checkbox"> 空調（セントラル）</label><label><input type="checkbox"> 空調（個別）</label><label><input type="checkbox"> 消防設備</label><label><input type="checkbox"> 給排水</label><label><input type="checkbox"> 電気設備</label><label><input type="checkbox"> 防犯カメラ</label><label><input type="checkbox"> オートロック</label>
+          </div>
+        </div>
+        <div class="form-group"><label>備考</label><textarea placeholder="特記事項"></textarea></div>
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="nav('pm','pm-buildings')">登録する</button>
+          <button class="btn btn-outline" onclick="nav('pm','pm-buildings')">キャンセル</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 管理会社：案件一覧 -->
+    <div id="pm-cases" class="screen">
+      <div class="page-header">
+        <h2>案件一覧</h2>
+        <button class="btn btn-primary" onclick="nav('pm','pm-case-register')">+ 案件を登録</button>
+      </div>
+      <div class="alert alert-warning"><span class="alert-icon">!</span>設備会社一覧は閲覧できません。過去に発注した会社のみ再依頼可能です。</div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <table>
+          <thead><tr><th>案件ID</th><th>案件名</th><th>建物</th><th>カテゴリ</th><th>ステータス</th><th>設備会社</th><th></th></tr></thead>
+          <tbody>
+            <tr><td class="link" onclick="nav('pm','pm-case-detail')">#C-001</td><td><a class="link" onclick="nav('pm','pm-case-detail')">空調設備更新</a></td><td><a class="link" onclick="nav('pm','pm-building-detail')">○○マンション</a></td><td>空調設備</td><td><span class="badge badge-inprogress">商談中</span></td><td>ABC設備（株）</td><td><button class="btn btn-sm btn-outline" onclick="nav('pm','pm-case-detail')">詳細</button></td></tr>
+            <tr><td>#C-006</td><td>消防設備点検</td><td>△△ビル</td><td>消防設備</td><td><span class="badge badge-pending">運営確認中</span></td><td>-</td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
+            <tr><td>#C-004</td><td>エレベーター点検</td><td>◎◎レジデンス</td><td>エレベーター</td><td><span class="badge badge-ordered">発注済み</span></td><td>DEF設備（株）</td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 管理会社：案件登録 -->
+    <div id="pm-case-register" class="screen">
+      <div class="breadcrumb"><a onclick="nav('pm','pm-cases')">案件一覧</a> <span>›</span> <span style="color:var(--text)">新規登録</span></div>
+      <div class="card" style="max-width:840px">
+        <h2>案件登録</h2>
+        <div class="alert alert-info"><span class="alert-icon">i</span>登録後、運営者がマッチする設備会社を探し紹介します。</div>
+        <div class="form-group"><label>対象建物<span class="req">必須</span></label><select><option>選択してください</option><option>○○マンション（東京都港区）</option><option>△△ビル（東京都新宿区）</option><option>□□タワー（東京都中央区）</option></select></div>
+        <div class="form-row">
+          <div class="form-group"><label>案件名<span class="req">必須</span></label><input placeholder="空調設備更新工事"></div>
+          <div class="form-group"><label>カテゴリ<span class="req">必須</span></label><select><option>選択してください</option><option>空調設備</option><option>給排水設備</option><option>電気設備</option><option>消防設備</option><option>エレベーター</option></select></div>
+        </div>
+        <div class="form-group"><label>案件概要<span class="req">必須</span></label><textarea placeholder="工事内容、現状の課題、希望条件など"></textarea></div>
+        <div class="form-row">
+          <div class="form-group"><label>希望時期<span class="req">必須</span></label><input type="month"></div>
+          <div class="form-group"><label>予算感</label><select><option>未定</option><option>〜100万円</option><option>100〜500万円</option><option>500〜1,000万円</option><option>1,000万円〜</option></select></div>
+        </div>
+        <div class="form-group"><label>緊急度</label><select><option>通常</option><option>やや急ぎ</option><option>至急</option></select></div>
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="nav('pm','pm-cases')">案件を登録する</button>
+          <button class="btn btn-outline" onclick="nav('pm','pm-cases')">キャンセル</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 管理会社：案件詳細（チャット＋発注ボタン） -->
+    <div id="pm-case-detail" class="screen">
+      <div class="breadcrumb"><a onclick="nav('pm','pm-cases')">案件一覧</a> <span>›</span> <span style="color:var(--text)">案件詳細</span></div>
+      <div class="page-header">
+        <h2>空調設備更新 - ABC設備（株）</h2>
+        <span class="badge badge-inprogress">商談中</span>
+      </div>
+      <div class="two-col">
+        <div>
+          <div class="chat-container">
+            <div class="chat-header"><span>ABC設備（株）とのチャット</span></div>
+            <div class="chat-messages">
+              <div class="chat-msg mine">はじめまして、○○管理会社の田中です。<div class="meta">田中（自社） 3/25 10:00</div></div>
+              <div class="chat-msg theirs">はじめまして。Zoomでお話しできますか？<div class="meta">鈴木（ABC設備） 3/25 10:30</div></div>
+              <div class="chat-msg mine">ぜひ。明日14時はいかがですか？<div class="meta">田中（自社） 3/25 11:00</div></div>
+              <div class="chat-msg theirs">承知しました。<br>https://zoom.us/j/xxxxxxxxxx<div class="meta">鈴木（ABC設備） 3/25 11:15</div></div>
+              <div class="chat-msg theirs">お見積りを来週中にお送りします。<div class="meta">鈴木（ABC設備） 3/26 15:00</div></div>
+            </div>
+            <div class="chat-input"><input placeholder="メッセージを入力..."><button class="btn btn-primary btn-sm">送信</button></div>
+          </div>
+        </div>
+        <div>
+          <div class="card">
+            <h3>案件情報</h3>
+            <dl class="detail-grid">
+              <div class="detail-item"><dt>案件ID</dt><dd>#C-001</dd></div>
+              <div class="detail-item"><dt>カテゴリ</dt><dd>空調設備</dd></div>
+              <div class="detail-item"><dt>建物</dt><dd><a class="link" onclick="nav('pm','pm-building-detail')">○○マンション</a></dd></div>
+              <div class="detail-item"><dt>希望時期</dt><dd>2026年5月〜</dd></div>
+              <div class="detail-item"><dt>設備会社</dt><dd>ABC設備（株）</dd></div>
+              <div class="detail-item"><dt>紹介日</dt><dd>2026/03/25</dd></div>
+            </dl>
+          </div>
+          <div class="card">
+            <h3>発注アクション</h3>
+            <p style="color:var(--text-dim);margin-bottom:16px;line-height:1.8">この設備会社に発注を確定する場合は下のボタンを押してください。<br><span style="font-size:12px">※ 発注確定後の請求・施工管理はシステム外で行います</span></p>
+            <button class="btn btn-success btn-lg btn-block" onclick="alert('発注を確定しますか？（確認ダイアログ）')">この会社に発注する</button>
+            <p style="text-align:center;color:var(--text-muted);font-size:12px;margin-top:10px">キャンセルは運営にお問い合わせください</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 管理会社：過去発注先 -->
+    <div id="pm-past-orders" class="screen">
+      <div class="page-header"><h2>過去の発注先</h2></div>
+      <div class="alert alert-info"><span class="alert-icon">i</span>過去に発注確定した設備会社のみ表示されます。再依頼が可能です。</div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <table>
+          <thead><tr><th>設備会社名</th><th>過去案件</th><th>最終発注日</th><th></th></tr></thead>
+          <tbody>
+            <tr><td style="color:var(--text);font-weight:500">ABC設備（株）</td><td>空調設備更新（○○マンション）</td><td>2026/02/20</td><td><button class="btn btn-sm btn-primary" onclick="nav('pm','pm-reorder')">再依頼する</button></td></tr>
+            <tr><td style="color:var(--text);font-weight:500">DEF設備（株）</td><td>エレベーター点検（◎◎レジデンス）</td><td>2026/01/15</td><td><button class="btn btn-sm btn-primary" onclick="nav('pm','pm-reorder')">再依頼する</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 管理会社：再依頼フォーム -->
+    <div id="pm-reorder" class="screen">
+      <div class="breadcrumb"><a onclick="nav('pm','pm-past-orders')">過去の発注先</a> <span>›</span> <span style="color:var(--text)">再依頼</span></div>
+      <div class="card" style="max-width:840px">
+        <h2>ABC設備（株）への再依頼</h2>
+        <div class="alert alert-info"><span class="alert-icon">i</span>過去に取引のある設備会社へ直接案件を紹介できます。チャットルームが開設されます。</div>
+        <div class="form-group"><label>対象建物<span class="req">必須</span></label><select><option>選択してください</option><option>○○マンション（東京都港区）</option><option>△△ビル（東京都新宿区）</option></select></div>
+        <div class="form-row">
+          <div class="form-group"><label>案件名<span class="req">必須</span></label><input placeholder="空調設備定期メンテナンス"></div>
+          <div class="form-group"><label>カテゴリ<span class="req">必須</span></label><select><option>空調設備</option><option>給排水設備</option><option>電気設備</option><option>消防設備</option></select></div>
+        </div>
+        <div class="form-group"><label>依頼内容<span class="req">必須</span></label><textarea placeholder="依頼したい内容を記載してください"></textarea></div>
+        <div class="form-group"><label>希望時期</label><input type="month"></div>
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="nav('pm','pm-case-detail')">再依頼する</button>
+          <button class="btn btn-outline" onclick="nav('pm','pm-past-orders')">キャンセル</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 管理会社：会員登録 -->
+    <div id="pm-register" class="screen">
+      <div class="card" style="max-width:840px">
+        <h2>物件管理会社 会員登録（審査申請）</h2>
+        <div class="alert alert-info"><span class="alert-icon">i</span>ご登録後、運営事務局にて審査を行います。</div>
+        <div class="form-row">
+          <div class="form-group"><label>会社名<span class="req">必須</span></label><input placeholder="○○管理株式会社"></div>
+          <div class="form-group"><label>代表者名<span class="req">必須</span></label><input placeholder="佐藤 花子"></div>
+        </div>
+        <div class="form-group"><label>所在地<span class="req">必須</span></label><input placeholder="東京都千代田区○○1-1-1"></div>
+        <div class="form-row">
+          <div class="form-group"><label>電話番号<span class="req">必須</span></label><input></div>
+          <div class="form-group"><label>メールアドレス<span class="req">必須</span></label><input type="email"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>管理戸数・棟数<span class="req">必須</span></label><input placeholder="約500戸 / 30棟"></div>
+          <div class="form-group"><label>管理物件の種類<span class="req">必須</span></label><select><option>選択</option><option>マンション</option><option>オフィスビル</option><option>商業施設</option></select></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>パスワード<span class="req">必須</span></label><input type="password"></div>
+          <div class="form-group"><label>パスワード（確認）<span class="req">必須</span></label><input type="password"></div>
+        </div>
+        <div class="btn-group"><button class="btn btn-primary">審査申請する</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- 運営管理 -->
+<!-- ============================================ -->
+<div id="role-admin" class="app-layout role-section">
+  <div class="sidebar" id="sidebar-admin">
+    <div class="section-title">ダッシュボード</div>
+    <a class="active" onclick="nav('admin','admin-dashboard')"><span class="nav-icon">📊</span>概要</a>
+    <div class="section-title">会員管理</div>
+    <a onclick="nav('admin','admin-eq-list')"><span class="nav-icon">🔧</span>設備会社一覧</a>
+    <a onclick="nav('admin','admin-pm-list')"><span class="nav-icon">🏢</span>管理会社一覧</a>
+    <div class="section-title">案件管理</div>
+    <a onclick="nav('admin','admin-cases')"><span class="nav-icon">📋</span>案件一覧</a>
+    <div class="section-title">受注管理</div>
+    <a onclick="nav('admin','admin-orders')"><span class="nav-icon">✅</span>受注一覧</a>
+  </div>
+  <div class="main">
+
+    <!-- 運営：ダッシュボード -->
+    <div id="admin-dashboard" class="screen active">
+      <div class="page-header"><h2>運営ダッシュボード</h2></div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">設備会社</div><div class="stat-value" style="color:var(--accent-light)">24</div><div class="stat-sub">審査待ち: 3</div></div>
+        <div class="stat-card"><div class="stat-label">管理会社</div><div class="stat-value" style="color:var(--amber)">18</div><div class="stat-sub">審査待ち: 1</div></div>
+        <div class="stat-card"><div class="stat-label">進行中案件</div><div class="stat-value" style="color:var(--green)">7</div><div class="stat-sub">未マッチング: 2</div></div>
+        <div class="stat-card"><div class="stat-label">今月の受注</div><div class="stat-value" style="color:var(--blue)">5</div></div>
+      </div>
+      <div class="card">
+        <h2>審査待ち一覧</h2>
+        <table>
+          <thead><tr><th>種別</th><th>会社名</th><th>申請日</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><span class="badge badge-new">設備会社</span></td><td><a class="link" onclick="nav('admin','admin-eq-detail')">GHI設備工業（株）</a></td><td>2026/03/25</td><td><button class="btn btn-sm btn-primary" onclick="nav('admin','admin-eq-detail')">審査する</button></td></tr>
+            <tr><td><span class="badge badge-new">設備会社</span></td><td>JKL空調サービス（株）</td><td>2026/03/24</td><td><button class="btn btn-sm btn-primary">審査する</button></td></tr>
+            <tr><td><span class="badge badge-inprogress">管理会社</span></td><td>PQR管理（株）</td><td>2026/03/24</td><td><button class="btn btn-sm btn-primary">審査する</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 運営：設備会社一覧 -->
+    <div id="admin-eq-list" class="screen">
+      <div class="page-header"><h2>設備会社一覧</h2></div>
+      <div class="search-bar">
+        <input placeholder="会社名・エリア・分野で検索...">
+        <select><option>全ステータス</option><option>審査待ち</option><option>承認済み</option><option>否認</option></select>
+        <button class="btn btn-primary">検索</button>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <table>
+          <thead><tr><th>会社名</th><th>対応分野</th><th>エリア</th><th>従業員数</th><th>ステータス</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><a class="link" onclick="nav('admin','admin-eq-detail')">ABC設備（株）</a></td><td>空調, 給排水</td><td>東京23区</td><td>50名</td><td><span class="badge badge-approved">承認済み</span></td><td><button class="btn btn-sm btn-outline" onclick="nav('admin','admin-eq-detail')">詳細</button></td></tr>
+            <tr><td><a class="link">DEF設備（株）</a></td><td>エレベーター</td><td>東京23区, 神奈川</td><td>120名</td><td><span class="badge badge-approved">承認済み</span></td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
+            <tr><td><a class="link" onclick="nav('admin','admin-eq-detail')">GHI設備工業（株）</a></td><td>消防設備</td><td>東京23区</td><td>30名</td><td><span class="badge badge-pending">審査待ち</span></td><td><button class="btn btn-sm btn-primary" onclick="nav('admin','admin-eq-detail')">審査</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 運営：設備会社詳細（審査） -->
+    <div id="admin-eq-detail" class="screen">
+      <div class="breadcrumb"><a onclick="nav('admin','admin-eq-list')">設備会社一覧</a> <span>›</span> <span style="color:var(--text)">詳細</span></div>
+      <div class="page-header">
+        <h2>GHI設備工業（株）</h2>
+        <span class="badge badge-pending">審査待ち</span>
+      </div>
+      <div class="two-col">
+        <div class="card">
+          <h3>基本情報</h3>
+          <dl>
+            <div class="detail-item"><dt>会社名</dt><dd>GHI設備工業株式会社</dd></div>
+            <div class="detail-item"><dt>代表者</dt><dd>高橋 次郎</dd></div>
+            <div class="detail-item"><dt>所在地</dt><dd>東京都文京区○○ 3-4-5</dd></div>
+            <div class="detail-item"><dt>設立</dt><dd>2005年4月</dd></div>
+            <div class="detail-item"><dt>電話番号</dt><dd>03-3333-4444</dd></div>
+            <div class="detail-item"><dt>ホームページ</dt><dd style="color:var(--accent-light)">https://ghi-setubi.co.jp</dd></div>
+          </dl>
+        </div>
+        <div class="card">
+          <h3>事業情報</h3>
+          <dl>
+            <div class="detail-item"><dt>資本金</dt><dd>3,000万円</dd></div>
+            <div class="detail-item"><dt>従業員数</dt><dd>30名</dd></div>
+            <div class="detail-item"><dt>年間売上高</dt><dd>2億円</dd></div>
+            <div class="detail-item"><dt>建設業許可</dt><dd>東京都知事許可 第12345号</dd></div>
+            <div class="detail-item"><dt>対応分野</dt><dd>消防設備、電気設備</dd></div>
+            <div class="detail-item"><dt>対応エリア</dt><dd>東京23区</dd></div>
+            <div class="detail-item"><dt>損害賠償保険</dt><dd>加入済み</dd></div>
+          </dl>
+        </div>
+      </div>
+      <div class="card">
+        <h3>保有資格</h3>
+        <p style="color:var(--text-dim)">消防設備士 甲種: 5名、電気工事施工管理技士 1級: 3名</p>
+      </div>
+      <div class="card">
+        <h3>施工実績</h3>
+        <p style="color:var(--text-dim);line-height:1.8">・○○ビル 消防設備更新工事（2025年）<br>・△△マンション 電気設備改修（2024年）<br>・□□商業施設 消防設備点検（2024年）</p>
+      </div>
+      <div class="card">
+        <h3>審査アクション</h3>
+        <div class="form-group"><label>審査コメント</label><textarea placeholder="審査結果のコメントを記入"></textarea></div>
+        <div class="btn-group">
+          <button class="btn btn-success" onclick="alert('承認しました'); nav('admin','admin-eq-list')">承認する</button>
+          <button class="btn btn-danger" onclick="alert('否認しました'); nav('admin','admin-eq-list')">否認する</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 運営：管理会社一覧 -->
+    <div id="admin-pm-list" class="screen">
+      <div class="page-header"><h2>物件管理会社一覧</h2></div>
+      <div class="search-bar">
+        <input placeholder="会社名で検索...">
+        <select><option>全ステータス</option><option>審査待ち</option><option>承認済み</option></select>
+        <button class="btn btn-primary">検索</button>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
         <table>
           <thead><tr><th>会社名</th><th>管理戸数</th><th>物件種別</th><th>登録建物数</th><th>ステータス</th><th></th></tr></thead>
           <tbody>
-            <tr><td>○○管理（株）</td><td>500戸</td><td>マンション</td><td>12</td><td><span class="badge badge-approved">承認済み</span></td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
-            <tr><td>△△プロパティ（株）</td><td>1,200戸</td><td>オフィスビル</td><td>8</td><td><span class="badge badge-approved">承認済み</span></td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
+            <tr><td><a class="link" onclick="nav('admin','admin-pm-detail')">○○管理（株）</a></td><td>500戸</td><td>マンション</td><td style="color:var(--accent-light);font-weight:600">12</td><td><span class="badge badge-approved">承認済み</span></td><td><button class="btn btn-sm btn-outline" onclick="nav('admin','admin-pm-detail')">詳細</button></td></tr>
+            <tr><td><a class="link">△△プロパティ（株）</a></td><td>1,200戸</td><td>オフィスビル</td><td style="color:var(--accent-light);font-weight:600">8</td><td><span class="badge badge-approved">承認済み</span></td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
             <tr><td>PQR管理（株）</td><td>300戸</td><td>マンション</td><td>-</td><td><span class="badge badge-pending">審査待ち</span></td><td><button class="btn btn-sm btn-primary">審査</button></td></tr>
           </tbody>
         </table>
       </div>
+    </div>
 
-      <!-- 運営：案件一覧 -->
-      <div id="admin-cases" class="admin-screen" style="display:none;">
-        <div class="page-header"><h2>案件一覧</h2></div>
-        <div class="tab-bar">
-          <button class="active">すべて (12)</button>
-          <button>未マッチング (2)</button>
-          <button>商談中 (3)</button>
-          <button>受注確定 (7)</button>
+    <!-- 運営：管理会社詳細 -->
+    <div id="admin-pm-detail" class="screen">
+      <div class="breadcrumb"><a onclick="nav('admin','admin-pm-list')">管理会社一覧</a> <span>›</span> <span style="color:var(--text)">詳細</span></div>
+      <div class="page-header">
+        <h2>○○管理（株）</h2>
+        <span class="badge badge-approved">承認済み</span>
+      </div>
+      <div class="two-col">
+        <div class="card">
+          <h3>基本情報</h3>
+          <dl>
+            <div class="detail-item"><dt>会社名</dt><dd>○○管理株式会社</dd></div>
+            <div class="detail-item"><dt>代表者</dt><dd>佐藤 花子</dd></div>
+            <div class="detail-item"><dt>所在地</dt><dd>東京都千代田区○○ 1-1-1</dd></div>
+            <div class="detail-item"><dt>電話番号</dt><dd>03-1111-2222</dd></div>
+            <div class="detail-item"><dt>管理戸数</dt><dd>約500戸 / 30棟</dd></div>
+            <div class="detail-item"><dt>物件種別</dt><dd>マンション</dd></div>
+          </dl>
         </div>
+        <div class="card">
+          <h3>登録建物（12件）</h3>
+          <table>
+            <thead><tr><th>建物名</th><th>種別</th><th>案件数</th></tr></thead>
+            <tbody>
+              <tr><td>○○マンション</td><td>マンション</td><td>3</td></tr>
+              <tr><td>△△ビル</td><td>オフィスビル</td><td>2</td></tr>
+              <tr><td>□□タワー</td><td>複合施設</td><td>5</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 運営：案件一覧 -->
+    <div id="admin-cases" class="screen">
+      <div class="page-header"><h2>案件一覧</h2></div>
+      <div class="tab-bar">
+        <button class="active">すべて (12)</button>
+        <button>未マッチング (2)</button>
+        <button>商談中 (3)</button>
+        <button>受注確定 (7)</button>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
         <table>
           <thead><tr><th>案件ID</th><th>案件名</th><th>管理会社</th><th>建物</th><th>カテゴリ</th><th>設備会社</th><th>ステータス</th><th></th></tr></thead>
           <tbody>
-            <tr><td>#C-007</td><td>防犯カメラ設置</td><td>○○管理</td><td>○○マンション</td><td>防犯</td><td>-</td><td><span class="badge badge-new">未マッチング</span></td><td><button class="btn btn-sm btn-primary">マッチング</button></td></tr>
-            <tr><td>#C-006</td><td>消防設備点検</td><td>○○管理</td><td>△△ビル</td><td>消防</td><td>-</td><td><span class="badge badge-new">未マッチング</span></td><td><button class="btn btn-sm btn-primary">マッチング</button></td></tr>
-            <tr><td>#C-001</td><td>空調設備更新</td><td>○○管理</td><td>○○マンション</td><td>空調</td><td>ABC設備</td><td><span class="badge badge-inprogress">商談中</span></td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
-            <tr><td>#C-004</td><td>エレベーター点検</td><td>○○管理</td><td>◎◎レジデンス</td><td>エレベーター</td><td>DEF設備</td><td><span class="badge badge-ordered">受注確定</span></td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
+            <tr><td style="color:var(--accent-light);font-weight:600">#C-007</td><td>防犯カメラ設置</td><td>○○管理</td><td>○○マンション</td><td>防犯</td><td>-</td><td><span class="badge badge-new">未マッチング</span></td><td><button class="btn btn-sm btn-primary" onclick="nav('admin','admin-matching')">マッチング</button></td></tr>
+            <tr><td style="color:var(--accent-light);font-weight:600">#C-006</td><td>消防設備点検</td><td>○○管理</td><td>△△ビル</td><td>消防</td><td>-</td><td><span class="badge badge-new">未マッチング</span></td><td><button class="btn btn-sm btn-primary" onclick="nav('admin','admin-matching')">マッチング</button></td></tr>
+            <tr><td style="color:var(--accent-light);font-weight:600">#C-001</td><td><a class="link" onclick="nav('admin','admin-case-detail')">空調設備更新</a></td><td>○○管理</td><td>○○マンション</td><td>空調</td><td>ABC設備</td><td><span class="badge badge-inprogress">商談中</span></td><td><button class="btn btn-sm btn-outline" onclick="nav('admin','admin-case-detail')">詳細</button></td></tr>
+            <tr><td style="color:var(--accent-light);font-weight:600">#C-004</td><td>エレベーター点検</td><td>○○管理</td><td>◎◎レジデンス</td><td>エレベーター</td><td>DEF設備</td><td><span class="badge badge-ordered">受注確定</span></td><td><button class="btn btn-sm btn-outline">詳細</button></td></tr>
           </tbody>
         </table>
       </div>
+    </div>
 
-      <!-- 運営：マッチング画面 -->
-      <div id="admin-matching" class="admin-screen" style="display:none;">
-        <div class="page-header"><h2>マッチング: #C-006 消防設備点検</h2></div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-          <div class="card">
-            <h3>案件情報</h3>
-            <dl>
-              <div class="detail-item"><dt>案件名</dt><dd>消防設備点検</dd></div>
-              <div class="detail-item"><dt>管理会社</dt><dd>○○管理（株）</dd></div>
-              <div class="detail-item"><dt>建物</dt><dd>△△ビル（東京都新宿区）</dd></div>
-              <div class="detail-item"><dt>カテゴリ</dt><dd>消防設備</dd></div>
-              <div class="detail-item"><dt>希望時期</dt><dd>2026年5月</dd></div>
-              <div class="detail-item"><dt>概要</dt><dd>定期点検。共用部全体の消防設備点検を実施希望。</dd></div>
-            </dl>
-          </div>
-          <div class="card">
-            <h3>マッチング候補（消防設備 × 東京23区）</h3>
-            <table>
-              <thead><tr><th>会社名</th><th>従業員</th><th>受注実績</th><th></th></tr></thead>
-              <tbody>
-                <tr><td>GHI設備工業（株）</td><td>30名</td><td>5件</td><td><button class="btn btn-sm btn-success">紹介する</button></td></tr>
-                <tr><td>STU防災（株）</td><td>45名</td><td>12件</td><td><button class="btn btn-sm btn-success">紹介する</button></td></tr>
-                <tr><td>VWX消防設備（株）</td><td>20名</td><td>3件</td><td><button class="btn btn-sm btn-success">紹介する</button></td></tr>
-              </tbody>
-            </table>
-            <p style="margin-top: 12px; font-size: 12px; color: var(--gray-400);">※ 「紹介する」を押すと設備会社に案件が通知され、チャットルームが開設されます。</p>
+    <!-- 運営：マッチング画面 -->
+    <div id="admin-matching" class="screen">
+      <div class="breadcrumb"><a onclick="nav('admin','admin-cases')">案件一覧</a> <span>›</span> <span style="color:var(--text)">マッチング</span></div>
+      <div class="page-header"><h2>マッチング: #C-006 消防設備点検</h2></div>
+      <div class="two-col">
+        <div class="card">
+          <h3>案件情報</h3>
+          <dl>
+            <div class="detail-item"><dt>案件名</dt><dd>消防設備点検</dd></div>
+            <div class="detail-item"><dt>管理会社</dt><dd><a class="link" onclick="nav('admin','admin-pm-detail')">○○管理（株）</a></dd></div>
+            <div class="detail-item"><dt>建物</dt><dd>△△ビル（東京都新宿区）</dd></div>
+            <div class="detail-item"><dt>カテゴリ</dt><dd>消防設備</dd></div>
+            <div class="detail-item"><dt>希望時期</dt><dd>2026年5月</dd></div>
+            <div class="detail-item"><dt>概要</dt><dd style="color:var(--text-dim)">定期点検。共用部全体の消防設備点検を実施希望。</dd></div>
+          </dl>
+        </div>
+        <div class="card">
+          <h3>マッチング候補（消防設備 × 東京23区）</h3>
+          <table>
+            <thead><tr><th>会社名</th><th>従業員</th><th>実績</th><th></th></tr></thead>
+            <tbody>
+              <tr><td><a class="link" onclick="nav('admin','admin-eq-detail')">GHI設備工業（株）</a></td><td>30名</td><td>5件</td><td><button class="btn btn-sm btn-success" onclick="alert('紹介しました。設備会社に通知されます。'); nav('admin','admin-cases')">紹介する</button></td></tr>
+              <tr><td>STU防災（株）</td><td>45名</td><td>12件</td><td><button class="btn btn-sm btn-success">紹介する</button></td></tr>
+              <tr><td>VWX消防設備（株）</td><td>20名</td><td>3件</td><td><button class="btn btn-sm btn-success">紹介する</button></td></tr>
+            </tbody>
+          </table>
+          <p style="margin-top:14px;font-size:12px;color:var(--text-muted)">※ 「紹介する」を押すと設備会社に案件が通知され、チャットルームが開設されます。</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 運営：案件詳細 -->
+    <div id="admin-case-detail" class="screen">
+      <div class="breadcrumb"><a onclick="nav('admin','admin-cases')">案件一覧</a> <span>›</span> <span style="color:var(--text)">案件詳細</span></div>
+      <div class="page-header">
+        <h2>#C-001 空調設備更新</h2>
+        <span class="badge badge-inprogress">商談中</span>
+      </div>
+      <div class="two-col">
+        <div class="card">
+          <h3>案件情報</h3>
+          <dl class="detail-grid">
+            <div class="detail-item"><dt>管理会社</dt><dd><a class="link" onclick="nav('admin','admin-pm-detail')">○○管理（株）</a></dd></div>
+            <div class="detail-item"><dt>設備会社</dt><dd><a class="link" onclick="nav('admin','admin-eq-detail')">ABC設備（株）</a></dd></div>
+            <div class="detail-item"><dt>建物</dt><dd>○○マンション</dd></div>
+            <div class="detail-item"><dt>カテゴリ</dt><dd>空調設備</dd></div>
+            <div class="detail-item"><dt>希望時期</dt><dd>2026年5月〜</dd></div>
+            <div class="detail-item"><dt>紹介日</dt><dd>2026/03/25</dd></div>
+          </dl>
+          <h3 style="margin-top:20px">概要</h3>
+          <p style="color:var(--text-dim);line-height:1.8">築15年のマンションにて、共用部の空調設備の更新工事を検討中。</p>
+        </div>
+        <div class="card">
+          <h3>ステータス履歴</h3>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;gap:12px;align-items:start"><span style="color:var(--green);font-size:18px">●</span><div><div style="font-weight:600;font-size:13px">案件登録</div><div style="color:var(--text-muted);font-size:12px">2026/03/24 ○○管理（株）</div></div></div>
+            <div style="display:flex;gap:12px;align-items:start"><span style="color:var(--green);font-size:18px">●</span><div><div style="font-weight:600;font-size:13px">設備会社紹介</div><div style="color:var(--text-muted);font-size:12px">2026/03/25 → ABC設備（株）</div></div></div>
+            <div style="display:flex;gap:12px;align-items:start"><span style="color:var(--accent-light);font-size:18px">●</span><div><div style="font-weight:600;font-size:13px">商談中</div><div style="color:var(--text-muted);font-size:12px">設備会社が承認、チャット開始</div></div></div>
+            <div style="display:flex;gap:12px;align-items:start"><span style="color:var(--text-muted);font-size:18px">○</span><div><div style="font-weight:500;font-size:13px;color:var(--text-muted)">発注確定</div><div style="color:var(--text-muted);font-size:12px">管理会社が発注ボタンを押す</div></div></div>
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- 運営：受注一覧 -->
-      <div id="admin-orders" class="admin-screen" style="display:none;">
-        <div class="page-header">
-          <h2>受注一覧</h2>
-          <button class="btn btn-outline" onclick="alert('CSVダウンロード')">CSVダウンロード</button>
-        </div>
+    <!-- 運営：受注一覧 -->
+    <div id="admin-orders" class="screen">
+      <div class="page-header">
+        <h2>受注一覧</h2>
+        <button class="btn btn-outline" onclick="alert('CSVダウンロード')">📥 CSV ダウンロード</button>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
         <table>
           <thead><tr><th>受注ID</th><th>案件名</th><th>管理会社</th><th>設備会社</th><th>建物</th><th>受注日</th><th>ステータス</th></tr></thead>
           <tbody>
-            <tr><td>#O-001</td><td>エレベーター点検</td><td>○○管理</td><td>DEF設備</td><td>◎◎レジデンス</td><td>2026/02/15</td><td><span class="badge badge-ordered">受注確定</span></td></tr>
-            <tr><td>#O-002</td><td>電気設備改修</td><td>△△プロパティ</td><td>ABC設備</td><td>▲▲ビル</td><td>2026/01/20</td><td><span class="badge badge-ordered">受注確定</span></td></tr>
-            <tr><td>#O-003</td><td>給排水設備修繕</td><td>○○管理</td><td>XYZ設備</td><td>□□タワー</td><td>2025/12/10</td><td><span class="badge badge-ordered">受注確定</span></td></tr>
-            <tr><td>#O-004</td><td>空調設備新設</td><td>△△プロパティ</td><td>JKL空調</td><td>◆◆オフィス</td><td>2025/11/05</td><td><span class="badge badge-ordered">受注確定</span></td></tr>
-            <tr><td>#O-005</td><td>消防設備更新</td><td>○○管理</td><td>STU防災</td><td>△△ビル</td><td>2025/10/20</td><td><span class="badge badge-ordered">受注確定</span></td></tr>
+            <tr><td style="color:var(--accent-light);font-weight:600">#O-001</td><td>エレベーター点検</td><td><a class="link" onclick="nav('admin','admin-pm-detail')">○○管理</a></td><td><a class="link" onclick="nav('admin','admin-eq-detail')">DEF設備</a></td><td>◎◎レジデンス</td><td>2026/02/15</td><td><span class="badge badge-ordered">受注確定</span></td></tr>
+            <tr><td style="color:var(--accent-light);font-weight:600">#O-002</td><td>電気設備改修</td><td>△△プロパティ</td><td>ABC設備</td><td>▲▲ビル</td><td>2026/01/20</td><td><span class="badge badge-ordered">受注確定</span></td></tr>
+            <tr><td style="color:var(--accent-light);font-weight:600">#O-003</td><td>給排水設備修繕</td><td>○○管理</td><td>XYZ設備</td><td>□□タワー</td><td>2025/12/10</td><td><span class="badge badge-ordered">受注確定</span></td></tr>
+            <tr><td style="color:var(--accent-light);font-weight:600">#O-004</td><td>空調設備新設</td><td>△△プロパティ</td><td>JKL空調</td><td>◆◆オフィス</td><td>2025/11/05</td><td><span class="badge badge-ordered">受注確定</span></td></tr>
           </tbody>
         </table>
       </div>
-
     </div>
+
   </div>
 </div>
 
 <script>
 function switchRole(role) {
-  document.querySelectorAll('.role-section').forEach(s => s.style.display = 'none');
-  document.getElementById('role-' + role).style.display = 'block';
-  document.querySelectorAll('.top-nav .nav-links button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.role-section').forEach(s => s.classList.remove('active'));
+  document.getElementById('role-' + role).classList.add('active');
+  document.querySelectorAll('.nav-links button').forEach(b => b.classList.remove('active'));
   event.target.classList.add('active');
 }
 
-function showScreen(prefix, id) {
-  const parent = document.getElementById('role-' + (prefix === 'eq' ? 'equipment' : 'property'));
+function nav(role, screenId) {
+  const parent = document.getElementById('role-' + role);
   parent.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  const selector = document.getElementById(prefix + '-screens');
-  selector.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
-}
-
-function showAdminScreen(id) {
-  document.querySelectorAll('.admin-screen').forEach(s => s.style.display = 'none');
-  document.getElementById(id).style.display = 'block';
-  document.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
-  event.target.classList.add('active');
+  document.getElementById(screenId).classList.add('active');
+  // Update sidebar active
+  const sidebar = document.getElementById('sidebar-' + role);
+  if (sidebar) {
+    sidebar.querySelectorAll('a').forEach(a => a.classList.remove('active'));
+    // Find matching sidebar link
+    sidebar.querySelectorAll('a').forEach(a => {
+      const onclick = a.getAttribute('onclick');
+      if (onclick && onclick.includes("'" + screenId + "'")) {
+        a.classList.add('active');
+      }
+    });
+  }
+  window.scrollTo(0, 0);
 }
 </script>
 </body>
