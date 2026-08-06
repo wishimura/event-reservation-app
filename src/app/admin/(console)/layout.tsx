@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 const navItems = [
   { href: "/admin", label: "ダッシュボード", icon: "📊" },
@@ -13,6 +13,13 @@ const navItems = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function handleLogout() {
+    await fetch("/api/admin/logout", { method: "POST" });
+    router.replace("/admin/login");
+    router.refresh();
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
@@ -44,13 +51,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             );
           })}
         </nav>
-        <div className="px-6 py-4 border-t border-indigo-800">
+        <div className="px-6 py-4 border-t border-indigo-800 space-y-2">
           <Link
             href="/"
-            className="text-xs text-indigo-300 hover:text-white transition-colors"
+            className="block text-xs text-indigo-300 hover:text-white transition-colors"
           >
             &larr; お客様向けサイトへ
           </Link>
+          <button
+            onClick={handleLogout}
+            className="block text-xs text-indigo-300 hover:text-white transition-colors"
+          >
+            ログアウト
+          </button>
         </div>
       </aside>
 

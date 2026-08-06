@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { fetchJson } from "@/lib/api-client";
 import { formatPrice } from "@/lib/utils";
 import type { Order, OrderItem } from "@/lib/types";
 
@@ -38,36 +38,10 @@ export default function PickupPage() {
 
   async function loadTodayOrders() {
     try {
-      const { data: ev } = await supabase
-        .from("events")
-        .select("*")
-        .eq("is_active", true)
-        .single();
-      if (!ev) return;
-
-      const today = new Date().toISOString().split("T")[0];
-
-      // Find today's event_date
-      const { data: todayDate } = await supabase
-        .from("event_dates")
-        .select("*")
-        .eq("event_id", ev.id)
-        .eq("pickup_date", today)
-        .single();
-
-      if (!todayDate) {
-        setLoading(false);
-        return;
-      }
-
-      const { data } = await supabase
-        .from("orders")
-        .select("*, order_items(*, product:products(*))")
-        .eq("event_date_id", todayDate.id)
-        .eq("order_status", "confirmed")
-        .order("customer_name");
-
-      if (data) setOrders(data as PickupOrder[]);
+      const data = await fetchJson<{ orders: PickupOrder[] }>(
+        "/api/admin/pickup"
+      );
+      setOrders(data.orders);
     } catch (err) {
       console.error("Pickup load error:", err);
     } finally {
@@ -75,45 +49,33 @@ export default function PickupPage() {
     }
   }
 
-  async function markPickedUp(orderId: string) {
+  async function setPickupStatus(
+    orderId: string,
+    status: "picked_up" | "not_picked_up"
+  ) {
     setUpdatingId(orderId);
     try {
-      await supabase
-        .from("orders")
-        .update({ pickup_status: "picked_up" })
-        .eq("id", orderId);
+      await fetchJson(`/api/admin/orders/${orderId}/pickup`, {
+        method: "PATCH",
+        body: JSON.stringify({ pickup_status: status }),
+      });
 
       setOrders((prev) =>
-        prev.map((o) =>
-          o.id === orderId ? { ...o, pickup_status: "picked_up" as const } : o
-        )
+        prev.map((o) => (o.id === orderId ? { ...o, pickup_status: status } : o))
       );
     } catch (err) {
       console.error("Pickup update error:", err);
+      alert("受取ステータスの更新に失敗しました");
     } finally {
       setUpdatingId(null);
     }
   }
 
-  async function markNotPickedUp(orderId: string) {
-    setUpdatingId(orderId);
-    try {
-      await supabase
-        .from("orders")
-        .update({ pickup_status: "not_picked_up" })
-        .eq("id", orderId);
+  const markPickedUp = (orderId: string) =>
+    setPickupStatus(orderId, "picked_up");
 
-      setOrders((prev) =>
-        prev.map((o) =>
-          o.id === orderId ? { ...o, pickup_status: "not_picked_up" as const } : o
-        )
-      );
-    } catch (err) {
-      console.error("Pickup update error:", err);
-    } finally {
-      setUpdatingId(null);
-    }
-  }
+  const markNotPickedUp = (orderId: string) =>
+    setPickupStatus(orderId, "not_picked_up");
 
   const totalCount = orders.length;
   const pickedUpCount = orders.filter((o) => o.pickup_status === "picked_up").length;

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { useEffect, useMemo, useState } from "react";
+import { fetchJson } from "@/lib/api-client";
 import { formatDate, formatPrice } from "@/lib/utils";
 import type { EventDate, DailyProductInventory, Product } from "@/lib/types";
 
@@ -12,97 +12,56 @@ type InventoryWithProduct = DailyProductInventory & {
 export default function ProductionPage() {
   const [eventDates, setEventDates] = useState<EventDate[]>([]);
   const [selectedDateId, setSelectedDateId] = useState<string>("");
-  const [inventories, setInventories] = useState<InventoryWithProduct[]>([]);
+  const [allInventories, setAllInventories] = useState<
+    Map<string, InventoryWithProduct[]>
+  >(new Map());
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"single" | "all">("all");
 
   useEffect(() => {
-    loadDates();
+    loadProductionPlan();
   }, []);
 
-  useEffect(() => {
-    if (selectedDateId) {
-      loadInventory(selectedDateId);
-    }
-  }, [selectedDateId]);
+  // One request covers both views; the single-date view is just a slice of it.
+  async function loadProductionPlan() {
+    try {
+      const { dates, inventory } = await fetchJson<{
+        dates: EventDate[];
+        inventory: InventoryWithProduct[];
+      }>("/api/admin/production");
 
-  async function loadDates() {
-    const { data: ev } = await supabase
-      .from("events")
-      .select("*")
-      .eq("is_active", true)
-      .single();
-    if (!ev) return;
+      setEventDates(dates);
+      if (dates.length > 0) setSelectedDateId(dates[0].id);
 
-    const { data: dates } = await supabase
-      .from("event_dates")
-      .select("*")
-      .eq("event_id", ev.id)
-      .eq("is_active", true)
-      .order("pickup_date");
-
-    if (dates && dates.length > 0) {
-      setEventDates(dates as EventDate[]);
-      setSelectedDateId(dates[0].id);
-    }
-    setLoading(false);
-  }
-
-  async function loadInventory(dateId: string) {
-    const { data } = await supabase
-      .from("daily_product_inventory")
-      .select("*, product:products(*)")
-      .eq("event_date_id", dateId)
-      .order("product(sort_order)");
-
-    if (data) setInventories(data as InventoryWithProduct[]);
-  }
-
-  // Load all dates' inventory for the "all dates" view
-  const [allInventories, setAllInventories] = useState<
-    Map<string, InventoryWithProduct[]>
-  >(new Map());
-  const [allLoading, setAllLoading] = useState(false);
-
-  useEffect(() => {
-    if (viewMode === "all" && eventDates.length > 0) {
-      loadAllInventories();
-    }
-  }, [viewMode, eventDates]);
-
-  async function loadAllInventories() {
-    setAllLoading(true);
-    const dateIds = eventDates.map((d) => d.id);
-    const { data } = await supabase
-      .from("daily_product_inventory")
-      .select("*, product:products(*)")
-      .in("event_date_id", dateIds)
-      .order("product(sort_order)");
-
-    if (data) {
       const map = new Map<string, InventoryWithProduct[]>();
-      for (const inv of data as InventoryWithProduct[]) {
-        const existing = map.get(inv.event_date_id) || [];
+      for (const inv of inventory) {
+        const existing = map.get(inv.event_date_id) ?? [];
         existing.push(inv);
         map.set(inv.event_date_id, existing);
       }
       setAllInventories(map);
+    } catch (err) {
+      console.error("Production load error:", err);
+    } finally {
+      setLoading(false);
     }
-    setAllLoading(false);
   }
 
-  // Get unique product names across all inventories
-  const productNames = (() => {
-    if (allInventories.size === 0) return [];
+  const allLoading = loading;
+
+  const inventories = useMemo(
+    () => allInventories.get(selectedDateId) ?? [],
+    [allInventories, selectedDateId]
+  );
+
+  // Product columns for the matrix view, taken from any one date.
+  const productNames = useMemo(() => {
     const first = allInventories.values().next().value;
     if (!first) return [];
-    return first
-      .sort((a: InventoryWithProduct, b: InventoryWithProduct) => a.product.sort_order - b.product.sort_order)
-      .map((inv: InventoryWithProduct) => ({
-        id: inv.product.id,
-        name: inv.product.name,
-      }));
-  })();
+    return [...first]
+      .sort((a, b) => a.product.sort_order - b.product.sort_order)
+      .map((inv) => ({ id: inv.product.id, name: inv.product.name }));
+  }, [allInventories]);
 
   if (loading) {
     return (

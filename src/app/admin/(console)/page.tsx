@@ -2,8 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
-import { formatDate, formatPrice, getRemainingQuantity } from "@/lib/utils";
+import { fetchJson } from "@/lib/api-client";
+import {
+  addDaysToDateString,
+  formatDate,
+  formatPrice,
+  getRemainingQuantity,
+} from "@/lib/utils";
 import type { Event, EventDate, Order, DailyProductInventory } from "@/lib/types";
 
 interface DailySummary {
@@ -29,90 +34,50 @@ export default function AdminDashboard() {
 
   async function loadDashboard() {
     try {
-      // Get active event
-      const { data: ev } = await supabase
-        .from("events")
-        .select("*")
-        .eq("is_active", true)
-        .single();
-      if (!ev) return;
-      setEvent(ev);
+      const data = await fetchJson<{
+        event: Event;
+        dates: EventDate[];
+        today: string;
+        orders: Order[];
+        lowStockItems: DailyProductInventory[];
+      }>("/api/admin/dashboard");
 
-      // Get all event dates
-      const { data: dates } = await supabase
-        .from("event_dates")
-        .select("*")
-        .eq("event_id", ev.id)
-        .order("pickup_date");
+      setEvent(data.event);
+      setLowStockItems(data.lowStockItems);
 
-      // Get all orders
-      const { data: orders } = await supabase
-        .from("orders")
-        .select("*, event_date:event_dates(*)")
-        .eq("event_id", ev.id)
-        .in("order_status", ["confirmed", "temporary"]);
+      const { today, orders, dates } = data;
+      const tomorrow = addDaysToDateString(today, 1);
 
-      const today = new Date().toISOString().split("T")[0];
-      const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
+      const todayOrders = orders.filter(
+        (o) =>
+          o.event_date?.pickup_date === today && o.order_status === "confirmed"
+      );
+      setTodayPickupCount(todayOrders.length);
+      setTodayPickedUp(
+        todayOrders.filter((o) => o.pickup_status === "picked_up").length
+      );
 
-      if (orders) {
-        // Today's pickup
-        const todayOrders = orders.filter(
-          (o: Order) => o.event_date?.pickup_date === today && o.order_status === "confirmed"
-        );
-        setTodayPickupCount(todayOrders.length);
-        setTodayPickedUp(todayOrders.filter((o: Order) => o.pickup_status === "picked_up").length);
+      setTomorrowReservationCount(
+        orders.filter((o) => o.event_date?.pickup_date === tomorrow).length
+      );
 
-        // Tomorrow's reservations
-        const tomorrowOrders = orders.filter(
-          (o: Order) => o.event_date?.pickup_date === tomorrow
-        );
-        setTomorrowReservationCount(tomorrowOrders.length);
+      setTotalSales(
+        orders
+          .filter((o) => o.payment_status === "paid")
+          .reduce((sum, o) => sum + o.total_amount, 0)
+      );
 
-        // Total sales
-        const sales = orders
-          .filter((o: Order) => o.payment_status === "paid")
-          .reduce((sum: number, o: Order) => sum + o.total_amount, 0);
-        setTotalSales(sales);
-
-        // Daily summary
-        if (dates) {
-          const summary: DailySummary[] = dates.map((d: EventDate) => {
-            const dateOrders = orders.filter((o: Order) => o.event_date_id === d.id);
-            return {
-              date: d.pickup_date,
-              dateLabel: formatDate(d.pickup_date),
-              orderCount: dateOrders.length,
-              totalAmount: dateOrders.reduce((s: number, o: Order) => s + o.total_amount, 0),
-            };
-          });
-          setDailySummary(summary);
-        }
-      }
-
-      // Low stock warnings - check all upcoming dates
-      if (dates) {
-        const upcomingDates = dates.filter((d: EventDate) => d.pickup_date >= today);
-        const allLowStock: DailyProductInventory[] = [];
-
-        for (const d of upcomingDates) {
-          const { data: inv } = await supabase
-            .from("daily_product_inventory")
-            .select("*, product:products(*)")
-            .eq("event_date_id", d.id);
-          if (inv) {
-            const low = inv.filter(
-              (i: DailyProductInventory) =>
-                !i.is_sold_out &&
-                !i.is_hidden &&
-                getRemainingQuantity(i) <= i.warning_threshold &&
-                getRemainingQuantity(i) > 0
-            );
-            allLowStock.push(...low);
-          }
-        }
-        setLowStockItems(allLowStock);
-      }
+      setDailySummary(
+        dates.map((d) => {
+          const dateOrders = orders.filter((o) => o.event_date_id === d.id);
+          return {
+            date: d.pickup_date,
+            dateLabel: formatDate(d.pickup_date),
+            orderCount: dateOrders.length,
+            totalAmount: dateOrders.reduce((s, o) => s + o.total_amount, 0),
+          };
+        })
+      );
     } catch (err) {
       console.error("Dashboard load error:", err);
     } finally {

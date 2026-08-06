@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { supabase } from "@/lib/supabase";
-import { formatDate, getRemainingQuantity } from "@/lib/utils";
+import { ApiError, fetchJson } from "@/lib/api-client";
+import { formatDate, getRemainingQuantity, todayInJST } from "@/lib/utils";
 import type { Event, EventDate, DailyProductInventory } from "@/lib/types";
 
 interface EditableInventory extends DailyProductInventory {
@@ -29,25 +29,19 @@ export default function InventoryPage() {
     if (!dateId) return;
     setLoading(true);
     try {
-      const { data } = await supabase
-        .from("daily_product_inventory")
-        .select("*, product:products(*)")
-        .eq("event_date_id", dateId);
+      const { inventory: rows } = await fetchJson<{
+        inventory: DailyProductInventory[];
+      }>(`/api/admin/inventory?dateId=${encodeURIComponent(dateId)}`);
 
-      if (data) {
-        const editable: EditableInventory[] = data
-          .sort((a: DailyProductInventory, b: DailyProductInventory) =>
-            (a.product?.sort_order ?? 0) - (b.product?.sort_order ?? 0)
-          )
-          .map((inv: DailyProductInventory) => ({
-            ...inv,
-            _editedQty: inv.production_quantity,
-            _editedSoldOut: inv.is_sold_out,
-            _editedHidden: inv.is_hidden,
-            _dirty: false,
-          }));
-        setInventory(editable);
-      }
+      setInventory(
+        rows.map((inv) => ({
+          ...inv,
+          _editedQty: inv.production_quantity,
+          _editedSoldOut: inv.is_sold_out,
+          _editedHidden: inv.is_hidden,
+          _dirty: false,
+        }))
+      );
     } catch (err) {
       console.error("Inventory load error:", err);
     } finally {
@@ -63,26 +57,19 @@ export default function InventoryPage() {
 
   async function loadInitialData() {
     try {
-      const { data: ev } = await supabase
-        .from("events")
-        .select("*")
-        .eq("is_active", true)
-        .single();
-      if (!ev) return;
+      const { event: ev, dates } = await fetchJson<{
+        event: Event;
+        dates: EventDate[];
+      }>("/api/admin/inventory");
+
       setEvent(ev);
 
-      const { data: dates } = await supabase
-        .from("event_dates")
-        .select("*")
-        .eq("event_id", ev.id)
-        .order("pickup_date");
-
-      if (dates && dates.length > 0) {
+      if (dates.length > 0) {
         setEventDates(dates);
         // Select today or the first upcoming date
-        const today = new Date().toISOString().split("T")[0];
-        const todayDate = dates.find((d: EventDate) => d.pickup_date === today);
-        const upcomingDate = dates.find((d: EventDate) => d.pickup_date >= today);
+        const today = todayInJST();
+        const todayDate = dates.find((d) => d.pickup_date === today);
+        const upcomingDate = dates.find((d) => d.pickup_date >= today);
         setSelectedDateId((todayDate || upcomingDate || dates[0]).id);
       }
     } catch (err) {
@@ -113,23 +100,31 @@ export default function InventoryPage() {
     setSaving(true);
     setSaveMsg("");
     try {
-      for (const item of dirtyItems) {
-        await supabase
-          .from("daily_product_inventory")
-          .update({
+      await fetchJson("/api/admin/inventory", {
+        method: "PATCH",
+        body: JSON.stringify({
+          items: dirtyItems.map((item) => ({
+            id: item.id,
             production_quantity: item._editedQty,
             is_sold_out: item._editedSoldOut,
             is_hidden: item._editedHidden,
-          })
-          .eq("id", item.id);
-      }
+          })),
+        }),
+      });
       setSaveMsg(`${dirtyItems.length} 件を保存しました`);
       setTimeout(() => setSaveMsg(""), 3000);
       // Reload
       await loadInventory(selectedDateId);
     } catch (err) {
       console.error("Save error:", err);
-      setSaveMsg("保存に失敗しました");
+      const detail =
+        err instanceof ApiError && err.details?.length
+          ? err.details.join(" / ")
+          : err instanceof ApiError
+            ? err.message
+            : "保存に失敗しました";
+      setSaveMsg(detail);
+      setTimeout(() => setSaveMsg(""), 6000);
     } finally {
       setSaving(false);
     }
@@ -145,32 +140,29 @@ export default function InventoryPage() {
 
     const prevDateId = eventDates[currentIdx - 1].id;
     try {
-      const { data: prevInv } = await supabase
-        .from("daily_product_inventory")
-        .select("*")
-        .eq("event_date_id", prevDateId);
+      const { inventory: prevInv } = await fetchJson<{
+        inventory: DailyProductInventory[];
+      }>(`/api/admin/inventory?dateId=${encodeURIComponent(prevDateId)}`);
 
-      if (prevInv) {
-        setInventory((curr) =>
-          curr.map((inv) => {
-            const match = prevInv.find(
-              (p: DailyProductInventory) => p.product_id === inv.product_id
-            );
-            if (!match) return inv;
-            return {
-              ...inv,
-              _editedQty: match.production_quantity,
-              _editedSoldOut: match.is_sold_out,
-              _editedHidden: match.is_hidden,
-              _dirty: true,
-            };
-          })
-        );
-        setSaveMsg("前日の設定をコピーしました（保存を押してください）");
-        setTimeout(() => setSaveMsg(""), 4000);
-      }
+      setInventory((curr) =>
+        curr.map((inv) => {
+          const match = prevInv.find((p) => p.product_id === inv.product_id);
+          if (!match) return inv;
+          return {
+            ...inv,
+            _editedQty: match.production_quantity,
+            _editedSoldOut: match.is_sold_out,
+            _editedHidden: match.is_hidden,
+            _dirty: true,
+          };
+        })
+      );
+      setSaveMsg("前日の設定をコピーしました（保存を押してください）");
+      setTimeout(() => setSaveMsg(""), 4000);
     } catch (err) {
       console.error("Copy error:", err);
+      setSaveMsg("前日の設定の取得に失敗しました");
+      setTimeout(() => setSaveMsg(""), 4000);
     }
   }
 

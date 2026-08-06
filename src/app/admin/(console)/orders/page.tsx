@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { fetchJson } from "@/lib/api-client";
 import { formatDate, formatPrice } from "@/lib/utils";
 import type { Order, OrderItem, EventDate } from "@/lib/types";
 
@@ -53,27 +53,13 @@ export default function OrdersPage() {
 
   async function loadOrders() {
     try {
-      const { data: ev } = await supabase
-        .from("events")
-        .select("*")
-        .eq("is_active", true)
-        .single();
-      if (!ev) return;
+      const data = await fetchJson<{
+        dates: EventDate[];
+        orders: OrderWithItems[];
+      }>("/api/admin/orders");
 
-      const { data: dates } = await supabase
-        .from("event_dates")
-        .select("*")
-        .eq("event_id", ev.id)
-        .order("pickup_date");
-      if (dates) setEventDates(dates);
-
-      const { data } = await supabase
-        .from("orders")
-        .select("*, event_date:event_dates(*), order_items(*, product:products(*))")
-        .eq("event_id", ev.id)
-        .order("created_at", { ascending: false });
-
-      if (data) setOrders(data as OrderWithItems[]);
+      setEventDates(data.dates);
+      setOrders(data.orders);
     } catch (err) {
       console.error("Orders load error:", err);
     } finally {

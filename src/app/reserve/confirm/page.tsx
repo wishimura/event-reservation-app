@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import type { CartItem, Event } from "@/lib/types";
-import { supabase } from "@/lib/supabase";
+import { fetchJson } from "@/lib/api-client";
 import { formatDate, formatPrice } from "@/lib/utils";
 
 export default function ConfirmPage() {
@@ -27,7 +27,7 @@ export default function ConfirmPage() {
     const dateData = localStorage.getItem("selectedDate");
 
     if (!cartData || !dateData) {
-      router.push("/reserve");
+      router.push("/");
       return;
     }
 
@@ -35,12 +35,11 @@ export default function ConfirmPage() {
     setSelectedDate(JSON.parse(dateData));
 
     async function fetchEvent() {
-      const { data } = await supabase
-        .from("events")
-        .select("*")
-        .eq("is_active", true)
-        .single<Event>();
-      if (data) setEvent(data);
+      try {
+        setEvent(await fetchJson<Event>("/api/events"));
+      } catch (err) {
+        console.error("Event load error:", err);
+      }
     }
     fetchEvent();
   }, [router]);
@@ -92,8 +91,13 @@ export default function ConfirmPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        alert(data.error || "注文に失敗しました。もう一度お試しください。");
+        const data = await res.json().catch(() => ({}));
+        const details = Array.isArray(data.details) ? data.details : [];
+        alert(
+          [data.error || "注文に失敗しました。もう一度お試しください。", ...details].join(
+            "\n"
+          )
+        );
         setSubmitting(false);
         return;
       }

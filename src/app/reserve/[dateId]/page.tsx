@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { supabase } from "@/lib/supabase";
+import { fetchJson } from "@/lib/api-client";
 import type { EventDate, DailyProductInventory, CartItem } from "@/lib/types";
 import {
   formatDate,
@@ -21,26 +21,23 @@ export default function ProductSelectionPage() {
   const [inventories, setInventories] = useState<DailyProductInventory[]>([]);
   const [cart, setCart] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     async function fetchData() {
-      const [dateRes, invRes] = await Promise.all([
-        supabase
-          .from("event_dates")
-          .select("*")
-          .eq("id", dateId)
-          .single<EventDate>(),
-        supabase
-          .from("daily_product_inventory")
-          .select("*, product:products(*)")
-          .eq("event_date_id", dateId)
-          .eq("is_hidden", false)
-          .order("product(sort_order)"),
-      ]);
-
-      if (dateRes.data) setEventDate(dateRes.data);
-      if (invRes.data) setInventories(invRes.data as DailyProductInventory[]);
-      setLoading(false);
+      try {
+        const data = await fetchJson<{
+          event_date: EventDate;
+          inventory: DailyProductInventory[];
+        }>(`/api/reserve/${dateId}`);
+        setEventDate(data.event_date);
+        setInventories(data.inventory);
+      } catch (err) {
+        console.error("Reserve data load error:", err);
+        setLoadError("商品情報の取得に失敗しました");
+      } finally {
+        setLoading(false);
+      }
     }
     fetchData();
   }, [dateId]);
@@ -93,6 +90,24 @@ export default function ProductSelectionPage() {
     return (
       <main className="min-h-screen bg-stone-50 flex items-center justify-center">
         <div className="animate-pulse text-stone-400">読み込み中...</div>
+      </main>
+    );
+  }
+
+  if (loadError || !eventDate) {
+    return (
+      <main className="min-h-screen bg-stone-50 flex items-center justify-center px-4">
+        <div className="text-center">
+          <p className="text-stone-600 mb-4">
+            {loadError || "受取日が見つかりませんでした"}
+          </p>
+          <Link
+            href="/"
+            className="text-sm text-amber-700 underline underline-offset-4"
+          >
+            トップへ戻る
+          </Link>
+        </div>
       </main>
     );
   }

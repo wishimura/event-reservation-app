@@ -4,6 +4,25 @@ export function formatDate(dateStr: string): string {
   return `${d.getMonth() + 1}/${d.getDate()}(${days[d.getDay()]})`;
 }
 
+/**
+ * "Today" for this app always means today in Japan, not in the server's or
+ * browser's timezone. `en-CA` formats as YYYY-MM-DD, matching our date columns.
+ */
+export function todayInJST(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+export function addDaysToDateString(dateStr: string, days: number): string {
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().split("T")[0];
+}
+
 export function formatPrice(price: number): string {
   return `¥${price.toLocaleString()}`;
 }

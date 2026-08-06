@@ -1,21 +1,13 @@
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
-import type { Event, EventDate } from "@/lib/types";
+import { getActiveEventWithDates } from "@/lib/queries";
+import type { EventDate } from "@/lib/types";
 import { formatDate, getStatusLabel } from "@/lib/utils";
 
-export default async function EventTopPage() {
-  const { data: event } = await supabase
-    .from("events")
-    .select("*")
-    .eq("is_active", true)
-    .single<Event>();
+// Availability changes as orders come in, so never serve this from the cache.
+export const dynamic = "force-dynamic";
 
-  const { data: eventDates } = await supabase
-    .from("event_dates")
-    .select("*")
-    .eq("event_id", event?.id ?? "")
-    .eq("is_active", true)
-    .order("pickup_date");
+export default async function EventTopPage() {
+  const event = await getActiveEventWithDates();
 
   if (!event) {
     return (
@@ -33,7 +25,7 @@ export default async function EventTopPage() {
     );
   }
 
-  const dates = (eventDates ?? []) as EventDate[];
+  const dates = event.event_dates as EventDate[];
 
   return (
     <main className="min-h-screen bg-stone-50">

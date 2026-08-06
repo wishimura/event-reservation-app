@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { asc, eq, inArray } from "drizzle-orm";
+import { db } from "@/db";
+import { eventDates, orderItems, orders } from "@/db/schema";
+import { getActiveEvent } from "@/lib/queries";
+import { todayInJST } from "@/lib/utils";
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+export const dynamic = "force-dynamic";
 
 function escapeCSV(value: string): string {
   if (value.includes(",") || value.includes('"') || value.includes("\n")) {
@@ -14,13 +15,11 @@ function escapeCSV(value: string): string {
 }
 
 function formatDateJP(dateStr: string): string {
-  const d = new Date(dateStr + "T00:00:00+09:00");
-  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
+  return dateStr.replace(/-/g, "/");
 }
 
-function formatDateTimeJP(isoStr: string): string {
-  const d = new Date(isoStr);
-  return d.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
+function formatDateTimeJP(value: Date): string {
+  return value.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
 }
 
 const paymentStatusMap: Record<string, string> = {
@@ -44,39 +43,41 @@ const pickupStatusMap: Record<string, string> = {
 
 export async function GET() {
   try {
-    // Get the active event
-    const { data: ev } = await supabaseAdmin
-      .from("events")
-      .select("*")
-      .eq("is_active", true)
-      .single();
-
-    if (!ev) {
-      return NextResponse.json({ error: "イベントが見つかりません" }, { status: 404 });
+    const event = await getActiveEvent();
+    if (!event) {
+      return NextResponse.json(
+        { error: "イベントが見つかりません" },
+        { status: 404 }
+      );
     }
 
-    // Fetch all orders with items and event_date, sorted by pickup_date then created_at
-    const { data: orders, error } = await supabaseAdmin
-      .from("orders")
-      .select("*, event_date:event_dates(*), order_items(*, product:products(*))")
-      .eq("event_id", ev.id)
-      .order("created_at", { ascending: true });
+    // Sorted by pickup date, then by when the order came in.
+    const orderRows = await db
+      .select({ order: orders, event_date: eventDates })
+      .from(orders)
+      .innerJoin(eventDates, eq(eventDates.id, orders.event_date_id))
+      .where(eq(orders.event_id, event.id))
+      .orderBy(asc(eventDates.pickup_date), asc(orders.created_at));
 
-    if (error) {
-      console.error("CSV export error:", error);
-      return NextResponse.json({ error: "注文データの取得に失敗しました" }, { status: 500 });
+    const itemRows = orderRows.length
+      ? await db
+          .select()
+          .from(orderItems)
+          .where(
+            inArray(
+              orderItems.order_id,
+              orderRows.map((r) => r.order.id)
+            )
+          )
+      : [];
+
+    const itemsByOrder = new Map<string, typeof itemRows>();
+    for (const item of itemRows) {
+      const list = itemsByOrder.get(item.order_id) ?? [];
+      list.push(item);
+      itemsByOrder.set(item.order_id, list);
     }
 
-    // Sort by pickup_date first, then created_at
-    const sorted = (orders || []).sort((a, b) => {
-      const dateA = a.event_date?.pickup_date || "";
-      const dateB = b.event_date?.pickup_date || "";
-      if (dateA !== dateB) return dateA.localeCompare(dateB);
-      return (a.created_at || "").localeCompare(b.created_at || "");
-    });
-
-    // Build CSV rows - one row per order item for spreadsheet usability
-    const BOM = "\uFEFF"; // UTF-8 BOM for Excel
     const headers = [
       "受取日",
       "注文番号",
@@ -97,72 +98,47 @@ export async function GET() {
 
     const rows: string[] = [headers.join(",")];
 
-    for (const order of sorted) {
-      const pickupDate = order.event_date
-        ? formatDateJP(order.event_date.pickup_date)
-        : "";
-      const createdAt = order.created_at
-        ? formatDateTimeJP(order.created_at)
-        : "";
-      const paymentMethod = order.payment_method === "cash" ? "現金" : "クレジットカード";
-      const paymentStatus = paymentStatusMap[order.payment_status] || order.payment_status;
-      const orderStatus = orderStatusMap[order.order_status] || order.order_status;
-      const pickupStatus = pickupStatusMap[order.pickup_status] || order.pickup_status;
+    for (const { order, event_date } of orderRows) {
+      const base = [
+        escapeCSV(formatDateJP(event_date.pickup_date)),
+        escapeCSV(order.order_number),
+        escapeCSV(formatDateTimeJP(order.created_at)),
+        escapeCSV(order.customer_name),
+        escapeCSV(order.customer_email),
+        escapeCSV(order.customer_phone),
+      ];
 
-      const items = order.order_items || [];
+      const tail = [
+        String(order.total_amount),
+        escapeCSV(order.payment_method === "cash" ? "現金" : "クレジットカード"),
+        escapeCSV(paymentStatusMap[order.payment_status] ?? order.payment_status),
+        escapeCSV(orderStatusMap[order.order_status] ?? order.order_status),
+        escapeCSV(pickupStatusMap[order.pickup_status] ?? order.pickup_status),
+      ];
+
+      const items = itemsByOrder.get(order.id) ?? [];
 
       if (items.length === 0) {
-        // Order with no items (edge case)
-        rows.push(
-          [
-            escapeCSV(pickupDate),
-            escapeCSV(order.order_number),
-            escapeCSV(createdAt),
-            escapeCSV(order.customer_name),
-            escapeCSV(order.customer_email),
-            escapeCSV(order.customer_phone),
-            "",
-            "",
-            "",
-            "",
-            String(order.total_amount),
-            escapeCSV(paymentMethod),
-            escapeCSV(paymentStatus),
-            escapeCSV(orderStatus),
-            escapeCSV(pickupStatus),
-          ].join(",")
-        );
+        rows.push([...base, "", "", "", "", ...tail].join(","));
       } else {
         for (const item of items) {
           rows.push(
             [
-              escapeCSV(pickupDate),
-              escapeCSV(order.order_number),
-              escapeCSV(createdAt),
-              escapeCSV(order.customer_name),
-              escapeCSV(order.customer_email),
-              escapeCSV(order.customer_phone),
-              escapeCSV(item.product_name_snapshot || ""),
+              ...base,
+              escapeCSV(item.product_name_snapshot),
               String(item.unit_price),
               String(item.quantity),
               String(item.subtotal),
-              String(order.total_amount),
-              escapeCSV(paymentMethod),
-              escapeCSV(paymentStatus),
-              escapeCSV(orderStatus),
-              escapeCSV(pickupStatus),
+              ...tail,
             ].join(",")
           );
         }
       }
     }
 
-    const csv = BOM + rows.join("\n");
-
-    // Generate filename with current date
-    const now = new Date();
-    const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
-    const filename = `orders_${dateStr}.csv`;
+    // UTF-8 BOM so Excel opens it without mangling Japanese.
+    const csv = "\uFEFF" + rows.join("\n");
+    const filename = `orders_${todayInJST().replace(/-/g, "")}.csv`;
 
     return new NextResponse(csv, {
       status: 200,
@@ -173,6 +149,9 @@ export async function GET() {
     });
   } catch (error) {
     console.error("CSV export error:", error);
-    return NextResponse.json({ error: "CSVエクスポートに失敗しました" }, { status: 500 });
+    return NextResponse.json(
+      { error: "CSVエクスポートに失敗しました" },
+      { status: 500 }
+    );
   }
 }
