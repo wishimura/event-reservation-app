@@ -26,6 +26,18 @@ const globalForDb = globalThis as unknown as {
 const pool =
   globalForDb.__neonPool ?? new Pool({ connectionString, max: 5 });
 
+/**
+ * `Pool` inherits EventEmitter, which throws when an "error" event has no
+ * listener. Idle clients emit that event on any connection-level failure —
+ * a dropped socket, or Postgres rejecting the credentials — which would
+ * otherwise take down the whole function instead of failing the one query.
+ */
+if (pool.listenerCount("error") === 0) {
+  pool.on("error", (err: Error) => {
+    console.error("Neon pool error:", err);
+  });
+}
+
 if (process.env.NODE_ENV !== "production") {
   globalForDb.__neonPool = pool;
 }
