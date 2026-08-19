@@ -26,6 +26,9 @@ cp .env.example .env.local
 | `DATABASE_URL` | Neon のプール接続文字列 |
 | `ADMIN_PASSWORD` | `/admin` のログインパスワード |
 | `ADMIN_SESSION_SECRET` | セッション Cookie の署名鍵（`openssl rand -base64 32`） |
+| `RESEND_API_KEY` | 予約確認メールの送信に使う Resend の API キー |
+| `MAIL_FROM` | 送信元アドレス（Resend で DNS 認証済みのドメイン） |
+| `SHOP_NOTIFICATION_EMAIL` | 新規予約の通知先。空なら店舗宛の通知は送りません |
 
 ### 3. スキーマとサンプルデータ
 
@@ -76,6 +79,14 @@ UPDATE daily_product_inventory
 更新行数が 0 なら在庫不足として注文全体をロールバックします。加えて
 `daily_product_inventory_reserved_within_capacity` CHECK 制約が、アプリ側に不具合があっても
 `reserved_quantity > production_quantity` を DB レベルで拒否します。
+
+### 予約確認メール
+
+予約が確定すると、お客様宛の確認メールと店舗宛の新規予約通知を Resend で送ります。
+
+送信は `next/server` の `after()` でレスポンス返却後に回しており、**送信の失敗が予約の成立に影響することはありません**。失敗はログに残るだけです。`RESEND_API_KEY` か `MAIL_FROM` が未設定の環境では送信自体をスキップするので、ローカル開発でメール設定は必須ではありません。
+
+送信元ドメインは Resend 側で DNS 認証（TXT レコードの追加）を済ませておく必要があります。未認証のドメインを `MAIL_FROM` に設定すると、送信が拒否されます。
 
 ### 日付の扱い
 

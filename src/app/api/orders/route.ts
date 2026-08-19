@@ -1,13 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   dailyProductInventory,
   eventDates,
+  events,
   orderItems,
   orders,
   products,
 } from "@/db/schema";
+import { sendOrderEmails } from "@/lib/email";
 import { generateOrderNumber } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -100,6 +102,16 @@ export async function POST(request: NextRequest) {
 
         if (!eventDate || eventDate.event_id !== body.event_id) {
           throw new OrderValidationError("指定された受取日が見つかりません");
+        }
+
+        const [event] = await tx
+          .select()
+          .from(events)
+          .where(eq(events.id, body.event_id))
+          .limit(1);
+
+        if (!event) {
+          throw new OrderValidationError("イベントが見つかりません");
         }
         if (!eventDate.is_active || eventDate.reservation_status === "closed") {
           throw new OrderValidationError("この受取日は現在受付を終了しています");
@@ -262,10 +274,37 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        return { ...order, order_items: insertedItems, event_date: eventDate };
+        return { order, items: insertedItems, event_date: eventDate, event };
       });
 
-      return NextResponse.json(created, { status: 201 });
+      const { order, items, event_date, event } = created;
+
+      // Sent after the response so the customer is not kept waiting on the
+      // mail provider. A failure here never invalidates the reservation.
+      after(async () => {
+        await sendOrderEmails({
+          order_number: order.order_number,
+          customer_name: order.customer_name,
+          customer_email: order.customer_email,
+          customer_phone: order.customer_phone,
+          total_amount: order.total_amount,
+          pickup_date: event_date.pickup_date,
+          event_name: event.name,
+          pickup_location: event.pickup_location,
+          reservation_note: event.reservation_note,
+          items,
+        });
+      });
+
+      return NextResponse.json(
+        {
+          ...order,
+          items,
+          event_date,
+          pickup_location: event.pickup_location,
+        },
+        { status: 201 }
+      );
     } catch (error) {
       if (error instanceof OrderValidationError) {
         return NextResponse.json(
