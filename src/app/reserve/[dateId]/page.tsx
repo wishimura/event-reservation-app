@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -22,6 +22,15 @@ export default function ProductSelectionPage() {
   const [cart, setCart] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [capNoticeId, setCapNoticeId] = useState<string | null>(null);
+  const capNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (capNoticeTimer.current) clearTimeout(capNoticeTimer.current);
+    },
+    []
+  );
 
   useEffect(() => {
     async function fetchData() {
@@ -55,6 +64,29 @@ export default function ProductSelectionPage() {
         }
         return next;
       });
+    },
+    []
+  );
+
+  /**
+   * The + button stays tappable once the cap is reached, so the tap can
+   * explain itself. A `disabled` button fires no event at all, which reads
+   * as a broken screen rather than as "there is no more stock".
+   */
+  const handleCapAttempt = useCallback(
+    (productId: string, target: HTMLElement) => {
+      setCapNoticeId(productId);
+
+      if (capNoticeTimer.current) clearTimeout(capNoticeTimer.current);
+      capNoticeTimer.current = setTimeout(() => setCapNoticeId(null), 4000);
+
+      // Retrigger the nudge even while it is already running.
+      const card = target.closest<HTMLElement>("[data-product-card]");
+      if (card) {
+        card.classList.remove("animate-cap-nudge");
+        void card.offsetWidth;
+        card.classList.add("animate-cap-nudge");
+      }
     },
     []
   );
@@ -166,10 +198,18 @@ export default function ProductSelectionPage() {
             const remaining = getRemainingQuantity(inv);
             const isSoldOut = inv.is_sold_out || remaining === 0;
             const qty = cart.get(product.id) ?? 0;
+            const atCap = qty >= remaining;
+            // Only call out the count when it is actually scarce; "残り20個"
+            // is noise that dulls the warning when it matters.
+            const isLowStock = remaining > 0 && remaining <= inv.warning_threshold;
 
             return (
               <div
                 key={inv.id}
+                data-product-card
+                onAnimationEnd={(e) =>
+                  e.currentTarget.classList.remove("animate-cap-nudge")
+                }
                 className={`bg-white rounded-2xl border border-stone-200 overflow-hidden transition-opacity ${
                   isSoldOut ? "opacity-50" : ""
                 }`}
@@ -212,18 +252,30 @@ export default function ProductSelectionPage() {
                     <p className="text-amber-700 font-bold text-base">
                       {formatPrice(product.price)}
                     </p>
-                    {!isSoldOut && (
-                      <p className="text-xs text-stone-400 mt-1">
-                        残り {remaining} 個
-                      </p>
+                    {!isSoldOut && isLowStock && (
+                      <div className="mt-1.5">
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-xs font-bold text-red-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                          残り {remaining} 個
+                        </span>
+                      </div>
                     )}
                   </div>
                 </div>
 
                 {/* Quantity Selector */}
                 {!isSoldOut && (
+                  <>
                   <div className="border-t border-stone-100 px-4 py-3 flex items-center justify-between bg-stone-50/50">
-                    <span className="text-xs text-stone-500">数量</span>
+                    <span
+                      className={
+                        atCap
+                          ? "text-xs font-bold text-red-700"
+                          : "text-xs text-stone-500"
+                      }
+                    >
+                      {atCap ? "上限に達しました" : "数量"}
+                    </span>
                     <div className="flex items-center gap-3">
                       <button
                         onClick={() =>
@@ -242,13 +294,19 @@ export default function ProductSelectionPage() {
                         {qty}
                       </span>
                       <button
-                        onClick={() =>
-                          updateQuantity(product.id, 1, remaining)
-                        }
-                        disabled={qty >= remaining}
+                        type="button"
+                        aria-label="1つ増やす"
+                        aria-disabled={atCap}
+                        onClick={(e) => {
+                          if (atCap) {
+                            handleCapAttempt(product.id, e.currentTarget);
+                            return;
+                          }
+                          updateQuantity(product.id, 1, remaining);
+                        }}
                         className={`w-9 h-9 rounded-full flex items-center justify-center text-lg font-medium transition-colors ${
-                          qty >= remaining
-                            ? "bg-stone-200 text-stone-400 cursor-not-allowed"
+                          atCap
+                            ? "bg-stone-200 text-stone-400"
                             : "bg-amber-600 text-white hover:bg-amber-700 active:bg-amber-800"
                         }`}
                       >
@@ -256,6 +314,30 @@ export default function ProductSelectionPage() {
                       </button>
                     </div>
                   </div>
+                  {atCap && capNoticeId === product.id && (
+                    <div
+                      role="status"
+                      className="flex items-start gap-2 border-t border-red-100 bg-red-50 px-4 py-2.5 text-xs font-medium leading-relaxed text-red-700"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-3.5 w-3.5 shrink-0 mt-0.5"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2.2}
+                        strokeLinecap="round"
+                      >
+                        <circle cx="12" cy="12" r="9" />
+                        <path d="M12 8v5" />
+                        <path d="M12 16.5v.01" />
+                      </svg>
+                      <span>
+                        在庫が残り{remaining}個のため、これ以上は追加できません
+                      </span>
+                    </div>
+                  )}
+                  </>
                 )}
               </div>
             );
