@@ -310,7 +310,7 @@ export default function ConfirmPage() {
               </div>
               <div className="flex-1">
                 <p className="text-sm font-semibold text-stone-800">
-                  現金払い
+                  現地払い
                 </p>
                 <p className="text-xs text-stone-500">
                   受取時にお支払い
