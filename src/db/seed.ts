@@ -29,7 +29,7 @@ async function main() {
         "自家焙煎のコーヒーと、その日の朝に焼き上げる菓子をお持ち帰りいただけます。すべて受注生産のため、事前のご予約をお願いしています。",
       start_date: "2026-10-10",
       end_date: "2026-10-13",
-      pickup_location: "CITRUS COFFEE 本店（1F カウンター）",
+      pickup_location: "となりのと 本店（1F カウンター）",
       reservation_note:
         "受取時間は各日 11:00〜18:00 です。\nお支払いは店頭でのお会計となります。\n受取日の変更は前日までにご連絡ください。",
       is_active: true,
