@@ -38,7 +38,6 @@ const orderStatusMap: Record<string, string> = {
 const pickupStatusMap: Record<string, string> = {
   not_picked_up: "未受取",
   picked_up: "受取済",
-  absent: "未来店",
 };
 
 export async function GET() {
@@ -110,7 +109,7 @@ export async function GET() {
 
       const tail = [
         String(order.total_amount),
-        escapeCSV(order.payment_method === "cash" ? "現金" : "クレジットカード"),
+        escapeCSV(order.payment_method === "cash" ? "現地払い" : "クレジットカード"),
         escapeCSV(paymentStatusMap[order.payment_status] ?? order.payment_status),
         escapeCSV(orderStatusMap[order.order_status] ?? order.order_status),
         escapeCSV(pickupStatusMap[order.pickup_status] ?? order.pickup_status),

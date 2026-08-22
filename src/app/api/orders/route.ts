@@ -292,6 +292,7 @@ export async function POST(request: NextRequest) {
           event_name: event.name,
           pickup_location: event.pickup_location,
           reservation_note: event.reservation_note,
+          contact_phone: event.contact_phone,
           items,
         });
       });
@@ -302,6 +303,7 @@ export async function POST(request: NextRequest) {
           items,
           event_date,
           pickup_location: event.pickup_location,
+          contact_phone: event.contact_phone,
         },
         { status: 201 }
       );

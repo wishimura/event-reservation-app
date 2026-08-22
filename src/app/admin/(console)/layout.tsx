@@ -9,6 +9,8 @@ const navItems = [
   { href: "/admin/production", label: "製造計画", icon: "🍳" },
   { href: "/admin/orders", label: "注文一覧", icon: "📋" },
   { href: "/admin/pickup", label: "受取管理", icon: "🛒" },
+  { href: "/admin/products", label: "商品マスタ", icon: "🍩" },
+  { href: "/admin/settings", label: "イベント設定", icon: "⚙️" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

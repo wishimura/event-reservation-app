@@ -6,6 +6,7 @@ export interface Event {
   end_date: string;
   pickup_location: string;
   reservation_note: string;
+  contact_phone: string;
   is_active: boolean;
 }
 
@@ -54,7 +55,7 @@ export interface Order {
   payment_status: "pending" | "paid" | "failed" | "refunded";
   payment_method: "cash" | "credit_card";
   order_status: "temporary" | "confirmed" | "cancelled";
-  pickup_status: "not_picked_up" | "picked_up" | "absent";
+  pickup_status: "not_picked_up" | "picked_up";
   created_at: string;
   paid_at: string | null;
   event_date?: EventDate;

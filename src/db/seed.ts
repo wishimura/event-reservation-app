@@ -30,6 +30,7 @@ async function main() {
       start_date: "2026-10-10",
       end_date: "2026-10-13",
       pickup_location: "となりのと 本店（1F カウンター）",
+      contact_phone: "070-6669-1010",
       reservation_note:
         "受取時間は各日 11:00〜18:00 です。\nお支払いは店頭でのお会計となります。\n受取日の変更は前日までにご連絡ください。",
       is_active: true,

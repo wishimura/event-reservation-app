@@ -26,6 +26,7 @@ export interface OrderMailPayload {
   event_name: string;
   pickup_location: string;
   reservation_note: string;
+  contact_phone: string;
   items: Array<{
     product_name_snapshot: string;
     unit_price: number;
@@ -149,6 +150,12 @@ export function buildCustomerEmail(payload: OrderMailPayload) {
     <div style="margin-top:16px;padding:12px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;font-size:13px;color:#78350f;line-height:1.7;">
       お支払いは<strong>受取時に店頭</strong>でお願いいたします。
     </div>` +
+    (payload.contact_phone
+      ? `<div style="margin-top:12px;padding:12px 14px;border:1px solid #e7e5e4;border-radius:10px;font-size:13px;color:#57534e;line-height:1.7;">
+           ご予約の変更・キャンセルはお電話でお願いいたします。<br>
+           <a href="tel:${escapeHtml(payload.contact_phone.replace(/[^0-9+]/g, ""))}" style="color:#b45309;font-weight:bold;font-size:15px;text-decoration:none;">${escapeHtml(payload.contact_phone)}</a>
+         </div>`
+      : "") +
     (payload.reservation_note
       ? `<div style="margin-top:12px;font-size:13px;color:#57534e;line-height:1.7;white-space:pre-line;">${escapeHtml(
           payload.reservation_note
@@ -170,6 +177,9 @@ export function buildCustomerEmail(payload: OrderMailPayload) {
       textDetail(payload),
       "",
       "お支払いは受取時に店頭でお願いいたします。",
+      payload.contact_phone
+        ? `\nご予約の変更・キャンセルはお電話でお願いいたします。\n${payload.contact_phone}`
+        : null,
       payload.reservation_note ? `\n${payload.reservation_note}` : null,
     ]
       .filter((line) => line !== null)

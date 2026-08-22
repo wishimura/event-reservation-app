@@ -9,6 +9,7 @@ import { formatDate, formatPrice } from "@/lib/utils";
 interface OrderWithItems extends Order {
   items?: OrderItem[];
   pickup_location?: string;
+  contact_phone?: string;
 }
 
 export default function CompletePage() {
@@ -172,6 +173,38 @@ export default function CompletePage() {
             </div>
           </div>
         </div>
+
+        {/* Changes and cancellations */}
+        {order.contact_phone && (
+          <div className="bg-white border border-stone-200 rounded-2xl p-5 mb-5 text-center">
+            <p className="text-sm font-bold text-stone-700 mb-1">
+              ご予約の変更・キャンセル
+            </p>
+            <p className="text-xs text-stone-500 mb-3 leading-relaxed">
+              受注生産のため、お電話でのみ承っております。
+            </p>
+            <a
+              href={`tel:${order.contact_phone.replace(/[^0-9+]/g, "")}`}
+              className="inline-flex items-center justify-center gap-2 w-full bg-amber-700 hover:bg-amber-800 active:bg-amber-900 text-white font-bold py-3.5 rounded-2xl transition-colors"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                />
+              </svg>
+              {order.contact_phone}
+            </a>
+          </div>
+        )}
 
         {/* Payment Notice */}
         <div className="bg-stone-100 rounded-2xl p-4 mb-5">

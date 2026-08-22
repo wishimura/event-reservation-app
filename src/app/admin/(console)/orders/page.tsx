@@ -27,7 +27,6 @@ const orderStatusLabels: Record<string, { label: string; cls: string }> = {
 const pickupStatusLabels: Record<string, { label: string; cls: string }> = {
   not_picked_up: { label: "未受取", cls: "bg-slate-100 text-slate-600" },
   picked_up: { label: "受取済", cls: "bg-emerald-100 text-emerald-700" },
-  absent: { label: "未来店", cls: "bg-red-100 text-red-700" },
 };
 
 export default function OrdersPage() {
@@ -39,6 +38,7 @@ export default function OrdersPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const [csvDownloading, setCsvDownloading] = useState(false);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   // Filters
   const [filterDate, setFilterDate] = useState("");
@@ -94,6 +94,33 @@ export default function OrdersPage() {
     }
 
     setFilteredOrders(result);
+  }
+
+  async function handleCancel(order: OrderWithItems) {
+    const ok = window.confirm(
+      [
+        `${order.customer_name} 様の注文 ${order.order_number} をキャンセルします。`,
+        "",
+        "押さえていた在庫は受付枠に戻ります。",
+        "キャンセルは取り消せません。よろしいですか？",
+      ].join("\n")
+    );
+    if (!ok) return;
+
+    setCancellingId(order.id);
+    try {
+      await fetchJson(`/api/admin/orders/${order.id}/cancel`, {
+        method: "PATCH",
+      });
+      await loadOrders();
+    } catch (err) {
+      console.error("Cancel error:", err);
+      alert(
+        err instanceof ApiError ? err.message : "キャンセル処理に失敗しました"
+      );
+    } finally {
+      setCancellingId(null);
+    }
   }
 
   async function handleCSVDownload() {
@@ -281,7 +308,9 @@ export default function OrdersPage() {
                               <p className="text-slate-500">
                                 支払方法:{" "}
                                 <span className="text-slate-700">
-                                  {order.payment_method === "cash" ? "現金" : "クレジットカード"}
+                                  {order.payment_method === "cash"
+                                    ? "現地払い"
+                                    : "クレジットカード"}
                                 </span>
                               </p>
                               <p className="text-slate-500">
@@ -308,6 +337,32 @@ export default function OrdersPage() {
                                 </div>
                               </div>
                             </div>
+                          </div>
+
+                          <div className="mt-4 border-t border-slate-200 pt-3">
+                            {order.order_status === "cancelled" ? (
+                              <p className="text-xs text-slate-500">
+                                この注文はキャンセル済みです。在庫は受付枠に戻っています。
+                              </p>
+                            ) : (
+                              <div className="flex flex-wrap items-center gap-3">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCancel(order);
+                                  }}
+                                  disabled={cancellingId === order.id}
+                                  className="rounded-lg border border-red-300 bg-white px-4 py-1.5 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 disabled:opacity-50"
+                                >
+                                  {cancellingId === order.id
+                                    ? "処理中..."
+                                    : "この注文をキャンセル"}
+                                </button>
+                                <span className="text-xs text-slate-500">
+                                  在庫は受付枠に戻ります。取り消しはできません。
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </td>
                       </tr>

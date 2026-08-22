@@ -192,7 +192,7 @@ export default function PickupPage() {
                   <p className="text-sm font-medium text-slate-700 mt-2">
                     {formatPrice(order.total_amount)}
                     <span className="ml-2 text-xs font-normal text-slate-400">
-                      ({order.payment_method === "cash" ? "現金" : "カード"} /{" "}
+                      ({order.payment_method === "cash" ? "現地払い" : "カード"} /{" "}
                       {order.payment_status === "paid" ? "決済済み" : "未決済"})
                     </span>
                   </p>

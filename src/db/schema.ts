@@ -47,7 +47,6 @@ export const orderStatusEnum = pgEnum("order_status", [
 export const pickupStatusEnum = pgEnum("pickup_status", [
   "not_picked_up",
   "picked_up",
-  "absent",
 ]);
 
 export const events = pgTable("events", {
@@ -58,6 +57,8 @@ export const events = pgTable("events", {
   end_date: date("end_date").notNull(),
   pickup_location: text("pickup_location").notNull().default(""),
   reservation_note: text("reservation_note").notNull().default(""),
+  /** Shown to customers as the line to call for changes or cancellations. */
+  contact_phone: text("contact_phone").notNull().default(""),
   is_active: boolean("is_active").notNull().default(false),
   created_at: timestamp("created_at", { withTimezone: true })
     .notNull()

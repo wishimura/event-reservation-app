@@ -5,7 +5,7 @@ import { orders } from "@/db/schema";
 
 export const dynamic = "force-dynamic";
 
-const ALLOWED = ["not_picked_up", "picked_up", "absent"] as const;
+const ALLOWED = ["not_picked_up", "picked_up"] as const;
 type PickupStatus = (typeof ALLOWED)[number];
 
 export async function PATCH(
