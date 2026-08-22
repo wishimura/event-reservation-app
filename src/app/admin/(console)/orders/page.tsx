@@ -1,7 +1,8 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
-import { fetchJson } from "@/lib/api-client";
+import { ApiError, fetchJson } from "@/lib/api-client";
+import { LoadErrorNotice } from "@/components/LoadErrorNotice";
 import { formatDate, formatPrice } from "@/lib/utils";
 import type { Order, OrderItem, EventDate } from "@/lib/types";
 
@@ -34,6 +35,7 @@ export default function OrdersPage() {
   const [filteredOrders, setFilteredOrders] = useState<OrderWithItems[]>([]);
   const [eventDates, setEventDates] = useState<EventDate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const [csvDownloading, setCsvDownloading] = useState(false);
@@ -52,6 +54,7 @@ export default function OrdersPage() {
   }, [orders, filterDate, filterStatus, filterSearch]);
 
   async function loadOrders() {
+    setLoadError("");
     try {
       const data = await fetchJson<{
         dates: EventDate[];
@@ -62,6 +65,9 @@ export default function OrdersPage() {
       setOrders(data.orders);
     } catch (err) {
       console.error("Orders load error:", err);
+      setLoadError(
+        err instanceof ApiError ? err.message : "サーバーとの通信に失敗しました"
+      );
     } finally {
       setLoading(false);
     }
@@ -119,6 +125,18 @@ export default function OrdersPage() {
       <div className="flex items-center justify-center h-64">
         <div className="text-slate-400">読み込み中...</div>
       </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <LoadErrorNotice
+        message={loadError}
+        onRetry={() => {
+          setLoading(true);
+          loadOrders();
+        }}
+      />
     );
   }
 

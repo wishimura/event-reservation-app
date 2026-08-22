@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { fetchJson } from "@/lib/api-client";
+import { ApiError, fetchJson } from "@/lib/api-client";
+import { LoadErrorNotice } from "@/components/LoadErrorNotice";
 import {
   addDaysToDateString,
   formatDate,
@@ -27,12 +28,14 @@ export default function AdminDashboard() {
   const [lowStockItems, setLowStockItems] = useState<DailyProductInventory[]>([]);
   const [dailySummary, setDailySummary] = useState<DailySummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     loadDashboard();
   }, []);
 
   async function loadDashboard() {
+    setLoadError("");
     try {
       const data = await fetchJson<{
         event: Event;
@@ -80,6 +83,9 @@ export default function AdminDashboard() {
       );
     } catch (err) {
       console.error("Dashboard load error:", err);
+      setLoadError(
+        err instanceof ApiError ? err.message : "サーバーとの通信に失敗しました"
+      );
     } finally {
       setLoading(false);
     }
@@ -90,6 +96,18 @@ export default function AdminDashboard() {
       <div className="flex items-center justify-center h-64">
         <div className="text-slate-400">読み込み中...</div>
       </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <LoadErrorNotice
+        message={loadError}
+        onRetry={() => {
+          setLoading(true);
+          loadDashboard();
+        }}
+      />
     );
   }
 

@@ -6,6 +6,8 @@ import {
   verifyPassword,
 } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(request: NextRequest) {
   let password: unknown;
   try {

@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ApiError, fetchJson } from "@/lib/api-client";
-import { formatDate, getRemainingQuantity, todayInJST } from "@/lib/utils";
-import type { Event, EventDate, DailyProductInventory } from "@/lib/types";
+import { LoadErrorNotice } from "@/components/LoadErrorNotice";
+import { formatDate, todayInJST } from "@/lib/utils";
+import type { EventDate, DailyProductInventory } from "@/lib/types";
 
 interface EditableInventory extends DailyProductInventory {
   _editedQty: number;
@@ -13,13 +14,13 @@ interface EditableInventory extends DailyProductInventory {
 }
 
 export default function InventoryPage() {
-  const [event, setEvent] = useState<Event | null>(null);
   const [eventDates, setEventDates] = useState<EventDate[]>([]);
   const [selectedDateId, setSelectedDateId] = useState<string>("");
   const [inventory, setInventory] = useState<EditableInventory[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     loadInitialData();
@@ -44,6 +45,9 @@ export default function InventoryPage() {
       );
     } catch (err) {
       console.error("Inventory load error:", err);
+      setLoadError(
+        err instanceof ApiError ? err.message : "サーバーとの通信に失敗しました"
+      );
     } finally {
       setLoading(false);
     }
@@ -56,13 +60,11 @@ export default function InventoryPage() {
   }, [selectedDateId, loadInventory]);
 
   async function loadInitialData() {
+    setLoadError("");
     try {
-      const { event: ev, dates } = await fetchJson<{
-        event: Event;
-        dates: EventDate[];
-      }>("/api/admin/inventory");
-
-      setEvent(ev);
+      const { dates } = await fetchJson<{ dates: EventDate[] }>(
+        "/api/admin/inventory"
+      );
 
       if (dates.length > 0) {
         setEventDates(dates);
@@ -74,6 +76,9 @@ export default function InventoryPage() {
       }
     } catch (err) {
       console.error("Init error:", err);
+      setLoadError(
+        err instanceof ApiError ? err.message : "サーバーとの通信に失敗しました"
+      );
     } finally {
       setLoading(false);
     }
@@ -198,7 +203,7 @@ export default function InventoryPage() {
         <label className="block text-xs font-medium text-slate-500 mb-2">受取日を選択</label>
         <div className="flex flex-wrap gap-2">
           {eventDates.map((d) => {
-            const today = new Date().toISOString().split("T")[0];
+            const today = todayInJST();
             const isToday = d.pickup_date === today;
             const isPast = d.pickup_date < today;
             return (
@@ -227,6 +232,22 @@ export default function InventoryPage() {
           saveMsg.includes("失敗") ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"
         }`}>
           {saveMsg}
+        </div>
+      )}
+
+      {loadError && (
+        <div className="mb-6">
+          <LoadErrorNotice
+            message={loadError}
+            onRetry={() => {
+              setLoading(true);
+              if (selectedDateId) {
+                loadInventory(selectedDateId);
+              } else {
+                loadInitialData();
+              }
+            }}
+          />
         </div>
       )}
 
@@ -263,11 +284,18 @@ export default function InventoryPage() {
                     </td>
                     <td className="px-5 py-3 text-center">
                       <input
-                        type="number"
-                        min={0}
+                        type="text"
+                        inputMode="numeric"
                         value={inv._editedQty}
                         onChange={(e) =>
-                          updateField(inv.id, "_editedQty", Math.max(0, parseInt(e.target.value) || 0))
+                          updateField(
+                            inv.id,
+                            "_editedQty",
+                            Math.max(
+                              0,
+                              parseInt(e.target.value.replace(/[^0-9]/g, ""), 10) || 0
+                            )
+                          )
                         }
                         className="w-20 text-center border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none"
                       />

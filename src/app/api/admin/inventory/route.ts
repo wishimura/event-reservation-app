@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { dailyProductInventory, products } from "@/db/schema";
 import { getActiveEvent, getAllEventDates } from "@/lib/queries";

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { fetchJson } from "@/lib/api-client";
+import { ApiError, fetchJson } from "@/lib/api-client";
+import { LoadErrorNotice } from "@/components/LoadErrorNotice";
 import { formatDate, formatPrice } from "@/lib/utils";
 import type { EventDate, DailyProductInventory, Product } from "@/lib/types";
 
@@ -16,6 +17,7 @@ export default function ProductionPage() {
     Map<string, InventoryWithProduct[]>
   >(new Map());
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [viewMode, setViewMode] = useState<"single" | "all">("all");
 
   useEffect(() => {
@@ -24,6 +26,7 @@ export default function ProductionPage() {
 
   // One request covers both views; the single-date view is just a slice of it.
   async function loadProductionPlan() {
+    setLoadError("");
     try {
       const { dates, inventory } = await fetchJson<{
         dates: EventDate[];
@@ -42,6 +45,9 @@ export default function ProductionPage() {
       setAllInventories(map);
     } catch (err) {
       console.error("Production load error:", err);
+      setLoadError(
+        err instanceof ApiError ? err.message : "サーバーとの通信に失敗しました"
+      );
     } finally {
       setLoading(false);
     }
@@ -68,6 +74,18 @@ export default function ProductionPage() {
       <div className="flex items-center justify-center h-64">
         <div className="text-slate-400">読み込み中...</div>
       </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <LoadErrorNotice
+        message={loadError}
+        onRetry={() => {
+          setLoading(true);
+          loadProductionPlan();
+        }}
+      />
     );
   }
 
@@ -297,10 +315,18 @@ export default function ProductionPage() {
                             : "bg-emerald-400"
                         }`}
                         style={{
-                          width: `${Math.min(
-                            100,
-                            (inv.reserved_quantity / inv.production_quantity) * 100
-                          )}%`,
+                          // production_quantity can legitimately be 0 for a
+                          // product not offered that day; 0/0 would render NaN%.
+                          width: `${
+                            inv.production_quantity > 0
+                              ? Math.min(
+                                  100,
+                                  (inv.reserved_quantity /
+                                    inv.production_quantity) *
+                                    100
+                                )
+                              : 0
+                          }%`,
                         }}
                       />
                     </div>

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { dailyProductInventory, eventDates, orders, products } from "@/db/schema";
 import { getActiveEvent, getAllEventDates } from "@/lib/queries";

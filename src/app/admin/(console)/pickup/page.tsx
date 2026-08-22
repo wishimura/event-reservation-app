@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fetchJson } from "@/lib/api-client";
+import { ApiError, fetchJson } from "@/lib/api-client";
+import { LoadErrorNotice } from "@/components/LoadErrorNotice";
 import { formatPrice } from "@/lib/utils";
 import type { Order, OrderItem } from "@/lib/types";
 
@@ -14,6 +15,7 @@ export default function PickupPage() {
   const [filteredOrders, setFilteredOrders] = useState<PickupOrder[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -37,6 +39,7 @@ export default function PickupPage() {
   }, [orders, search]);
 
   async function loadTodayOrders() {
+    setLoadError("");
     try {
       const data = await fetchJson<{ orders: PickupOrder[] }>(
         "/api/admin/pickup"
@@ -44,6 +47,9 @@ export default function PickupPage() {
       setOrders(data.orders);
     } catch (err) {
       console.error("Pickup load error:", err);
+      setLoadError(
+        err instanceof ApiError ? err.message : "サーバーとの通信に失敗しました"
+      );
     } finally {
       setLoading(false);
     }
@@ -86,6 +92,18 @@ export default function PickupPage() {
       <div className="flex items-center justify-center h-64">
         <div className="text-slate-400">読み込み中...</div>
       </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <LoadErrorNotice
+        message={loadError}
+        onRetry={() => {
+          setLoading(true);
+          loadTodayOrders();
+        }}
+      />
     );
   }
 
