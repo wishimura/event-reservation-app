@@ -58,10 +58,44 @@ export async function GET() {
         ).map((r) => ({ ...r.inventory, product: r.product }))
       : [];
 
+    /**
+     * Capacity 0 on a visible product reads to customers as SOLD OUT, so a
+     * product added and left at the default never sells and nothing says why.
+     * Rows the operator deliberately hid are excluded — that is a choice,
+     * not the trap.
+     */
+    const zeroCapacity = upcomingDateIds.length
+      ? await db
+          .select({
+            product_name: products.name,
+            pickup_date: eventDates.pickup_date,
+          })
+          .from(dailyProductInventory)
+          .innerJoin(
+            products,
+            eq(products.id, dailyProductInventory.product_id)
+          )
+          .innerJoin(
+            eventDates,
+            eq(eventDates.id, dailyProductInventory.event_date_id)
+          )
+          .where(
+            and(
+              inArray(dailyProductInventory.event_date_id, upcomingDateIds),
+              eq(eventDates.is_active, true),
+              eq(products.is_active, true),
+              eq(dailyProductInventory.is_hidden, false),
+              eq(dailyProductInventory.production_quantity, 0)
+            )
+          )
+          .orderBy(asc(eventDates.pickup_date), asc(products.sort_order))
+      : [];
+
     return NextResponse.json({
       event,
       dates,
       today,
+      zeroCapacity,
       orders: orderRows.map((r) => ({ ...r.order, event_date: r.event_date })),
       lowStockItems,
     });

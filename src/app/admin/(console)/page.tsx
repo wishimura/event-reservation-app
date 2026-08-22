@@ -12,11 +12,30 @@ import {
 } from "@/lib/utils";
 import type { Event, EventDate, Order, DailyProductInventory } from "@/lib/types";
 
+interface ZeroCapacityRow {
+  product_name: string;
+  pickup_date: string;
+}
+
 interface DailySummary {
   date: string;
   dateLabel: string;
   orderCount: number;
   totalAmount: number;
+}
+
+/** One line per product, listing the dates it is stuck at zero. */
+function groupZeroCapacity(rows: ZeroCapacityRow[]) {
+  const byProduct = new Map<string, string[]>();
+  for (const row of rows) {
+    const dates = byProduct.get(row.product_name) ?? [];
+    dates.push(row.pickup_date);
+    byProduct.set(row.product_name, dates);
+  }
+  return [...byProduct.entries()].map(([product_name, dates]) => ({
+    product_name,
+    dates,
+  }));
 }
 
 export default function AdminDashboard() {
@@ -26,6 +45,7 @@ export default function AdminDashboard() {
   const [tomorrowReservationCount, setTomorrowReservationCount] = useState(0);
   const [totalSales, setTotalSales] = useState(0);
   const [lowStockItems, setLowStockItems] = useState<DailyProductInventory[]>([]);
+  const [zeroCapacity, setZeroCapacity] = useState<ZeroCapacityRow[]>([]);
   const [dailySummary, setDailySummary] = useState<DailySummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -43,10 +63,12 @@ export default function AdminDashboard() {
         today: string;
         orders: Order[];
         lowStockItems: DailyProductInventory[];
+        zeroCapacity: ZeroCapacityRow[];
       }>("/api/admin/dashboard");
 
       setEvent(data.event);
       setLowStockItems(data.lowStockItems);
+      setZeroCapacity(data.zeroCapacity ?? []);
 
       const { today, orders, dates } = data;
       const tomorrow = addDaysToDateString(today, 1);
@@ -119,6 +141,50 @@ export default function AdminDashboard() {
         <p className="text-sm text-slate-500 mb-6">
           イベント: <span className="font-medium text-slate-700">{event.name}</span>
         </p>
+      )}
+
+      {zeroCapacity.length > 0 && (
+        <div className="mb-8 rounded-xl border border-red-300 bg-red-50 p-5">
+          <div className="flex items-start gap-3">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="mt-0.5 h-5 w-5 shrink-0 text-red-600"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2.2}
+              strokeLinecap="round"
+            >
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 8v5" />
+              <path d="M12 16.5v.01" />
+            </svg>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-sm font-bold text-red-800">
+                受付枠が 0 の商品があります
+              </h3>
+              <p className="mt-1 text-sm text-red-700">
+                この設定のままだと、お客様には「SOLD OUT」と表示され予約できません。
+              </p>
+              <ul className="mt-3 space-y-1">
+                {groupZeroCapacity(zeroCapacity).map((row) => (
+                  <li key={row.product_name} className="text-sm text-red-900">
+                    <span className="font-medium">{row.product_name}</span>
+                    <span className="ml-2 text-red-700">
+                      {row.dates.map((d) => formatDate(d)).join("・")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href="/admin/inventory"
+                className="mt-3 inline-block rounded-lg border border-red-300 bg-white px-4 py-1.5 text-sm font-medium text-red-700 transition-colors hover:bg-red-100"
+              >
+                在庫管理で受付上限を設定する
+              </Link>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Stat Cards */}
