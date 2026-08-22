@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import { fetchJson } from "@/lib/api-client";
 import type { EventDate, DailyProductInventory, CartItem } from "@/lib/types";
 import {
@@ -218,12 +217,12 @@ export default function ProductSelectionPage() {
                   {/* Product Image */}
                   <div className="w-24 h-24 rounded-xl bg-stone-100 overflow-hidden shrink-0 relative">
                     {product.image_url ? (
-                      <Image
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
                         src={product.image_url}
                         alt={product.name}
-                        fill
-                        className="object-cover"
-                        sizes="96px"
+                        loading="lazy"
+                        className="absolute inset-0 h-full w-full object-cover"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-3xl text-stone-300">

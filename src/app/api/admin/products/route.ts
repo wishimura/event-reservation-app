@@ -41,6 +41,7 @@ export async function GET() {
 interface ProductBody {
   name: string;
   description?: string;
+  image_url?: string;
   price: number;
   sort_order?: number;
   default_capacity?: number;
@@ -93,6 +94,7 @@ export async function POST(request: NextRequest) {
           event_id: event.id,
           name: body.name.trim(),
           description: body.description ?? "",
+          image_url: (body.image_url ?? "").trim() || null,
           price: body.price,
           sort_order: Number.isInteger(body.sort_order)
             ? (body.sort_order as number)

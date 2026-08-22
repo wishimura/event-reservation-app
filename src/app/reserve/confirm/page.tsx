@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import type { CartItem, Event } from "@/lib/types";
 import { fetchJson } from "@/lib/api-client";
 import { formatDate, formatPrice } from "@/lib/utils";
@@ -170,12 +169,12 @@ export default function ConfirmPage() {
               <div key={item.product.id} className="flex items-center gap-3 p-4">
                 <div className="w-14 h-14 rounded-lg bg-stone-100 overflow-hidden shrink-0 relative">
                   {item.product.image_url ? (
-                    <Image
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
                       src={item.product.image_url}
                       alt={item.product.name}
-                      fill
-                      className="object-cover"
-                      sizes="56px"
+                      loading="lazy"
+                      className="absolute inset-0 h-full w-full object-cover"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-xl text-stone-300">

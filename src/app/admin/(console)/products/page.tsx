@@ -11,6 +11,7 @@ type ProductWithCount = Product & { order_count: number };
 interface Draft {
   name: string;
   description: string;
+  image_url: string;
   price: string;
   sort_order: string;
   is_active: boolean;
@@ -20,6 +21,7 @@ function toDraft(p: ProductWithCount): Draft {
   return {
     name: p.name,
     description: p.description,
+    image_url: p.image_url ?? "",
     price: String(p.price),
     sort_order: String(p.sort_order),
     is_active: p.is_active,
@@ -29,6 +31,7 @@ function toDraft(p: ProductWithCount): Draft {
 const newDraft: Draft = {
   name: "",
   description: "",
+  image_url: "",
   price: "",
   sort_order: "",
   is_active: true,
@@ -86,6 +89,7 @@ export default function ProductsPage() {
         body: JSON.stringify({
           name: draft.name,
           description: draft.description,
+          image_url: draft.image_url,
           price: parseInt(draft.price, 10) || 0,
           sort_order: parseInt(draft.sort_order, 10) || 0,
           is_active: draft.is_active,
@@ -112,6 +116,7 @@ export default function ProductsPage() {
           body: JSON.stringify({
             name: addDraft.name,
             description: addDraft.description,
+            image_url: addDraft.image_url,
             price: parseInt(addDraft.price, 10) || 0,
             sort_order: parseInt(addDraft.sort_order, 10) || 0,
             default_capacity: parseInt(addCapacity, 10) || 0,
@@ -197,6 +202,18 @@ export default function ProductsPage() {
             value={d.description}
             onChange={(e) => set({ ...d, description: e.target.value })}
           />
+        </div>
+        <div>
+          <label className={label}>商品画像のURL（任意）</label>
+          <input
+            className={field}
+            placeholder="https://..."
+            value={d.image_url}
+            onChange={(e) => set({ ...d, image_url: e.target.value })}
+          />
+          <p className="mt-1 text-xs text-slate-400">
+            画像は外部に置いたものをURLで指定します。空にすると絵文字が表示されます。
+          </p>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>

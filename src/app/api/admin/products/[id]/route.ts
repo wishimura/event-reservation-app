@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 interface ProductPatchBody {
   name: string;
   description?: string;
+  image_url?: string;
   price: number;
   sort_order?: number;
   is_active?: boolean;
@@ -48,6 +49,7 @@ export async function PATCH(
       .set({
         name: body.name.trim(),
         description: body.description ?? "",
+        image_url: (body.image_url ?? "").trim() || null,
         price: body.price,
         sort_order: Number.isInteger(body.sort_order)
           ? (body.sort_order as number)
