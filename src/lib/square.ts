@@ -28,6 +28,11 @@ export function isSquareEnabled(): boolean {
   return Boolean(accessToken && applicationId && locationId);
 }
 
+/** Registering a domain needs the token alone, not the whole card setup. */
+export function hasSquareAccessToken(): boolean {
+  return Boolean(accessToken);
+}
+
 /** Values the browser needs to render the card form. Neither is a secret. */
 export function squarePublicConfig() {
   return {
@@ -142,4 +147,35 @@ export async function chargeOrder(params: {
     paymentId: payment.id,
     receiptUrl: payment.receiptUrl ?? null,
   };
+}
+
+export type ApplePayRegistration =
+  | { status: "verified" }
+  | { status: "pending" };
+
+/**
+ * Registers a domain for Apple Pay.
+ *
+ * Apple will not show its button on a domain it has not verified, and it
+ * verifies by fetching `/.well-known/apple-developer-merchantid-domain-
+ * association` — which this app serves — over public HTTPS. Square asks Apple
+ * on the shop's behalf, so no Apple Developer account is involved.
+ *
+ * "pending" means Apple could not read the file. That is almost always the
+ * domain being unreachable rather than anything about the account.
+ *
+ * Registering a domain that is already registered is harmless.
+ */
+export async function registerApplePayDomain(
+  domainName: string
+): Promise<ApplePayRegistration> {
+  if (!accessToken) {
+    throw new SquarePaymentError("Square の認証情報が設定されていません");
+  }
+
+  const response = await getClient().applePay.registerDomain({ domainName });
+
+  return response.status === "VERIFIED"
+    ? { status: "verified" }
+    : { status: "pending" };
 }

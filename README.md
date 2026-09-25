@@ -94,7 +94,7 @@ UPDATE daily_product_inventory
 | 注文一覧 | 検索・CSV出力・**注文のキャンセル** |
 | 受取管理 | 当日の受渡しチェック |
 | 商品マスタ | 商品の追加・編集・削除 |
-| イベント設定 | イベント基本情報と受取日の管理 |
+| イベント設定 | イベント基本情報、受取日、Apple Pay のドメイン登録 |
 
 受取日または商品を追加すると、`daily_product_inventory` の行が自動で作られます。この行が無いと商品はその日に表示されないため、片方だけ増やして噛み合わなくなることはありません。
 
@@ -140,11 +140,17 @@ UPDATE daily_product_inventory
 1. Apple がドメイン確認のために `/.well-known/apple-developer-merchantid-domain-association` を取りに来ます。このパスは `next.config.ts` の rewrite で `src/app/api/apple-pay-domain-association/route.ts` に繋いでおり、Square が配布している最新のファイルをその場で返します（Square はこのファイルを更新することがあり、長時間のキャッシュを避けるよう案内しているため、固定ファイルを置かずに 1 時間ごとに取り直しています）
 2. 本番ドメインが確定したら、一度だけ登録します
 
+登録は**管理画面の「イベント設定」→「Apple Pay のドメイン登録」**からボタン一つでできます。管理画面を開いているドメインがそのまま登録されるので、**お客様に案内するURLで管理画面を開いてから**実行してください。localhost ではカード自体が出ません（Apple が読みに来られないため）。
+
+ターミナルからやる場合はこちら。
+
 ```bash
 npm run square:register-apple-pay -- yoyaku.example.jp
 ```
 
-`VERIFIED` が出れば完了です。Apple Developer アカウントは不要で、決済事業者は Square です。ドメインを変えたら登録し直してください。
+Apple Developer アカウントは不要で、決済事業者は Square です。ドメインを変えたら登録し直してください。
+
+登録には、サイトが**ログイン無しで開ける**必要があります。Apple が確認ファイルを直接取りに来るためで、Vercel の Deployment Protection が有効のままだと登録は失敗します（お客様もサイトに入れません）。
 
 **返金は自動化していません。** キャンセルは電話で受け、返金は Square の管理画面から手動で行う運用です。そのため注文には `square_payment_id` と `square_receipt_url` を保存し、管理画面のキャンセル操作時に「Square から返金してください」と決済 ID を表示します。
 

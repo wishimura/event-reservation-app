@@ -32,8 +32,24 @@ export default function SettingsPage() {
   const [newDateCapacity, setNewDateCapacity] = useState("0");
   const [busyDateId, setBusyDateId] = useState<string | null>(null);
 
+  const [applePay, setApplePay] = useState<{
+    configured: boolean;
+    domain: string | null;
+  } | null>(null);
+  const [registeringApplePay, setRegisteringApplePay] = useState(false);
+
   useEffect(() => {
     load();
+  }, []);
+
+  useEffect(() => {
+    fetchJson<{ configured: boolean; domain: string | null }>(
+      "/api/admin/apple-pay"
+    )
+      .then(setApplePay)
+      // Nothing here is needed to run the event, so a failure just hides the
+      // card rather than interrupting the page.
+      .catch(() => setApplePay(null));
   }, []);
 
   function notify(text: string, ok: boolean) {
@@ -82,6 +98,21 @@ export default function SettingsPage() {
       notify(describe(err, "保存に失敗しました"), false);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleRegisterApplePay() {
+    setRegisteringApplePay(true);
+    try {
+      const res = await fetchJson<{ domain: string }>("/api/admin/apple-pay", {
+        method: "POST",
+      });
+      notify(`${res.domain} を Apple Pay に登録しました`, true);
+    } catch (err) {
+      console.error("Apple Pay registration error:", err);
+      notify(describe(err, "Apple Pay のドメイン登録に失敗しました"), false);
+    } finally {
+      setRegisteringApplePay(false);
     }
   }
 
@@ -391,6 +422,39 @@ export default function SettingsPage() {
           )}
         </div>
       </div>
+
+      {/*
+        Hidden until Square is configured, and hidden on localhost, where
+        there is nothing Apple could reach.
+      */}
+      {applePay?.configured && applePay.domain && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
+          <h3 className="text-sm font-bold text-slate-700 mb-1">
+            Apple Pay のドメイン登録
+          </h3>
+          <p className="text-xs text-slate-500 mb-4 leading-relaxed">
+            Apple は、登録済みのドメインでしか Apple Pay のボタンを表示しません。
+            登録は一度だけで、ドメインを変えたときにやり直します。
+            Google Pay とカード決済には関係ありません。
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <code className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700">
+              {applePay.domain}
+            </code>
+            <button
+              onClick={handleRegisterApplePay}
+              disabled={registeringApplePay}
+              className="rounded-lg bg-slate-800 px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-slate-900 disabled:opacity-50"
+            >
+              {registeringApplePay ? "登録中..." : "このドメインを登録"}
+            </button>
+          </div>
+          <p className="mt-3 text-xs text-slate-400 leading-relaxed">
+            Apple がこのサイトを直接読みに来るため、ログイン無しで開ける状態にしてから実行してください。
+            お客様に案内するURLで管理画面を開いて実行すると確実です。
+          </p>
+        </div>
+      )}
     </div>
   );
 }
