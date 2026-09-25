@@ -460,7 +460,7 @@ export default function SettingsPage() {
           )}
           <p className="mt-3 text-xs text-slate-400 leading-relaxed">
             Apple がこのサイトを直接読みに来るため、ログイン無しで開ける状態にしてから実行してください。
-            Apple Pay のボタンは Safari でのみ表示されます（Chrome や Android では出ません）。
+            登録後、Apple Pay のボタンは対応している端末とブラウザでのみ表示されます。確実なのは iPhone / Mac の Safari です。
           </p>
         </div>
       )}
