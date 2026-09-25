@@ -127,6 +127,25 @@ UPDATE daily_product_inventory
 
 認証額は注文金額そのままです。円には補助単位が無いため、金額は `"1500"` のように**小数点なし**で渡します（`"1500.00"` ではありません）。
 
+#### Apple Pay / Google Pay
+
+カード番号の入力欄の上にウォレットのボタンを出します。**どちらも専用の認証情報は要りません**。カード決済と同じ `SQUARE_APPLICATION_ID` / `SQUARE_LOCATION_ID` で動きます。
+
+端末が対応していない場合（Wallet にカードが無い、対応ブラウザでない）、Square の SDK が「使えない」と返すのでボタンは表示されません。読み込みが 3 秒で返らない場合も同じ扱いです。カード入力欄はその影響を受けません。
+
+ウォレットの決済に **3Dセキュアは通しません**。端末側で既に本人認証が済んでおり、Square もウォレットのトークンを認証済みとして扱うためです。
+
+**Apple Pay だけドメイン登録が必要です**（Google Pay は不要）。
+
+1. Apple がドメイン確認のために `/.well-known/apple-developer-merchantid-domain-association` を取りに来ます。このパスは `next.config.ts` の rewrite で `src/app/api/apple-pay-domain-association/route.ts` に繋いでおり、Square が配布している最新のファイルをその場で返します（Square はこのファイルを更新することがあり、長時間のキャッシュを避けるよう案内しているため、固定ファイルを置かずに 1 時間ごとに取り直しています）
+2. 本番ドメインが確定したら、一度だけ登録します
+
+```bash
+npm run square:register-apple-pay -- yoyaku.example.jp
+```
+
+`VERIFIED` が出れば完了です。Apple Developer アカウントは不要で、決済事業者は Square です。ドメインを変えたら登録し直してください。
+
 **返金は自動化していません。** キャンセルは電話で受け、返金は Square の管理画面から手動で行う運用です。そのため注文には `square_payment_id` と `square_receipt_url` を保存し、管理画面のキャンセル操作時に「Square から返金してください」と決済 ID を表示します。
 
 ### 日付の扱い

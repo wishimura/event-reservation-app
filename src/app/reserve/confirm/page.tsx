@@ -11,7 +11,23 @@ type TokenResult =
   | { status: "OK"; token: string }
   | { status: "Error" | "Invalid"; errors?: Array<{ message?: string }> };
 
-/** The slice of the Square Payments object we use for 3-D Secure. */
+type PaymentRequest = {
+  countryCode: string;
+  currencyCode: string;
+  total: { amount: string; label: string };
+};
+
+/** Apple Pay and Google Pay expose the same surface to us. */
+type SquareWallet = {
+  attach: (selector: string) => Promise<void>;
+  tokenize: () => Promise<TokenResult>;
+  destroy?: () => Promise<void>;
+};
+
+/** Whether a wallet button can be shown on this device. */
+type WalletStatus = "pending" | "ready" | "unavailable";
+
+/** The slice of the Square Payments object we use beyond the card form. */
 type SquarePayments = {
   verifyBuyer: (
     source: string,
@@ -28,7 +44,21 @@ type SquarePayments = {
       };
     }
   ) => Promise<{ token: string } | null>;
+  paymentRequest: (config: PaymentRequest) => PaymentRequest;
+  applePay: (request: PaymentRequest) => Promise<SquareWallet | null>;
+  googlePay: (request: PaymentRequest) => Promise<SquareWallet | null>;
 };
+
+/**
+ * Wallet setup can hang — Apple Pay on a device with an empty Wallet never
+ * settles. Cap it so a stuck wallet never holds up the card form.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([
+    promise,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+  ]);
+}
 
 /**
  * Square takes the buyer's name in two fields. Japanese names are written
@@ -64,8 +94,14 @@ export default function ConfirmPage() {
   const [payByCard, setPayByCard] = useState<boolean | null>(null);
   const [cardReady, setCardReady] = useState(false);
   const [cardError, setCardError] = useState("");
+  const [paymentsReady, setPaymentsReady] = useState(false);
+  const [applePayStatus, setApplePayStatus] = useState<WalletStatus>("pending");
+  const [googlePayStatus, setGooglePayStatus] =
+    useState<WalletStatus>("pending");
   const cardRef = useRef<{ tokenize: () => Promise<TokenResult> } | null>(null);
   const paymentsRef = useRef<SquarePayments | null>(null);
+  const applePayRef = useRef<SquareWallet | null>(null);
+  const googlePayRef = useRef<SquareWallet | null>(null);
 
   useEffect(() => {
     const cartData = localStorage.getItem("cart");
@@ -115,6 +151,7 @@ export default function ConfirmPage() {
         }
 
         paymentsRef.current = sq as unknown as SquarePayments;
+        setPaymentsReady(true);
 
         const card = await sq.card();
         await card.attach("#square-card");
@@ -148,6 +185,80 @@ export default function ConfirmPage() {
     0
   );
 
+  /**
+   * Apple Pay / Google Pay.
+   *
+   * Set up separately from the card form because the wallet sheet has to be
+   * told the amount up front, and the cart is only known after it is read back
+   * from storage. Neither wallet needs any credential of its own: they run on
+   * the same Square application and location as the card form.
+   *
+   * A wallet the device cannot offer — no Wallet card, wrong browser — simply
+   * reports itself unavailable and its button stays hidden. The card form is
+   * never blocked by it.
+   */
+  useEffect(() => {
+    const payments = paymentsRef.current;
+    if (!paymentsReady || !payments || totalAmount <= 0) return;
+
+    let cancelled = false;
+
+    const request = payments.paymentRequest({
+      countryCode: "JP",
+      currencyCode: "JPY",
+      // The yen has no fractional denomination, so no decimal point.
+      total: { amount: String(totalAmount), label: "お支払い金額" },
+    });
+
+    async function setUpWallet(
+      create: () => Promise<SquareWallet | null>,
+      containerId: string,
+      ref: React.RefObject<SquareWallet | null>,
+      setStatus: (status: WalletStatus) => void
+    ) {
+      try {
+        const wallet = await withTimeout(create(), 3000);
+        if (!wallet || cancelled) {
+          setStatus("unavailable");
+          await wallet?.destroy?.();
+          return;
+        }
+        await wallet.attach(`#${containerId}`);
+        if (cancelled) {
+          await wallet.destroy?.();
+          return;
+        }
+        ref.current = wallet;
+        setStatus("ready");
+      } catch {
+        // Square throws when the wallet is not supported here. That is the
+        // normal case on most desktops, not an error worth showing.
+        setStatus("unavailable");
+      }
+    }
+
+    setUpWallet(
+      () => payments.applePay(request),
+      "square-apple-pay",
+      applePayRef,
+      setApplePayStatus
+    );
+    setUpWallet(
+      () => payments.googlePay(request),
+      "square-google-pay",
+      googlePayRef,
+      setGooglePayStatus
+    );
+
+    return () => {
+      cancelled = true;
+      applePayRef.current?.destroy?.().catch(() => {});
+      googlePayRef.current?.destroy?.().catch(() => {});
+      applePayRef.current = null;
+      googlePayRef.current = null;
+    };
+  }, [paymentsReady, totalAmount]);
+
   function validate(): boolean {
     const errs: Record<string, string> = {};
     if (!name.trim()) errs.name = "お名前を入力してください";
@@ -165,6 +276,62 @@ export default function ConfirmPage() {
     return Object.keys(errs).length === 0;
   }
 
+  /**
+   * Sends the reservation. The payment token is already in hand by this
+   * point — whether it came from the card form or from a wallet — so all
+   * that is left is to hand it to the server.
+   */
+  async function placeOrder(
+    paymentSourceId?: string,
+    verificationToken?: string
+  ) {
+    if (!event || !selectedDate) return;
+
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event_id: event.id,
+          event_date_id: selectedDate.id,
+          customer_name: name.trim(),
+          customer_email: email.trim(),
+          customer_phone: phone.trim(),
+          payment_method: payByCard ? "credit_card" : "cash",
+          payment_source_id: paymentSourceId,
+          verification_token: verificationToken,
+          items: cart.map((item) => ({
+            product_id: item.product.id,
+            product_name_snapshot: item.product.name,
+            unit_price: item.product.price,
+            quantity: item.quantity,
+          })),
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const details = Array.isArray(data.details) ? data.details : [];
+        alert(
+          [data.error || "注文に失敗しました。もう一度お試しください。", ...details].join(
+            "\n"
+          )
+        );
+        setSubmitting(false);
+        return;
+      }
+
+      const order = await res.json();
+      localStorage.setItem("lastOrder", JSON.stringify(order));
+      localStorage.removeItem("cart");
+      router.push("/reserve/complete");
+    } catch {
+      alert("エラーが発生しました。もう一度お試しください。");
+      setSubmitting(false);
+    }
+  }
+
+  /** The card form: tokenise, verify the buyer, then order. */
   async function handleSubmit() {
     if (!validate() || !event || !selectedDate) return;
 
@@ -234,48 +401,42 @@ export default function ConfirmPage() {
       }
     }
 
-    try {
-      const res = await fetch("/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          event_id: event.id,
-          event_date_id: selectedDate.id,
-          customer_name: name.trim(),
-          customer_email: email.trim(),
-          customer_phone: phone.trim(),
-          payment_method: payByCard ? "credit_card" : "cash",
-          payment_source_id: paymentSourceId,
-          verification_token: verificationToken,
-          items: cart.map((item) => ({
-            product_id: item.product.id,
-            product_name_snapshot: item.product.name,
-            unit_price: item.product.price,
-            quantity: item.quantity,
-          })),
-        }),
-      });
+    await placeOrder(paymentSourceId, verificationToken);
+  }
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        const details = Array.isArray(data.details) ? data.details : [];
-        alert(
-          [data.error || "注文に失敗しました。もう一度お試しください。", ...details].join(
-            "\n"
-          )
-        );
+  /**
+   * Apple Pay / Google Pay.
+   *
+   * No 3-D Secure step here: the wallet has already authenticated the buyer
+   * on the device, and Square treats a wallet token as verified. Running
+   * verifyBuyer() on one would be rejected.
+   */
+  async function handleWalletPay(wallet: SquareWallet | null) {
+    if (!wallet || submitting) return;
+    // Validated before the sheet opens, so the customer is not asked to pay
+    // only to be sent back to a missing field afterwards.
+    if (!validate() || !event || !selectedDate) return;
+
+    setSubmitting(true);
+    setCardError("");
+
+    let token: string;
+    try {
+      const result = await wallet.tokenize();
+      if (result.status !== "OK") {
+        // Closing the sheet lands here too, which is not worth an error.
         setSubmitting(false);
         return;
       }
-
-      const order = await res.json();
-      localStorage.setItem("lastOrder", JSON.stringify(order));
-      localStorage.removeItem("cart");
-      router.push("/reserve/complete");
-    } catch {
-      alert("エラーが発生しました。もう一度お試しください。");
+      token = result.token;
+    } catch (err) {
+      console.error("Wallet tokenize error:", err);
+      setCardError("お支払いを完了できませんでした。もう一度お試しください。");
       setSubmitting(false);
+      return;
     }
+
+    await placeOrder(token);
   }
 
   if (!selectedDate || cart.length === 0) {
@@ -501,6 +662,46 @@ export default function ConfirmPage() {
                 </div>
                 <span className="text-lg">&#128179;</span>
               </div>
+
+              {/*
+                The wallet containers stay mounted while Square decides
+                whether the device can offer them — it attaches to a laid-out
+                element — and are hidden only once the answer is no. Empty,
+                they take up no room, so nothing flickers.
+              */}
+              <div
+                className={`space-y-2 ${
+                  applePayStatus === "unavailable" &&
+                  googlePayStatus === "unavailable"
+                    ? "hidden"
+                    : ""
+                }`}
+              >
+                <div
+                  id="square-apple-pay"
+                  onClick={() => handleWalletPay(applePayRef.current)}
+                  className={`h-11 cursor-pointer ${
+                    applePayStatus === "unavailable" ? "hidden" : ""
+                  }`}
+                />
+                <div
+                  id="square-google-pay"
+                  onClick={() => handleWalletPay(googlePayRef.current)}
+                  className={`h-11 cursor-pointer ${
+                    googlePayStatus === "unavailable" ? "hidden" : ""
+                  }`}
+                />
+              </div>
+
+              {(applePayStatus === "ready" || googlePayStatus === "ready") && (
+                <div className="flex items-center gap-3 py-1">
+                  <div className="h-px flex-1 bg-stone-200" />
+                  <span className="text-xs text-stone-400">
+                    またはカード番号を入力
+                  </span>
+                  <div className="h-px flex-1 bg-stone-200" />
+                </div>
+              )}
 
               <div
                 id="square-card"
