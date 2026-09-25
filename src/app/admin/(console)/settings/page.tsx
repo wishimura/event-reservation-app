@@ -35,6 +35,7 @@ export default function SettingsPage() {
   const [applePay, setApplePay] = useState<{
     configured: boolean;
     domain: string | null;
+    opened_on: string | null;
   } | null>(null);
   const [registeringApplePay, setRegisteringApplePay] = useState(false);
 
@@ -43,9 +44,11 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(() => {
-    fetchJson<{ configured: boolean; domain: string | null }>(
-      "/api/admin/apple-pay"
-    )
+    fetchJson<{
+      configured: boolean;
+      domain: string | null;
+      opened_on: string | null;
+    }>("/api/admin/apple-pay")
       .then(setApplePay)
       // Nothing here is needed to run the event, so a failure just hides the
       // card rather than interrupting the page.
@@ -449,9 +452,15 @@ export default function SettingsPage() {
               {registeringApplePay ? "登録中..." : "このドメインを登録"}
             </button>
           </div>
+          {applePay.opened_on && applePay.opened_on !== applePay.domain && (
+            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
+              今開いているのは <code>{applePay.opened_on}</code> ですが、登録されるのは上の本番ドメインです。
+              デプロイごとに変わるURLを登録しても次のデプロイで使えなくなるため、本番ドメインに固定しています。
+            </p>
+          )}
           <p className="mt-3 text-xs text-slate-400 leading-relaxed">
             Apple がこのサイトを直接読みに来るため、ログイン無しで開ける状態にしてから実行してください。
-            お客様に案内するURLで管理画面を開いて実行すると確実です。
+            Apple Pay のボタンは Safari でのみ表示されます（Chrome や Android では出ません）。
           </p>
         </div>
       )}

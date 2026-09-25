@@ -8,24 +8,30 @@ import { hasSquareAccessToken, registerApplePayDomain } from "@/lib/square";
  * and the access token is already in this environment — so doing it here
  * saves setting up a local checkout just to run it once.
  *
- * The domain is taken from the request rather than typed in, so it is always
- * the domain the console was actually opened on. Apple verifies by fetching
- * a file from that domain over public HTTPS, which means the domain has to be
- * reachable without logging in.
+ * What gets registered is the project's production domain, not whatever URL
+ * the console happens to be open on. Every deploy also gets its own throwaway
+ * URL, and registering one of those would verify a domain that stops being
+ * used at the next deploy. Apple verifies by fetching a file from the domain
+ * over public HTTPS, so it has to be reachable without logging in.
  */
 
 export const dynamic = "force-dynamic";
 
-/** The bare hostname this request arrived on, or null if it is not usable. */
-function requestDomain(request: NextRequest): string | null {
-  const host = request.headers.get("host")?.trim();
+/** A hostname Apple could actually reach, or null. */
+function usableDomain(value: string | undefined | null): string | null {
+  const host = value?.trim();
   if (!host) return null;
 
-  // Drop the port: Apple registers hostnames, not origins.
-  const domain = host.split(":")[0].toLowerCase();
+  // Drop the scheme and port: Apple registers hostnames, not origins.
+  const domain = host
+    .replace(/^https?:\/\//, "")
+    .split("/")[0]
+    .split(":")[0]
+    .toLowerCase();
 
   // Apple cannot reach a local machine, so there is nothing to register.
   if (
+    !domain ||
     domain === "localhost" ||
     domain.endsWith(".local") ||
     /^\d+\.\d+\.\d+\.\d+$/.test(domain)
@@ -36,10 +42,29 @@ function requestDomain(request: NextRequest): string | null {
   return domain;
 }
 
+/**
+ * The domain to register: the project's production domain when the host
+ * tells us one, otherwise whatever this request came in on.
+ */
+function targetDomain(request: NextRequest): {
+  domain: string | null;
+  openedOn: string | null;
+} {
+  const openedOn = usableDomain(request.headers.get("host"));
+  const production = usableDomain(process.env.VERCEL_PROJECT_PRODUCTION_URL);
+
+  return { domain: production ?? openedOn, openedOn };
+}
+
 export async function GET(request: NextRequest) {
+  const { domain, openedOn } = targetDomain(request);
+
   return NextResponse.json({
     configured: hasSquareAccessToken(),
-    domain: requestDomain(request),
+    domain,
+    // Lets the console point out that the URL in the address bar is not the
+    // one being registered.
+    opened_on: openedOn,
   });
 }
 
@@ -51,7 +76,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const domain = requestDomain(request);
+  const { domain } = targetDomain(request);
   if (!domain) {
     return NextResponse.json(
       {
