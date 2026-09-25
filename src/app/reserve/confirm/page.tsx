@@ -11,6 +11,40 @@ type TokenResult =
   | { status: "OK"; token: string }
   | { status: "Error" | "Invalid"; errors?: Array<{ message?: string }> };
 
+/** The slice of the Square Payments object we use for 3-D Secure. */
+type SquarePayments = {
+  verifyBuyer: (
+    source: string,
+    details: {
+      amount: string;
+      currencyCode: string;
+      intent: "CHARGE";
+      billingContact: {
+        givenName?: string;
+        familyName?: string;
+        email?: string;
+        phone?: string;
+        countryCode?: string;
+      };
+    }
+  ) => Promise<{ token: string } | null>;
+};
+
+/**
+ * Square takes the buyer's name in two fields. Japanese names are written
+ * 「姓 名」, so the first chunk is the family name. A name with no separator
+ * goes in whole as the given name, which is what Square asks for mononyms.
+ */
+function splitName(fullName: string): {
+  givenName: string;
+  familyName?: string;
+} {
+  // \s covers the full-width space Japanese names are usually typed with.
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length < 2) return { givenName: fullName.trim() };
+  return { familyName: parts[0], givenName: parts.slice(1).join(" ") };
+}
+
 export default function ConfirmPage() {
   const router = useRouter();
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -31,6 +65,7 @@ export default function ConfirmPage() {
   const [cardReady, setCardReady] = useState(false);
   const [cardError, setCardError] = useState("");
   const cardRef = useRef<{ tokenize: () => Promise<TokenResult> } | null>(null);
+  const paymentsRef = useRef<SquarePayments | null>(null);
 
   useEffect(() => {
     const cartData = localStorage.getItem("cart");
@@ -78,6 +113,8 @@ export default function ConfirmPage() {
           setCardError("決済フォームを読み込めませんでした");
           return;
         }
+
+        paymentsRef.current = sq as unknown as SquarePayments;
 
         const card = await sq.card();
         await card.attach("#square-card");
@@ -135,6 +172,7 @@ export default function ConfirmPage() {
     setCardError("");
 
     let paymentSourceId: string | undefined;
+    let verificationToken: string | undefined;
 
     // Tokenise the card before touching the server, so a typo in the card
     // number never reaches the point of holding stock.
@@ -161,6 +199,39 @@ export default function ConfirmPage() {
         setSubmitting(false);
         return;
       }
+
+      // 3-D Secure. The card issuer may put a challenge screen in front of the
+      // customer here, so this has to happen in the browser, before the order
+      // reaches the server. Square declines the payment outright when the
+      // issuer asks for a challenge and no verification token comes with it.
+      try {
+        const verification = await paymentsRef.current?.verifyBuyer(
+          paymentSourceId,
+          {
+            // The yen has no fractional denomination, so "1500" — not "1500.00".
+            amount: String(totalAmount),
+            currencyCode: "JPY",
+            intent: "CHARGE",
+            billingContact: {
+              ...splitName(name),
+              email: email.trim(),
+              phone: phone.trim(),
+              countryCode: "JP",
+            },
+          }
+        );
+
+        // Square returns nothing when the issuer asks for no verification at
+        // all. That is a normal outcome, and the charge goes ahead without one.
+        verificationToken = verification?.token;
+      } catch (err) {
+        console.error("verifyBuyer error:", err);
+        setCardError(
+          "カード会社の本人認証が完了しませんでした。もう一度お試しください。"
+        );
+        setSubmitting(false);
+        return;
+      }
     }
 
     try {
@@ -175,6 +246,7 @@ export default function ConfirmPage() {
           customer_phone: phone.trim(),
           payment_method: payByCard ? "credit_card" : "cash",
           payment_source_id: paymentSourceId,
+          verification_token: verificationToken,
           items: cart.map((item) => ({
             product_id: item.product.id,
             product_name_snapshot: item.product.name,
@@ -449,6 +521,8 @@ export default function ConfirmPage() {
 
               <p className="text-xs leading-relaxed text-stone-400">
                 カード情報は決済代行会社（Square）が直接受け取ります。当店のサーバーには保存されません。
+                <br />
+                ご注文の確定時に、カード会社の本人認証（3Dセキュア）画面が表示される場合があります。
               </p>
             </div>
           )}

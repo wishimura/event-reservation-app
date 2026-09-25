@@ -29,6 +29,8 @@ interface OrderRequestBody {
   payment_method: "cash" | "credit_card";
   /** Set by the Square Web Payments SDK when card payment is switched on. */
   payment_source_id?: string;
+  /** 3-D Secure result from `payments.verifyBuyer()`, when the issuer gave one. */
+  verification_token?: string;
   items: Array<{ product_id: string; quantity: number }>;
 }
 
@@ -316,6 +318,7 @@ export async function POST(request: NextRequest) {
             referenceId: order.order_number,
             note: `${event.name} ${event_date.pickup_date} ${order.order_number}`,
             customerEmail: order.customer_email,
+            verificationToken: body.verification_token,
           });
 
           const [paid] = await db

@@ -70,6 +70,10 @@ export class SquarePaymentError extends Error {
  * `idempotencyKey` is the order id, so a retried request can never take the
  * money twice — Square returns the original payment instead of making a new
  * one.
+ *
+ * `verificationToken` carries the 3-D Secure verification, when the browser
+ * produced one. It is passed through untouched; Square decides whether the
+ * issuer's challenge was sufficient.
  */
 export async function chargeOrder(params: {
   sourceId: string;
@@ -78,6 +82,13 @@ export async function chargeOrder(params: {
   referenceId: string;
   note: string;
   customerEmail?: string;
+  /**
+   * The 3-D Secure result from `payments.verifyBuyer()` in the browser.
+   * Cards issued in Japan and the EU increasingly require it, and Square
+   * declines the payment outright when the issuer asks for a challenge and
+   * no token is supplied.
+   */
+  verificationToken?: string;
 }): Promise<ChargeResult> {
   if (!locationId) {
     throw new SquarePaymentError("決済の設定が完了していません");
@@ -97,6 +108,10 @@ export async function chargeOrder(params: {
       referenceId: params.referenceId.slice(0, 40),
       note: params.note.slice(0, 500),
       buyerEmailAddress: params.customerEmail,
+      // Omitted entirely when absent — Square rejects an empty string.
+      ...(params.verificationToken
+        ? { verificationToken: params.verificationToken }
+        : {}),
       autocomplete: true,
     });
   } catch (error) {
