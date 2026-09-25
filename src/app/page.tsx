@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SiteFooter } from "@/components/SiteFooter";
 import { getActiveEventWithDates } from "@/lib/queries";
 import type { EventDate } from "@/lib/types";
 import { formatDate, getStatusLabel } from "@/lib/utils";
@@ -185,6 +186,8 @@ export default async function EventTopPage() {
             <p>予約可能な日程がまだありません</p>
           </div>
         )}
+
+        <SiteFooter />
       </div>
     </main>
   );

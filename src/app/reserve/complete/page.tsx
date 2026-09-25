@@ -158,7 +158,9 @@ export default function CompletePage() {
               <div>
                 <p className="text-xs text-stone-400 mb-0.5">お支払い</p>
                 <p className="text-stone-800 text-sm font-medium">
-                  現地払い（受取時にお支払い）
+                  {order.payment_method === "credit_card"
+                    ? "クレジットカード（お支払い済み）"
+                    : "現地払い（受取時にお支払い）"}
                 </p>
               </div>
             </div>

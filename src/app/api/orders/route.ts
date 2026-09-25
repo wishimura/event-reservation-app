@@ -10,6 +10,12 @@ import {
   products,
 } from "@/db/schema";
 import { sendOrderEmails } from "@/lib/email";
+import { cancelOrderAndReleaseStock } from "@/lib/orders";
+import {
+  chargeOrder,
+  isSquareEnabled,
+  SquarePaymentError,
+} from "@/lib/square";
 import { generateOrderNumber } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +27,8 @@ interface OrderRequestBody {
   customer_email: string;
   customer_phone: string;
   payment_method: "cash" | "credit_card";
+  /** Set by the Square Web Payments SDK when card payment is switched on. */
+  payment_source_id?: string;
   items: Array<{ product_id: string; quantity: number }>;
 }
 
@@ -69,6 +77,20 @@ export async function POST(request: NextRequest) {
 
   if (body.payment_method !== "cash" && body.payment_method !== "credit_card") {
     return NextResponse.json({ error: "支払方法が不正です" }, { status: 400 });
+  }
+
+  /**
+   * Card payment only switches on once the shop's Square credentials are in
+   * place. Until then reservations keep working exactly as before, paid at
+   * the counter, so a missing credential can never take the site down.
+   */
+  const payByCard = isSquareEnabled();
+
+  if (payByCard && !body.payment_source_id) {
+    return NextResponse.json(
+      { error: "カード情報が読み取れませんでした。もう一度お試しください。" },
+      { status: 400 }
+    );
   }
 
   // Collapse duplicate product_ids so each product maps to exactly one update.
@@ -217,13 +239,15 @@ export async function POST(request: NextRequest) {
             customer_email: body.customer_email,
             customer_phone: body.customer_phone,
             total_amount: totalAmount,
-            // NOTE: carried over from the Supabase implementation — cash orders
-            // are marked paid at reservation time, not at pickup.
-            payment_status: "paid",
-            payment_method: body.payment_method,
-            order_status: "confirmed",
+            // Stock is held before the card is charged, so the order starts
+            // provisional and is confirmed once Square accepts the payment.
+            // Without Square configured the reservation is simply confirmed
+            // and settled at the counter.
+            payment_status: payByCard ? "pending" : "paid",
+            payment_method: payByCard ? "credit_card" : "cash",
+            order_status: payByCard ? "temporary" : "confirmed",
             pickup_status: "not_picked_up",
-            paid_at: new Date(),
+            paid_at: payByCard ? null : new Date(),
           })
           .returning();
 
@@ -277,7 +301,57 @@ export async function POST(request: NextRequest) {
         return { order, items: insertedItems, event_date: eventDate, event };
       });
 
-      const { order, items, event_date, event } = created;
+      let { order } = created;
+      const { items, event_date, event } = created;
+
+      /* --------------------- take the card payment ----------------------- */
+      if (payByCard) {
+        try {
+          // The order id is the idempotency key, so a retry of this request
+          // returns the original payment instead of charging a second time.
+          const charge = await chargeOrder({
+            sourceId: body.payment_source_id!,
+            amountYen: order.total_amount,
+            idempotencyKey: order.id,
+            referenceId: order.order_number,
+            note: `${event.name} ${event_date.pickup_date} ${order.order_number}`,
+            customerEmail: order.customer_email,
+          });
+
+          const [paid] = await db
+            .update(orders)
+            .set({
+              payment_status: "paid",
+              order_status: "confirmed",
+              paid_at: new Date(),
+              square_payment_id: charge.paymentId,
+              square_receipt_url: charge.receiptUrl,
+            })
+            .where(eq(orders.id, order.id))
+            .returning();
+
+          order = paid;
+        } catch (paymentError) {
+          // The stock was already held, so give it straight back rather than
+          // leaving a provisional order sitting on it.
+          try {
+            await cancelOrderAndReleaseStock(order.id);
+          } catch (releaseError) {
+            console.error(
+              "Failed to release stock after a declined payment:",
+              order.order_number,
+              releaseError
+            );
+          }
+
+          const message =
+            paymentError instanceof SquarePaymentError
+              ? paymentError.customerMessage
+              : "決済処理に失敗しました。もう一度お試しください。";
+
+          return NextResponse.json({ error: message }, { status: 402 });
+        }
+      }
 
       // Sent after the response so the customer is not kept waiting on the
       // mail provider. A failure here never invalidates the reservation.

@@ -29,6 +29,10 @@ cp .env.example .env.local
 | `RESEND_API_KEY` | 予約確認メールの送信に使う Resend の API キー |
 | `MAIL_FROM` | 送信元アドレス（Resend で DNS 認証済みのドメイン） |
 | `SHOP_NOTIFICATION_EMAIL` | 新規予約の通知先。空なら店舗宛の通知は送りません |
+| `SQUARE_ACCESS_TOKEN` | Square のアクセストークン。**お金を動かせる鍵** |
+| `SQUARE_APPLICATION_ID` | Square アプリケーション ID（公開値） |
+| `SQUARE_LOCATION_ID` | 入金先の店舗 ID（公開値） |
+| `SQUARE_ENVIRONMENT` | `production` で本番。それ以外はサンドボックス |
 
 ### 3. スキーマとサンプルデータ
 
@@ -103,6 +107,19 @@ UPDATE daily_product_inventory
 送信は `next/server` の `after()` でレスポンス返却後に回しており、**送信の失敗が予約の成立に影響することはありません**。失敗はログに残るだけです。`RESEND_API_KEY` か `MAIL_FROM` が未設定の環境では送信自体をスキップするので、ローカル開発でメール設定は必須ではありません。
 
 送信元ドメインは Resend 側で DNS 認証（TXT レコードの追加）を済ませておく必要があります。未認証のドメインを `MAIL_FROM` に設定すると、送信が拒否されます。
+
+### 決済（Square）
+
+`SQUARE_ACCESS_TOKEN` / `SQUARE_APPLICATION_ID` / `SQUARE_LOCATION_ID` の**3つが揃ったときだけ**カード決済に切り替わります。1つでも欠けていれば現地払いのまま動くので、認証情報が未設定の環境で予約が止まることはありません。
+
+予約の流れは「在庫確保 → カード決済 → 確定」です。
+
+1. トランザクション内で在庫を押さえ、注文を `temporary` / `pending` で作成
+2. Square で決済（冪等キーは注文 ID なので、再送されても二重課金になりません）
+3. 成功したら `confirmed` / `paid` に更新し、`square_payment_id` を保存
+4. 失敗したら `cancelOrderAndReleaseStock()` で在庫を戻し、402 を返す
+
+**返金は自動化していません。** キャンセルは電話で受け、返金は Square の管理画面から手動で行う運用です。そのため注文には `square_payment_id` と `square_receipt_url` を保存し、管理画面のキャンセル操作時に「Square から返金してください」と決済 ID を表示します。
 
 ### 日付の扱い
 

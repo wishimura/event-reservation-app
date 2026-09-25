@@ -102,6 +102,14 @@ export default function OrdersPage() {
         `${order.customer_name} 様の注文 ${order.order_number} をキャンセルします。`,
         "",
         "押さえていた在庫は受付枠に戻ります。",
+        ...(order.square_payment_id
+          ? [
+              "",
+              "※ 返金はこの画面では行われません。",
+              "　 Square の管理画面から手動で返金してください。",
+            ]
+          : []),
+        "",
         "キャンセルは取り消せません。よろしいですか？",
       ].join("\n")
     );
@@ -313,6 +321,24 @@ export default function OrdersPage() {
                                     : "クレジットカード"}
                                 </span>
                               </p>
+                              {order.square_payment_id && (
+                                <p className="text-slate-500">
+                                  Square決済ID:{" "}
+                                  <span className="font-mono text-xs text-slate-700">
+                                    {order.square_payment_id}
+                                  </span>
+                                  {order.square_receipt_url && (
+                                    <a
+                                      href={order.square_receipt_url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="ml-2 text-indigo-600 underline underline-offset-2"
+                                    >
+                                      レシート
+                                    </a>
+                                  )}
+                                </p>
+                              )}
                               <p className="text-slate-500">
                                 注文日時:{" "}
                                 <span className="text-slate-700">
@@ -341,9 +367,16 @@ export default function OrdersPage() {
 
                           <div className="mt-4 border-t border-slate-200 pt-3">
                             {order.order_status === "cancelled" ? (
-                              <p className="text-xs text-slate-500">
-                                この注文はキャンセル済みです。在庫は受付枠に戻っています。
-                              </p>
+                              <div className="text-xs text-slate-500">
+                                <p>
+                                  この注文はキャンセル済みです。在庫は受付枠に戻っています。
+                                </p>
+                                {order.square_payment_id && (
+                                  <p className="mt-1 text-amber-700">
+                                    返金は Square の管理画面から手動で行ってください（上記の決済IDで検索できます）。
+                                  </p>
+                                )}
+                              </div>
                             ) : (
                               <div className="flex flex-wrap items-center gap-3">
                                 <button
@@ -360,6 +393,8 @@ export default function OrdersPage() {
                                 </button>
                                 <span className="text-xs text-slate-500">
                                   在庫は受付枠に戻ります。取り消しはできません。
+                                  {order.square_payment_id &&
+                                    " 返金は Square の管理画面から別途お願いします。"}
                                 </span>
                               </div>
                             )}

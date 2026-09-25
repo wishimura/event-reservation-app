@@ -58,6 +58,8 @@ export interface Order {
   pickup_status: "not_picked_up" | "picked_up";
   created_at: string;
   paid_at: string | null;
+  square_payment_id: string | null;
+  square_receipt_url: string | null;
   event_date?: EventDate;
 }
 

@@ -1,10 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CartItem, Event } from "@/lib/types";
 import { fetchJson } from "@/lib/api-client";
 import { formatDate, formatPrice } from "@/lib/utils";
+import { SiteFooter } from "@/components/SiteFooter";
+
+type TokenResult =
+  | { status: "OK"; token: string }
+  | { status: "Error" | "Invalid"; errors?: Array<{ message?: string }> };
 
 export default function ConfirmPage() {
   const router = useRouter();
@@ -19,6 +24,13 @@ export default function ConfirmPage() {
   const [phone, setPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Card payment is on only when the shop's Square credentials are configured;
+  // otherwise the reservation is settled at the counter, as before.
+  const [payByCard, setPayByCard] = useState<boolean | null>(null);
+  const [cardReady, setCardReady] = useState(false);
+  const [cardError, setCardError] = useState("");
+  const cardRef = useRef<{ tokenize: () => Promise<TokenResult> } | null>(null);
 
   useEffect(() => {
     const cartData = localStorage.getItem("cart");
@@ -41,6 +53,58 @@ export default function ConfirmPage() {
     }
     fetchEvent();
   }, [router]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function setUpPayment() {
+      try {
+        const config = await fetchJson<{
+          enabled: boolean;
+          applicationId: string | null;
+          locationId: string | null;
+        }>("/api/payments/config");
+
+        if (cancelled) return;
+        setPayByCard(config.enabled);
+
+        if (!config.enabled || !config.applicationId || !config.locationId) {
+          return;
+        }
+
+        const { payments } = await import("@square/web-sdk");
+        const sq = await payments(config.applicationId, config.locationId);
+        if (cancelled || !sq) {
+          setCardError("決済フォームを読み込めませんでした");
+          return;
+        }
+
+        const card = await sq.card();
+        await card.attach("#square-card");
+        if (cancelled) {
+          card.destroy();
+          return;
+        }
+
+        cardRef.current = card as unknown as {
+          tokenize: () => Promise<TokenResult>;
+        };
+        setCardReady(true);
+      } catch (err) {
+        console.error("Square setup error:", err);
+        if (!cancelled) {
+          setCardError(
+            "決済フォームの読み込みに失敗しました。ページを再読み込みしてください。"
+          );
+        }
+      }
+    }
+
+    setUpPayment();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const totalAmount = cart.reduce(
     (sum, item) => sum + item.product.price * item.quantity,
@@ -66,7 +130,38 @@ export default function ConfirmPage() {
 
   async function handleSubmit() {
     if (!validate() || !event || !selectedDate) return;
+
     setSubmitting(true);
+    setCardError("");
+
+    let paymentSourceId: string | undefined;
+
+    // Tokenise the card before touching the server, so a typo in the card
+    // number never reaches the point of holding stock.
+    if (payByCard) {
+      if (!cardRef.current) {
+        setCardError("決済フォームがまだ読み込まれていません");
+        setSubmitting(false);
+        return;
+      }
+      try {
+        const result = await cardRef.current.tokenize();
+        if (result.status !== "OK") {
+          setCardError(
+            result.errors?.[0]?.message ??
+              "カード情報をご確認のうえ、もう一度お試しください。"
+          );
+          setSubmitting(false);
+          return;
+        }
+        paymentSourceId = result.token;
+      } catch (err) {
+        console.error("Tokenize error:", err);
+        setCardError("カード情報の確認に失敗しました。もう一度お試しください。");
+        setSubmitting(false);
+        return;
+      }
+    }
 
     try {
       const res = await fetch("/api/orders", {
@@ -78,7 +173,8 @@ export default function ConfirmPage() {
           customer_name: name.trim(),
           customer_email: email.trim(),
           customer_phone: phone.trim(),
-          payment_method: "cash",
+          payment_method: payByCard ? "credit_card" : "cash",
+          payment_source_id: paymentSourceId,
           items: cart.map((item) => ({
             product_id: item.product.id,
             product_name_snapshot: item.product.name,
@@ -300,42 +396,68 @@ export default function ConfirmPage() {
           <h2 className="font-bold text-stone-700 text-sm mb-4">
             お支払い方法
           </h2>
-          <div className="space-y-3">
-            {/* Cash - selected */}
+          {payByCard === null && (
+            <p className="text-sm text-stone-400">読み込み中...</p>
+          )}
+
+          {payByCard === false && (
             <div className="flex items-center gap-3 p-3 rounded-xl border-2 border-amber-500 bg-amber-50">
               <div className="w-5 h-5 rounded-full border-2 border-amber-600 flex items-center justify-center">
                 <div className="w-2.5 h-2.5 rounded-full bg-amber-600" />
               </div>
               <div className="flex-1">
-                <p className="text-sm font-semibold text-stone-800">
-                  現地払い
-                </p>
-                <p className="text-xs text-stone-500">
-                  受取時にお支払い
-                </p>
+                <p className="text-sm font-semibold text-stone-800">現地払い</p>
+                <p className="text-xs text-stone-500">受取時にお支払い</p>
               </div>
               <span className="text-lg">&#128176;</span>
             </div>
+          )}
 
-            {/* Credit Card - disabled */}
-            <div className="flex items-center gap-3 p-3 rounded-xl border border-stone-200 bg-stone-50 opacity-60">
-              <div className="w-5 h-5 rounded-full border-2 border-stone-300" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-stone-400">
-                  クレジットカード
-                </p>
+          {payByCard === true && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 p-3 rounded-xl border-2 border-amber-500 bg-amber-50">
+                <div className="w-5 h-5 rounded-full border-2 border-amber-600 flex items-center justify-center">
+                  <div className="w-2.5 h-2.5 rounded-full bg-amber-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-stone-800">
+                    クレジットカード
+                  </p>
+                  <p className="text-xs text-stone-500">
+                    ご予約の確定時にお支払いが完了します
+                  </p>
+                </div>
+                <span className="text-lg">&#128179;</span>
               </div>
-              <span className="text-xs font-semibold bg-stone-200 text-stone-500 px-2 py-0.5 rounded-full">
-                Coming Soon
-              </span>
+
+              <div
+                id="square-card"
+                className="rounded-xl border border-stone-200 bg-white p-3 min-h-[92px]"
+              />
+
+              {!cardReady && !cardError && (
+                <p className="text-xs text-stone-400">
+                  決済フォームを読み込んでいます...
+                </p>
+              )}
+
+              {cardError && (
+                <p className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-600">
+                  {cardError}
+                </p>
+              )}
+
+              <p className="text-xs leading-relaxed text-stone-400">
+                カード情報は決済代行会社（Square）が直接受け取ります。当店のサーバーには保存されません。
+              </p>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Submit Button */}
         <button
           onClick={handleSubmit}
-          disabled={submitting}
+          disabled={submitting || payByCard === null || (payByCard && !cardReady)}
           className={`w-full py-4 rounded-2xl font-bold text-lg transition-colors ${
             submitting
               ? "bg-stone-300 text-stone-500 cursor-not-allowed"
@@ -373,6 +495,8 @@ export default function ConfirmPage() {
         <p className="text-center text-xs text-stone-400">
           注文確定後、確認メールが送信されます
         </p>
+
+        <SiteFooter />
       </div>
     </main>
   );

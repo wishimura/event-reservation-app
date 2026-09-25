@@ -170,6 +170,13 @@ export const orders = pgTable(
       .notNull()
       .defaultNow(),
     paid_at: timestamp("paid_at", { withTimezone: true }),
+    /**
+     * Square's own identifiers for the charge. Refunds are issued by hand in
+     * the Square dashboard, so the console has to be able to point the
+     * operator at the exact payment.
+     */
+    square_payment_id: text("square_payment_id"),
+    square_receipt_url: text("square_receipt_url"),
   },
   (t) => [
     index("orders_event_id_idx").on(t.event_id),
