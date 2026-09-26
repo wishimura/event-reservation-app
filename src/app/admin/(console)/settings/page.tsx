@@ -35,8 +35,9 @@ export default function SettingsPage() {
   const [applePay, setApplePay] = useState<{
     configured: boolean;
     domain: string | null;
-    opened_on: string | null;
+    alternative: string | null;
   } | null>(null);
+  const [applePayDomain, setApplePayDomain] = useState("");
   const [registeringApplePay, setRegisteringApplePay] = useState(false);
 
   useEffect(() => {
@@ -47,9 +48,12 @@ export default function SettingsPage() {
     fetchJson<{
       configured: boolean;
       domain: string | null;
-      opened_on: string | null;
+      alternative: string | null;
     }>("/api/admin/apple-pay")
-      .then(setApplePay)
+      .then((data) => {
+        setApplePay(data);
+        setApplePayDomain(data.domain ?? "");
+      })
       // Nothing here is needed to run the event, so a failure just hides the
       // card rather than interrupting the page.
       .catch(() => setApplePay(null));
@@ -109,6 +113,7 @@ export default function SettingsPage() {
     try {
       const res = await fetchJson<{ domain: string }>("/api/admin/apple-pay", {
         method: "POST",
+        body: JSON.stringify({ domain: applePayDomain.trim() }),
       });
       notify(`${res.domain} を Apple Pay に登録しました`, true);
     } catch (err) {
@@ -437,29 +442,39 @@ export default function SettingsPage() {
           </h3>
           <p className="text-xs text-slate-500 mb-4 leading-relaxed">
             Apple は、登録済みのドメインでしか Apple Pay のボタンを表示しません。
-            登録は一度だけで、ドメインを変えたときにやり直します。
+            <strong>お客様に案内するURLのドメイン</strong>を登録してください。
+            複数のURLで公開している場合は、それぞれ登録できます。
             Google Pay とカード決済には関係ありません。
           </p>
           <div className="flex flex-wrap items-center gap-3">
-            <code className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700">
-              {applePay.domain}
-            </code>
+            <input
+              className={`${field} max-w-md font-mono text-xs`}
+              value={applePayDomain}
+              onChange={(e) => setApplePayDomain(e.target.value)}
+              placeholder="example.vercel.app"
+            />
             <button
               onClick={handleRegisterApplePay}
-              disabled={registeringApplePay}
+              disabled={registeringApplePay || !applePayDomain.trim()}
               className="rounded-lg bg-slate-800 px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-slate-900 disabled:opacity-50"
             >
               {registeringApplePay ? "登録中..." : "このドメインを登録"}
             </button>
           </div>
-          {applePay.opened_on && applePay.opened_on !== applePay.domain && (
-            <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
-              今開いているのは <code>{applePay.opened_on}</code> ですが、登録されるのは上の本番ドメインです。
-              デプロイごとに変わるURLを登録しても次のデプロイで使えなくなるため、本番ドメインに固定しています。
+          {applePay.alternative && (
+            <p className="mt-3 text-xs text-slate-500">
+              このプロジェクトには{" "}
+              <button
+                onClick={() => setApplePayDomain(applePay.alternative!)}
+                className="font-mono text-indigo-600 underline underline-offset-2"
+              >
+                {applePay.alternative}
+              </button>{" "}
+              も割り当てられています。こちらでも公開しているなら、同じように登録してください。
             </p>
           )}
           <p className="mt-3 text-xs text-slate-400 leading-relaxed">
-            Apple がこのサイトを直接読みに来るため、ログイン無しで開ける状態にしてから実行してください。
+            Apple がこのドメインを直接読みに来るため、ログイン無しで開ける状態にしてから実行してください。
             登録後、Apple Pay のボタンは対応している端末とブラウザでのみ表示されます。確実なのは iPhone / Mac の Safari です。
           </p>
         </div>

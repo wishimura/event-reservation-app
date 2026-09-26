@@ -8,11 +8,13 @@ import { hasSquareAccessToken, registerApplePayDomain } from "@/lib/square";
  * and the access token is already in this environment — so doing it here
  * saves setting up a local checkout just to run it once.
  *
- * What gets registered is the project's production domain, not whatever URL
- * the console happens to be open on. Every deploy also gets its own throwaway
- * URL, and registering one of those would verify a domain that stops being
- * used at the next deploy. Apple verifies by fetching a file from the domain
+ * The domain is chosen in the console, defaulting to the one it is open on,
+ * because only the operator knows which URL customers are given. A project
+ * can carry several aliases and every deploy adds a throwaway one, so
+ * guessing gets it wrong. Apple verifies by fetching a file from the domain
  * over public HTTPS, so it has to be reachable without logging in.
+ *
+ * More than one domain can be registered; do it once per URL in use.
  */
 
 export const dynamic = "force-dynamic";
@@ -42,29 +44,17 @@ function usableDomain(value: string | undefined | null): string | null {
   return domain;
 }
 
-/**
- * The domain to register: the project's production domain when the host
- * tells us one, otherwise whatever this request came in on.
- */
-function targetDomain(request: NextRequest): {
-  domain: string | null;
-  openedOn: string | null;
-} {
-  const openedOn = usableDomain(request.headers.get("host"));
-  const production = usableDomain(process.env.VERCEL_PROJECT_PRODUCTION_URL);
-
-  return { domain: production ?? openedOn, openedOn };
-}
-
 export async function GET(request: NextRequest) {
-  const { domain, openedOn } = targetDomain(request);
+  const openedOn = usableDomain(request.headers.get("host"));
+
+  // Vercel's idea of the production domain is the shortest alias, which is
+  // not necessarily the one customers are given. Offer it, do not assume it.
+  const alternative = usableDomain(process.env.VERCEL_PROJECT_PRODUCTION_URL);
 
   return NextResponse.json({
     configured: hasSquareAccessToken(),
-    domain,
-    // Lets the console point out that the URL in the address bar is not the
-    // one being registered.
-    opened_on: openedOn,
+    domain: openedOn,
+    alternative: alternative && alternative !== openedOn ? alternative : null,
   });
 }
 
@@ -76,12 +66,22 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { domain } = targetDomain(request);
+  let requested: string | undefined;
+  try {
+    const body = await request.json();
+    requested = typeof body?.domain === "string" ? body.domain : undefined;
+  } catch {
+    // No body is fine: fall back to the domain this request arrived on.
+  }
+
+  const domain =
+    usableDomain(requested) ?? usableDomain(request.headers.get("host"));
+
   if (!domain) {
     return NextResponse.json(
       {
         error:
-          "このアドレスでは登録できません。本番のURLで管理画面を開いてから実行してください。",
+          "登録できるドメインではありません。お客様に案内するURLのドメインを入力してください。",
       },
       { status: 400 }
     );
