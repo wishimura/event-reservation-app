@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Order, OrderItem } from "@/lib/types";
 import { formatDate, formatPrice } from "@/lib/utils";
+import { Icon } from "@/components/Icon";
 
 interface OrderWithItems extends Order {
   items?: OrderItem[];
@@ -144,7 +145,7 @@ export default function CompletePage() {
           <div className="space-y-3">
             {order.pickup_location && (
               <div className="flex items-start gap-2.5">
-                <span className="text-amber-600">&#128205;</span>
+                <Icon name="pin" className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
                 <div>
                   <p className="text-xs text-stone-400 mb-0.5">受取場所</p>
                   <p className="text-stone-800 text-sm font-medium">
@@ -154,7 +155,7 @@ export default function CompletePage() {
               </div>
             )}
             <div className="flex items-start gap-2.5">
-              <span className="text-amber-600">&#128176;</span>
+              <Icon name="cash" className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
               <div>
                 <p className="text-xs text-stone-400 mb-0.5">お支払い</p>
                 <p className="text-stone-800 text-sm font-medium">
@@ -165,7 +166,7 @@ export default function CompletePage() {
               </div>
             </div>
             <div className="flex items-start gap-2.5">
-              <span className="text-amber-600">&#128221;</span>
+              <Icon name="note" className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
               <div>
                 <p className="text-xs text-stone-400 mb-0.5">ご注意</p>
                 <p className="text-stone-600 text-sm">

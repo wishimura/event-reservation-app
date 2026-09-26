@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { Icon, type IconName } from "@/components/Icon";
 
-const navItems = [
-  { href: "/admin", label: "ダッシュボード", icon: "📊" },
-  { href: "/admin/inventory", label: "在庫管理", icon: "📦" },
-  { href: "/admin/production", label: "製造計画", icon: "🍳" },
-  { href: "/admin/orders", label: "注文一覧", icon: "📋" },
-  { href: "/admin/pickup", label: "受取管理", icon: "🛒" },
-  { href: "/admin/products", label: "商品マスタ", icon: "🍩" },
-  { href: "/admin/settings", label: "イベント設定", icon: "⚙️" },
+const navItems: Array<{ href: string; label: string; icon: IconName }> = [
+  { href: "/admin", label: "ダッシュボード", icon: "home" },
+  { href: "/admin/inventory", label: "在庫管理", icon: "box" },
+  { href: "/admin/production", label: "製造計画", icon: "clipboard" },
+  { href: "/admin/orders", label: "注文一覧", icon: "list" },
+  { href: "/admin/pickup", label: "受取管理", icon: "bag" },
+  { href: "/admin/products", label: "商品マスタ", icon: "tag" },
+  { href: "/admin/settings", label: "イベント設定", icon: "gear" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -47,7 +48,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     : "text-indigo-200 hover:bg-indigo-800/50 hover:text-white"
                 }`}
               >
-                <span className="text-base">{item.icon}</span>
+                <Icon name={item.icon} />
                 {item.label}
               </Link>
             );
@@ -83,13 +84,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`px-2 py-1 rounded text-xs ${
+                  aria-label={item.label}
+                  title={item.label}
+                  className={`rounded p-2 ${
                     isActive
                       ? "bg-indigo-700 text-white"
                       : "text-indigo-300 hover:text-white"
                   }`}
                 >
-                  {item.icon}
+                  <Icon name={item.icon} label={item.label} />
                 </Link>
               );
             })}

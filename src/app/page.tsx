@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SiteFooter } from "@/components/SiteFooter";
+import { Icon } from "@/components/Icon";
 import { getActiveEventWithDates } from "@/lib/queries";
 import type { EventDate } from "@/lib/types";
 import { formatDate, getStatusLabel } from "@/lib/utils";
@@ -14,7 +15,7 @@ export default async function EventTopPage() {
     return (
       <main className="min-h-screen flex items-center justify-center bg-stone-50 px-4">
         <div className="text-center">
-          <p className="text-6xl mb-4">&#9749;</p>
+          <Icon name="coffee" className="w-14 h-14 mx-auto mb-4 text-stone-300" />
           <h1 className="text-xl font-bold text-stone-700 mb-2">
             現在開催中のイベントはありません
           </h1>
@@ -33,8 +34,9 @@ export default async function EventTopPage() {
       {/* Hero */}
       <div className="bg-gradient-to-br from-amber-800 via-amber-900 to-stone-900 text-white">
         <div className="max-w-lg mx-auto px-4 pt-12 pb-10">
-          <p className="text-amber-300 text-sm font-medium tracking-wider mb-2">
-            &#9749; CAFE EVENT
+          <p className="text-amber-300 text-sm font-medium tracking-wider mb-2 flex items-center gap-1.5">
+            <Icon name="coffee" className="w-4 h-4" />
+            CAFE EVENT
           </p>
           <h1 className="text-3xl font-bold leading-tight mb-3">
             {event.name}
@@ -51,7 +53,7 @@ export default async function EventTopPage() {
         <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-5 mb-6">
           <div className="space-y-4">
             <div className="flex items-start gap-3">
-              <span className="text-amber-600 mt-0.5">&#128197;</span>
+              <Icon name="calendar" className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
               <div>
                 <p className="text-xs text-stone-400 font-medium mb-0.5">
                   開催期間
@@ -62,7 +64,7 @@ export default async function EventTopPage() {
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <span className="text-amber-600 mt-0.5">&#128205;</span>
+              <Icon name="pin" className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
               <div>
                 <p className="text-xs text-stone-400 font-medium mb-0.5">
                   受取場所
@@ -74,7 +76,7 @@ export default async function EventTopPage() {
             </div>
             {event.reservation_note && (
               <div className="flex items-start gap-3">
-                <span className="text-amber-600 mt-0.5">&#128221;</span>
+                <Icon name="note" className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
                 <div>
                   <p className="text-xs text-stone-400 font-medium mb-0.5">
                     ご注意
@@ -182,7 +184,7 @@ export default async function EventTopPage() {
 
         {dates.length === 0 && (
           <div className="text-center py-8 text-stone-400 mb-6">
-            <p className="text-4xl mb-3">&#128197;</p>
+            <Icon name="calendar" className="w-10 h-10 mx-auto mb-3 text-stone-300" />
             <p>予約可能な日程がまだありません</p>
           </div>
         )}

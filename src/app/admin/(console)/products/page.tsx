@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ApiError, fetchJson } from "@/lib/api-client";
 import { LoadErrorNotice } from "@/components/LoadErrorNotice";
+import { Toast } from "@/components/Toast";
 import { formatPrice } from "@/lib/utils";
 import type { Product } from "@/lib/types";
 
@@ -262,17 +263,7 @@ export default function ProductsPage() {
         価格と説明はお客様向けページにそのまま出ます。受付上限の調整は「在庫管理」です。
       </p>
 
-      {message && (
-        <div
-          className={`mb-6 rounded-lg px-4 py-2.5 text-sm ${
-            message.ok
-              ? "bg-emerald-50 text-emerald-700"
-              : "bg-red-50 text-red-700"
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
+      <Toast message={message} />
 
       {adding && (
         <div className="bg-white rounded-xl border border-indigo-300 p-5 mb-6">

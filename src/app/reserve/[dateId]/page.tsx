@@ -10,6 +10,7 @@ import {
   formatPrice,
   getRemainingQuantity,
 } from "@/lib/utils";
+import { Icon } from "@/components/Icon";
 
 export default function ProductSelectionPage() {
   const params = useParams();
@@ -225,8 +226,8 @@ export default function ProductSelectionPage() {
                         className="absolute inset-0 h-full w-full object-cover"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-3xl text-stone-300">
-                        &#9749;
+                      <div className="w-full h-full flex items-center justify-center text-stone-300">
+                        <Icon name="coffee" className="w-8 h-8" />
                       </div>
                     )}
                     {isSoldOut && (
@@ -345,7 +346,7 @@ export default function ProductSelectionPage() {
 
         {inventories.length === 0 && (
           <div className="text-center py-12 text-stone-400">
-            <p className="text-4xl mb-3">&#128230;</p>
+            <Icon name="box" className="w-10 h-10 mx-auto mb-3 text-stone-300" />
             <p>この日の商品はまだ登録されていません</p>
           </div>
         )}

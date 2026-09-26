@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ApiError, fetchJson } from "@/lib/api-client";
 import { LoadErrorNotice } from "@/components/LoadErrorNotice";
+import { Toast } from "@/components/Toast";
 import { formatDate, todayInJST } from "@/lib/utils";
 import type { Event, EventDate } from "@/lib/types";
 
@@ -39,6 +40,9 @@ export default function SettingsPage() {
   } | null>(null);
   const [applePayDomain, setApplePayDomain] = useState("");
   const [registeringApplePay, setRegisteringApplePay] = useState(false);
+  // The toast clears itself after a few seconds; this stays, so the operator
+  // can still tell afterwards what went through.
+  const [registeredDomains, setRegisteredDomains] = useState<string[]>([]);
 
   useEffect(() => {
     load();
@@ -115,6 +119,9 @@ export default function SettingsPage() {
         method: "POST",
         body: JSON.stringify({ domain: applePayDomain.trim() }),
       });
+      setRegisteredDomains((prev) =>
+        prev.includes(res.domain) ? prev : [...prev, res.domain]
+      );
       notify(`${res.domain} を Apple Pay に登録しました`, true);
     } catch (err) {
       console.error("Apple Pay registration error:", err);
@@ -232,17 +239,7 @@ export default function SettingsPage() {
         ここで変更した内容は、お客様向けページにすぐ反映されます。
       </p>
 
-      {message && (
-        <div
-          className={`mb-6 rounded-lg px-4 py-2.5 text-sm ${
-            message.ok
-              ? "bg-emerald-50 text-emerald-700"
-              : "bg-red-50 text-red-700"
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
+      <Toast message={message} />
 
       {/* Basics */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
@@ -461,6 +458,19 @@ export default function SettingsPage() {
               {registeringApplePay ? "登録中..." : "このドメインを登録"}
             </button>
           </div>
+          {registeredDomains.length > 0 && (
+            <ul className="mt-3 space-y-1">
+              {registeredDomains.map((d) => (
+                <li
+                  key={d}
+                  className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800"
+                >
+                  登録済み：<span className="font-mono">{d}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+
           {applePay.alternative && (
             <p className="mt-3 text-xs text-slate-500">
               このプロジェクトには{" "}

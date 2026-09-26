@@ -6,6 +6,7 @@ import type { CartItem, Event } from "@/lib/types";
 import { fetchJson } from "@/lib/api-client";
 import { formatDate, formatPrice } from "@/lib/utils";
 import { SiteFooter } from "@/components/SiteFooter";
+import { Icon } from "@/components/Icon";
 
 type TokenResult =
   | { status: "OK"; token: string }
@@ -506,8 +507,8 @@ export default function ConfirmPage() {
                       className="absolute inset-0 h-full w-full object-cover"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-xl text-stone-300">
-                      &#9749;
+                    <div className="w-full h-full flex items-center justify-center text-stone-300">
+                      <Icon name="coffee" className="w-6 h-6" />
                     </div>
                   )}
                 </div>
@@ -541,7 +542,7 @@ export default function ConfirmPage() {
             </h2>
             <div className="space-y-2">
               <div className="flex items-start gap-2">
-                <span className="text-amber-600 text-sm">&#128205;</span>
+                <Icon name="pin" className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
                 <div>
                   <p className="text-xs text-stone-400">受取場所</p>
                   <p className="text-stone-800 text-sm font-medium">
@@ -551,7 +552,7 @@ export default function ConfirmPage() {
               </div>
               {event.reservation_note && (
                 <div className="flex items-start gap-2">
-                  <span className="text-amber-600 text-sm">&#128221;</span>
+                  <Icon name="note" className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
                   <div>
                     <p className="text-xs text-stone-400">備考</p>
                     <p className="text-stone-600 text-sm whitespace-pre-line">
@@ -642,7 +643,7 @@ export default function ConfirmPage() {
                 <p className="text-sm font-semibold text-stone-800">現地払い</p>
                 <p className="text-xs text-stone-500">受取時にお支払い</p>
               </div>
-              <span className="text-lg">&#128176;</span>
+              <Icon name="cash" className="w-5 h-5 text-amber-700" />
             </div>
           )}
 
@@ -660,7 +661,7 @@ export default function ConfirmPage() {
                     ご予約の確定時にお支払いが完了します
                   </p>
                 </div>
-                <span className="text-lg">&#128179;</span>
+                <Icon name="card" className="w-5 h-5 text-amber-700" />
               </div>
 
               {/*
