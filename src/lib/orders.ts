@@ -2,10 +2,10 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   dailyProductInventory,
-  eventDates,
   orderItems,
   orders,
 } from "@/db/schema";
+import { refreshDateReservationStatus } from "@/lib/inventory";
 
 export class OrderCancelError extends Error {}
 
@@ -76,34 +76,7 @@ export async function cancelOrderAndReleaseStock(orderId: string): Promise<{
       .where(eq(orders.id, orderId));
 
     // Freeing stock can reopen a date that had closed.
-    const inventory = await tx
-      .select()
-      .from(dailyProductInventory)
-      .where(
-        and(
-          eq(dailyProductInventory.event_date_id, order.event_date_id),
-          eq(dailyProductInventory.is_hidden, false)
-        )
-      );
-
-    if (inventory.length > 0) {
-      const allSoldOut = inventory.every((i) => i.is_sold_out);
-      const anyNearThreshold = inventory.some((i) => {
-        const remaining = i.production_quantity - i.reserved_quantity;
-        return remaining > 0 && remaining <= i.warning_threshold;
-      });
-
-      await tx
-        .update(eventDates)
-        .set({
-          reservation_status: allSoldOut
-            ? "closed"
-            : anyNearThreshold
-              ? "few_left"
-              : "open",
-        })
-        .where(eq(eventDates.id, order.event_date_id));
-    }
+    await refreshDateReservationStatus(tx, order.event_date_id);
 
     return { released: items.length };
   });

@@ -10,6 +10,7 @@ import {
   products,
 } from "@/db/schema";
 import { sendOrderEmails } from "@/lib/email";
+import { refreshDateReservationStatus } from "@/lib/inventory";
 import { cancelOrderAndReleaseStock } from "@/lib/orders";
 import {
   chargeOrder,
@@ -269,36 +270,7 @@ export async function POST(request: NextRequest) {
             )
           );
 
-        const currentInventory = await tx
-          .select()
-          .from(dailyProductInventory)
-          .where(
-            and(
-              eq(dailyProductInventory.event_date_id, body.event_date_id),
-              eq(dailyProductInventory.is_hidden, false)
-            )
-          );
-
-        if (currentInventory.length > 0) {
-          const allSoldOut = currentInventory.every((i) => i.is_sold_out);
-          const anyNearThreshold = currentInventory.some((i) => {
-            const remaining = i.production_quantity - i.reserved_quantity;
-            return remaining > 0 && remaining <= i.warning_threshold;
-          });
-
-          const newStatus = allSoldOut
-            ? "closed"
-            : anyNearThreshold
-              ? "few_left"
-              : "open";
-
-          if (newStatus !== eventDate.reservation_status) {
-            await tx
-              .update(eventDates)
-              .set({ reservation_status: newStatus })
-              .where(eq(eventDates.id, body.event_date_id));
-          }
-        }
+        await refreshDateReservationStatus(tx, body.event_date_id);
 
         return { order, items: insertedItems, event_date: eventDate, event };
       });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { dailyProductInventory, products } from "@/db/schema";
+import { refreshDateReservationStatus, resolveSoldOut } from "@/lib/inventory";
 import { getActiveEvent, getAllEventDates } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -122,14 +123,29 @@ export async function PATCH(request: NextRequest) {
       }
 
       for (const item of items) {
+        const current = byId.get(item.id)!.inventory;
+
         await tx
           .update(dailyProductInventory)
           .set({
             production_quantity: item.production_quantity,
-            is_sold_out: item.is_sold_out,
+            is_sold_out: resolveSoldOut(item, current),
             is_hidden: item.is_hidden,
           })
           .where(eq(dailyProductInventory.id, item.id));
+      }
+
+      /**
+       * Raising a cap is how the operator reopens a day that sold out, so the
+       * day's status has to be recomputed here. Without this the date stays
+       * closed however much stock is added, and nothing on either screen says
+       * why customers cannot book it.
+       */
+      const affectedDates = new Set(
+        items.map((i) => byId.get(i.id)!.inventory.event_date_id)
+      );
+      for (const eventDateId of affectedDates) {
+        await refreshDateReservationStatus(tx, eventDateId);
       }
 
       return items.length;
