@@ -17,7 +17,11 @@ import {
   isSquareEnabled,
   SquarePaymentError,
 } from "@/lib/square";
-import { generateOrderNumber, parsePickupTimeSlots } from "@/lib/utils";
+import {
+  generateOrderNumber,
+  isPastReservationDeadline,
+  parsePickupTimeSlots,
+} from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -142,6 +146,11 @@ export async function POST(request: NextRequest) {
         }
         if (!eventDate.is_active || eventDate.reservation_status === "closed") {
           throw new OrderValidationError("この受取日は現在受付を終了しています");
+        }
+        if (isPastReservationDeadline(eventDate.reservation_close_at)) {
+          throw new OrderValidationError(
+            "この受取日のご予約受付は終了しました"
+          );
         }
 
         /**

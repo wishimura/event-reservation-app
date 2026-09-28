@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { dailyProductInventory, eventDates, products } from "@/db/schema";
 import { getActiveEvent } from "@/lib/queries";
+import { defaultReservationCloseAt } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,14 @@ export async function POST(request: NextRequest) {
     const created = await db.transaction(async (tx) => {
       const [date] = await tx
         .insert(eventDates)
-        .values({ event_id: event.id, pickup_date: body.pickup_date })
+        .values({
+          event_id: event.id,
+          pickup_date: body.pickup_date,
+          // Made to order, so bookings close the evening before. The operator
+          // can move a single date's deadline in the database if a day needs
+          // a different one.
+          reservation_close_at: defaultReservationCloseAt(body.pickup_date),
+        })
         .returning();
 
       const activeProducts = await tx

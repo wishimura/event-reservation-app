@@ -71,3 +71,56 @@ export function parsePickupTimeSlots(raw: string | null | undefined): string[] {
   }
   return [...seen];
 }
+
+/**
+ * Whether a pickup date has passed its reservation deadline.
+ *
+ * Everything here is made to order, so the shop needs the numbers before it
+ * starts prepping. `reservation_close_at` is the moment the day stops taking
+ * bookings; a date without one stays open until its stock runs out.
+ *
+ * Judged against the real clock rather than a stored flag, so nothing has to
+ * run on a schedule to close a date on time.
+ */
+export function isPastReservationDeadline(
+  closeAt: string | Date | null | undefined,
+  now: Date = new Date()
+): boolean {
+  if (!closeAt) return false;
+
+  const deadline = closeAt instanceof Date ? closeAt : new Date(closeAt);
+  if (Number.isNaN(deadline.getTime())) return false;
+
+  return now.getTime() > deadline.getTime();
+}
+
+/**
+ * The status a customer should see, which is the stored one unless the
+ * deadline has passed.
+ */
+export function effectiveReservationStatus(
+  date: {
+    reservation_status: "open" | "few_left" | "closed";
+    reservation_close_at: string | Date | null;
+  },
+  now: Date = new Date()
+): "open" | "few_left" | "closed" {
+  return isPastReservationDeadline(date.reservation_close_at, now)
+    ? "closed"
+    : date.reservation_status;
+}
+
+/**
+ * The default deadline for a pickup date: 23:59 the evening before, JST.
+ *
+ * Everything is made to order, so the kitchen needs the day's numbers settled
+ * before it starts. Written as a +09:00 offset rather than built from local
+ * parts, so the server's own timezone never moves it.
+ */
+export function defaultReservationCloseAt(pickupDate: string): Date {
+  const [year, month, day] = pickupDate.split("-").map(Number);
+  const dayBefore = new Date(Date.UTC(year, month - 1, day - 1));
+  const iso = dayBefore.toISOString().slice(0, 10);
+
+  return new Date(`${iso}T23:59:59+09:00`);
+}

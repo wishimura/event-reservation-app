@@ -3,7 +3,11 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { Icon } from "@/components/Icon";
 import { getActiveEventWithDates } from "@/lib/queries";
 import type { EventDate } from "@/lib/types";
-import { formatDate, getStatusLabel } from "@/lib/utils";
+import {
+  effectiveReservationStatus,
+  formatDate,
+  getStatusLabel,
+} from "@/lib/utils";
 
 // Availability changes as orders come in, so never serve this from the cache.
 export const dynamic = "force-dynamic";
@@ -101,10 +105,13 @@ export default async function EventTopPage() {
             </p>
             <div className="space-y-3">
               {dates.map((d) => {
-                const status = getStatusLabel(d.reservation_status);
+                // A date past its deadline reads as closed whatever is
+                // stored, so nothing has to run on a schedule to shut it.
+                const reservationStatus = effectiveReservationStatus(d);
+                const status = getStatusLabel(reservationStatus);
                 const isClickable =
-                  d.reservation_status === "open" ||
-                  d.reservation_status === "few_left";
+                  reservationStatus === "open" ||
+                  reservationStatus === "few_left";
                 const dayNum = new Date(d.pickup_date + "T00:00:00").getDate();
 
                 if (!isClickable) {

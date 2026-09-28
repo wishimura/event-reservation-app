@@ -4,7 +4,11 @@ import { useEffect, useState } from "react";
 import { ApiError, fetchJson } from "@/lib/api-client";
 import { LoadErrorNotice } from "@/components/LoadErrorNotice";
 import { Toast } from "@/components/Toast";
-import { formatDate, todayInJST } from "@/lib/utils";
+import {
+  formatDate,
+  isPastReservationDeadline,
+  todayInJST,
+} from "@/lib/utils";
 import type { Event, EventDate } from "@/lib/types";
 
 type DateWithCount = EventDate & { order_count: number };
@@ -63,6 +67,17 @@ export default function SettingsPage() {
       // card rather than interrupting the page.
       .catch(() => setApplePay(null));
   }, []);
+
+  /** The deadline in JST, which is the only timezone the shop thinks in. */
+  function formatDeadline(value: string): string {
+    return new Date(value).toLocaleString("ja-JP", {
+      timeZone: "Asia/Tokyo",
+      month: "numeric",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
 
   function notify(text: string, ok: boolean) {
     setMessage({ text, ok });
@@ -416,6 +431,19 @@ export default function SettingsPage() {
                 <span className="text-xs text-slate-500">
                   予約 {d.order_count} 件
                 </span>
+                {d.reservation_close_at && (
+                  <span
+                    className={`text-xs ${
+                      isPastReservationDeadline(d.reservation_close_at)
+                        ? "font-medium text-red-600"
+                        : "text-slate-400"
+                    }`}
+                  >
+                    {isPastReservationDeadline(d.reservation_close_at)
+                      ? "受付締切済み"
+                      : `締切 ${formatDeadline(d.reservation_close_at)}`}
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <button
