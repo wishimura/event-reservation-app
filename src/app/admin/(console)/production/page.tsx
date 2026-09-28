@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ApiError, fetchJson } from "@/lib/api-client";
 import { LoadErrorNotice } from "@/components/LoadErrorNotice";
-import { formatDate, formatPrice } from "@/lib/utils";
+import { formatDate, formatPrice, todayInJST } from "@/lib/utils";
 import type { EventDate, DailyProductInventory, Product } from "@/lib/types";
 
 type InventoryWithProduct = DailyProductInventory & {
@@ -34,7 +34,14 @@ export default function ProductionPage() {
       }>("/api/admin/production");
 
       setEventDates(dates);
-      if (dates.length > 0) setSelectedDateId(dates[0].id);
+
+      // Land on the day the shop is working on, not the first of the run.
+      // During the event that is today; before it starts, the next one up.
+      if (dates.length > 0) {
+        const today = todayInJST();
+        const upcoming = dates.find((d) => d.pickup_date >= today);
+        setSelectedDateId((upcoming ?? dates[dates.length - 1]).id);
+      }
 
       const map = new Map<string, InventoryWithProduct[]>();
       for (const inv of inventory) {
@@ -60,13 +67,29 @@ export default function ProductionPage() {
     [allInventories, selectedDateId]
   );
 
-  // Product columns for the matrix view, taken from any one date.
+  /**
+   * The product rows of the matrix.
+   *
+   * Every product that appears on any date, not the products of whichever
+   * date happened to come back first. A product missing from that one date
+   * used to vanish from the whole table, reservations and all — a production
+   * plan that quietly leaves something out is worse than no plan.
+   */
   const productNames = useMemo(() => {
-    const first = allInventories.values().next().value;
-    if (!first) return [];
-    return [...first]
-      .sort((a, b) => a.product.sort_order - b.product.sort_order)
-      .map((inv) => ({ id: inv.product.id, name: inv.product.name }));
+    const byId = new Map<string, { id: string; name: string; sort: number }>();
+
+    for (const rows of allInventories.values()) {
+      for (const inv of rows) {
+        if (!inv.product || byId.has(inv.product.id)) continue;
+        byId.set(inv.product.id, {
+          id: inv.product.id,
+          name: inv.product.name,
+          sort: inv.product.sort_order,
+        });
+      }
+    }
+
+    return [...byId.values()].sort((a, b) => a.sort - b.sort);
   }, [allInventories]);
 
   if (loading) {
