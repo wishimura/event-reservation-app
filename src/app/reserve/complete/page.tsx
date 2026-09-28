@@ -99,6 +99,11 @@ export default function CompletePage() {
             <p className="text-2xl font-bold text-amber-900">
               {formatDate(pickupDate)}
             </p>
+            {order.pickup_time_slot && (
+              <p className="mt-1 text-lg font-bold text-amber-900">
+                {order.pickup_time_slot}
+              </p>
+            )}
           </div>
         )}
 

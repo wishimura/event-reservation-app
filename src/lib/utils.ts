@@ -52,3 +52,22 @@ export function getStatusLabel(status: string): { label: string; color: string }
       return { label: status, color: "bg-stone-100 text-stone-600" };
   }
 }
+
+/**
+ * The pickup times a customer may choose from.
+ *
+ * Stored as free text, one per line, so the shop can word them however it
+ * likes. Blank lines and stray spaces are the normal result of typing into a
+ * textarea, and duplicates would render as two identical choices, so all
+ * three are dropped here rather than in each screen.
+ */
+export function parsePickupTimeSlots(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+
+  const seen = new Set<string>();
+  for (const line of raw.split("\n")) {
+    const slot = line.trim();
+    if (slot) seen.add(slot);
+  }
+  return [...seen];
+}

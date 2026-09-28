@@ -23,6 +23,7 @@ export interface OrderMailPayload {
   customer_phone: string;
   total_amount: number;
   pickup_date: string;
+  pickup_time_slot: string | null;
   event_name: string;
   pickup_location: string;
   reservation_note: string;
@@ -104,7 +105,11 @@ function detailBlock(payload: OrderMailPayload): string {
       </tr>
       <tr>
         <td style="padding-bottom:12px;color:#292524;font-weight:bold;">
-          ${escapeHtml(formatDate(payload.pickup_date))}
+          ${escapeHtml(formatDate(payload.pickup_date))}${
+            payload.pickup_time_slot
+              ? `　${escapeHtml(payload.pickup_time_slot)}`
+              : ""
+          }
         </td>
       </tr>
       ${
@@ -133,6 +138,7 @@ function textDetail(payload: OrderMailPayload): string {
   return [
     `注文番号: ${payload.order_number}`,
     `受取日: ${formatDate(payload.pickup_date)}`,
+    payload.pickup_time_slot ? `受取時間: ${payload.pickup_time_slot}` : null,
     payload.pickup_location ? `受取場所: ${payload.pickup_location}` : null,
     "",
     "ご注文内容",
@@ -199,7 +205,9 @@ export function buildShopEmail(payload: OrderMailPayload) {
     </table>`;
 
   return {
-    subject: `【新規予約】${formatDate(payload.pickup_date)} ${payload.customer_name} 様（${payload.order_number}）`,
+    subject: `【新規予約】${formatDate(payload.pickup_date)}${
+      payload.pickup_time_slot ? ` ${payload.pickup_time_slot}` : ""
+    } ${payload.customer_name} 様（${payload.order_number}）`,
     html: layout("新しい予約が入りました", "内容は下記のとおりです。", body),
     text: [
       "新しい予約が入りました。",

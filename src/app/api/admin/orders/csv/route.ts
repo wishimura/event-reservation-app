@@ -79,6 +79,7 @@ export async function GET() {
 
     const headers = [
       "受取日",
+      "受取時間",
       "注文番号",
       "注文日時",
       "お客様名",
@@ -100,6 +101,7 @@ export async function GET() {
     for (const { order, event_date } of orderRows) {
       const base = [
         escapeCSV(formatDateJP(event_date.pickup_date)),
+        escapeCSV(order.pickup_time_slot ?? ""),
         escapeCSV(order.order_number),
         escapeCSV(formatDateTimeJP(order.created_at)),
         escapeCSV(order.customer_name),

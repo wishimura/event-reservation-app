@@ -17,7 +17,7 @@ import {
   isSquareEnabled,
   SquarePaymentError,
 } from "@/lib/square";
-import { generateOrderNumber } from "@/lib/utils";
+import { generateOrderNumber, parsePickupTimeSlots } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +27,8 @@ interface OrderRequestBody {
   customer_name: string;
   customer_email: string;
   customer_phone: string;
+  /** One of the event's configured pickup times, when it offers any. */
+  pickup_time_slot?: string;
   payment_method: "cash" | "credit_card";
   /** Set by the Square Web Payments SDK when card payment is switched on. */
   payment_source_id?: string;
@@ -142,6 +144,22 @@ export async function POST(request: NextRequest) {
           throw new OrderValidationError("この受取日は現在受付を終了しています");
         }
 
+        /**
+         * Checked against the event rather than trusted from the browser: the
+         * shop may have rewritten its times while this page sat open, and a
+         * slot nobody is staffing is worse than asking again.
+         */
+        const timeSlots = parsePickupTimeSlots(event.pickup_time_slots);
+        const pickupTimeSlot = body.pickup_time_slot?.trim() ?? "";
+
+        if (timeSlots.length > 0 && !timeSlots.includes(pickupTimeSlot)) {
+          throw new OrderValidationError(
+            pickupTimeSlot
+              ? "選択された受取時間は現在ご利用いただけません。お手数ですが選び直してください"
+              : "受取時間を選んでください"
+          );
+        }
+
         /* ------------------ 2. resolve products and prices ------------------ */
         const productIds = [...quantityByProduct.keys()];
         const rows = await tx
@@ -241,6 +259,7 @@ export async function POST(request: NextRequest) {
             customer_name: body.customer_name,
             customer_email: body.customer_email,
             customer_phone: body.customer_phone,
+            pickup_time_slot: pickupTimeSlot || null,
             total_amount: totalAmount,
             // Stock is held before the card is charged, so the order starts
             // provisional and is confirmed once Square accepts the payment.
@@ -338,6 +357,7 @@ export async function POST(request: NextRequest) {
           customer_phone: order.customer_phone,
           total_amount: order.total_amount,
           pickup_date: event_date.pickup_date,
+          pickup_time_slot: order.pickup_time_slot,
           event_name: event.name,
           pickup_location: event.pickup_location,
           reservation_note: event.reservation_note,

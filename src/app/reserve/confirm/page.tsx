@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CartItem, Event } from "@/lib/types";
 import { fetchJson } from "@/lib/api-client";
-import { formatDate, formatPrice } from "@/lib/utils";
+import { formatDate, formatPrice, parsePickupTimeSlots } from "@/lib/utils";
 import { SiteFooter } from "@/components/SiteFooter";
 import { Icon } from "@/components/Icon";
 
@@ -87,6 +87,7 @@ export default function ConfirmPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [pickupTimeSlot, setPickupTimeSlot] = useState("");
   const [submitting, setSubmitting] = useState(false);
   /**
    * True only while the order is with the server — taking the money and
@@ -201,6 +202,8 @@ export default function ConfirmPage() {
     return () => window.removeEventListener("beforeunload", warn);
   }, [placing]);
 
+  const timeSlots = parsePickupTimeSlots(event?.pickup_time_slots);
+
   const totalAmount = cart.reduce(
     (sum, item) => sum + item.product.price * item.quantity,
     0
@@ -293,6 +296,9 @@ export default function ConfirmPage() {
     } else if (!/^[0-9\-+() ]{10,}$/.test(phone)) {
       errs.phone = "正しい電話番号を入力してください";
     }
+    if (timeSlots.length > 0 && !pickupTimeSlot) {
+      errs.pickup_time_slot = "受取時間を選んでください";
+    }
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -319,6 +325,7 @@ export default function ConfirmPage() {
           customer_name: name.trim(),
           customer_email: email.trim(),
           customer_phone: phone.trim(),
+          pickup_time_slot: pickupTimeSlot || undefined,
           payment_method: payByCard ? "credit_card" : "cash",
           payment_source_id: paymentSourceId,
           verification_token: verificationToken,
@@ -554,6 +561,43 @@ export default function ConfirmPage() {
             {formatDate(selectedDate.pickup_date)}
           </p>
         </div>
+
+        {/* Pickup time — only when the shop offers a choice. */}
+        {timeSlots.length > 0 && (
+          <div className="bg-white rounded-2xl border border-stone-200 p-4">
+            <h2 className="font-bold text-stone-700 text-sm mb-1">
+              受取時間 <span className="text-red-400">*</span>
+            </h2>
+            <p className="text-xs text-stone-400 mb-3">
+              ご来店の時間帯をお選びください。
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {timeSlots.map((slot) => {
+                const selected = pickupTimeSlot === slot;
+                return (
+                  <button
+                    key={slot}
+                    type="button"
+                    onClick={() => setPickupTimeSlot(slot)}
+                    aria-pressed={selected}
+                    className={`rounded-xl border-2 px-3 py-3 text-sm font-medium transition-colors ${
+                      selected
+                        ? "border-amber-500 bg-amber-50 text-amber-900"
+                        : "border-stone-200 bg-white text-stone-600 hover:border-stone-300"
+                    }`}
+                  >
+                    {slot}
+                  </button>
+                );
+              })}
+            </div>
+            {errors.pickup_time_slot && (
+              <p className="text-red-500 text-xs mt-2">
+                {errors.pickup_time_slot}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Product List */}
         <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden">

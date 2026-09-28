@@ -17,6 +17,7 @@ const emptyForm = {
   pickup_location: "",
   contact_phone: "",
   reservation_note: "",
+  pickup_time_slots: "",
 };
 
 export default function SettingsPage() {
@@ -86,6 +87,7 @@ export default function SettingsPage() {
         pickup_location: data.event.pickup_location,
         contact_phone: data.event.contact_phone ?? "",
         reservation_note: data.event.reservation_note,
+        pickup_time_slots: data.event.pickup_time_slots ?? "",
       });
       setDates(data.dates);
     } catch (err) {
@@ -311,6 +313,24 @@ export default function SettingsPage() {
             />
             <p className="mt-1 text-xs text-slate-400">
               予約完了画面と確認メールに、この番号への発信ボタンが表示されます。空にすると表示されません。
+            </p>
+          </div>
+          <div>
+            <label className={label}>受取時間の選択肢（1行に1つ）</label>
+            <textarea
+              className={`${field} min-h-24 font-mono`}
+              value={form.pickup_time_slots}
+              onChange={(e) =>
+                setForm({ ...form, pickup_time_slots: e.target.value })
+              }
+              placeholder={"11:00〜12:00\n12:00〜13:00\n13:00〜14:00"}
+            />
+            <p className="mt-1 text-xs text-slate-400">
+              ご予約時に、お客様がこの中から受取時間を選びます。
+              書き方は自由です（「午前中」なども使えます）。
+              <br />
+              <strong>空にすると、受取時間の選択欄そのものが表示されません。</strong>
+              時間枠ごとの人数制限はありません。その日の在庫だけが上限です。
             </p>
           </div>
           <div>

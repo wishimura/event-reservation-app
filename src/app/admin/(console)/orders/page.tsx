@@ -274,7 +274,14 @@ export default function OrdersPage() {
                       </td>
                       <td className="px-4 py-3 text-slate-800 font-medium">{order.customer_name}</td>
                       <td className="px-4 py-3 text-slate-600">
-                        {order.event_date ? formatDate(order.event_date.pickup_date) : "-"}
+                        {order.event_date
+                          ? formatDate(order.event_date.pickup_date)
+                          : "-"}
+                        {order.pickup_time_slot && (
+                          <span className="block text-xs text-slate-500">
+                            {order.pickup_time_slot}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-slate-600">
                         {order.order_items?.map((item) => (

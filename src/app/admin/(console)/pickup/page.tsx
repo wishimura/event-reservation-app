@@ -179,6 +179,11 @@ export default function PickupPage() {
                     )}
                   </div>
                   <p className="text-xs text-slate-500 font-mono">{order.order_number}</p>
+                  {order.pickup_time_slot && (
+                    <p className="mt-0.5 text-xs font-medium text-indigo-700">
+                      受取 {order.pickup_time_slot}
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-2 mt-2">
                     {order.order_items?.map((item) => (
                       <span

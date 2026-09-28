@@ -3,6 +3,7 @@ import { asc, count, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { eventDates, events, orders } from "@/db/schema";
 import { getActiveEvent } from "@/lib/queries";
+import { parsePickupTimeSlots } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,7 @@ interface EventPatchBody {
   pickup_location: string;
   contact_phone: string;
   reservation_note: string;
+  pickup_time_slots: string;
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -96,6 +98,11 @@ export async function PATCH(request: NextRequest) {
         pickup_location: body.pickup_location ?? "",
         contact_phone: (body.contact_phone ?? "").trim(),
         reservation_note: body.reservation_note ?? "",
+        // Normalised on the way in so every screen reads the same list, and
+        // a textarea full of blank lines cannot produce empty choices.
+        pickup_time_slots: parsePickupTimeSlots(body.pickup_time_slots).join(
+          "\n"
+        ),
       })
       .where(eq(events.id, event.id))
       .returning();

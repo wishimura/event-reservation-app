@@ -59,6 +59,17 @@ export const events = pgTable("events", {
   reservation_note: text("reservation_note").notNull().default(""),
   /** Shown to customers as the line to call for changes or cancellations. */
   contact_phone: text("contact_phone").notNull().default(""),
+  /**
+   * The pickup times a customer can choose from, one per line.
+   *
+   * Free text rather than a start/end pair, because the shop decides how to
+   * divide the day and the wording is theirs: "11:00〜12:00" and "午前中" are
+   * both fine. Empty means the customer is not asked — the reservation works
+   * exactly as it did before.
+   *
+   * There is no per-slot capacity. The day's stock is the only limit.
+   */
+  pickup_time_slots: text("pickup_time_slots").notNull().default(""),
   is_active: boolean("is_active").notNull().default(false),
   created_at: timestamp("created_at", { withTimezone: true })
     .notNull()
@@ -155,6 +166,13 @@ export const orders = pgTable(
     customer_name: text("customer_name").notNull(),
     customer_email: text("customer_email").notNull(),
     customer_phone: text("customer_phone").notNull(),
+    /**
+     * The time the customer chose, copied in rather than referenced: the
+     * shop may rewrite its slots later, and an order has to keep saying what
+     * was actually agreed. Null for orders taken before slots existed, or
+     * while the event has none.
+     */
+    pickup_time_slot: text("pickup_time_slot"),
     total_amount: integer("total_amount").notNull(),
     payment_status: paymentStatusEnum("payment_status")
       .notNull()
