@@ -88,6 +88,13 @@ export default function ConfirmPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  /**
+   * True only while the order is with the server — taking the money and
+   * holding the stock. Deliberately not set during 3-D Secure: Square puts
+   * its own challenge window on the screen there, and covering it would
+   * leave the customer unable to pay at all.
+   */
+  const [placing, setPlacing] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Card payment is on only when the shop's Square credentials are configured;
@@ -180,6 +187,19 @@ export default function ConfirmPage() {
       cancelled = true;
     };
   }, []);
+
+  /**
+   * Leaving mid-payment would take the money without ever showing the
+   * customer their reservation — the request carries on at the server
+   * whether or not the page is still there.
+   */
+  useEffect(() => {
+    if (!placing) return;
+
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [placing]);
 
   const totalAmount = cart.reduce(
     (sum, item) => sum + item.product.price * item.quantity,
@@ -288,6 +308,7 @@ export default function ConfirmPage() {
   ) {
     if (!event || !selectedDate) return;
 
+    setPlacing(true);
     try {
       const res = await fetch("/api/orders", {
         method: "POST",
@@ -318,6 +339,7 @@ export default function ConfirmPage() {
             "\n"
           )
         );
+        setPlacing(false);
         setSubmitting(false);
         return;
       }
@@ -325,8 +347,11 @@ export default function ConfirmPage() {
       const order = await res.json();
       localStorage.setItem("lastOrder", JSON.stringify(order));
       localStorage.removeItem("cart");
+      // The overlay stays up through the transition, so the paid customer is
+      // never looking at a live form they could submit a second time.
       router.push("/reserve/complete");
     } catch {
+      setPlacing(false);
       alert("エラーが発生しました。もう一度お試しください。");
       setSubmitting(false);
     }
@@ -450,12 +475,55 @@ export default function ConfirmPage() {
 
   return (
     <main className="min-h-screen bg-stone-50 pb-8">
+      {/*
+        While the money is moving, nothing else on the page can be touched.
+        The request takes a few seconds, and a stray tap on the back arrow or
+        a product would leave the customer charged with no reservation in
+        front of them — or paying twice by starting over.
+      */}
+      {placing && (
+        <div
+          role="alertdialog"
+          aria-busy="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 px-6 backdrop-blur-sm"
+        >
+          <div className="w-full max-w-xs rounded-2xl bg-white px-6 py-7 text-center shadow-xl">
+            <svg
+              className="mx-auto mb-4 h-8 w-8 animate-spin text-amber-700"
+              viewBox="0 0 24 24"
+              fill="none"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+              />
+            </svg>
+            <p className="font-bold text-stone-800">お支払いを処理しています</p>
+            <p className="mt-2 text-sm leading-relaxed text-stone-500">
+              数秒かかります。
+              <br />
+              この画面を閉じずにお待ちください。
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-white border-b border-stone-200 sticky top-0 z-10">
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center gap-3">
           <button
             onClick={() => router.back()}
-            className="text-stone-400 hover:text-stone-600 transition-colors"
+            disabled={submitting}
+            className="text-stone-400 transition-colors hover:text-stone-600 disabled:opacity-40"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
