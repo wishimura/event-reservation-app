@@ -9,6 +9,7 @@ import {
   orders,
   products,
 } from "@/db/schema";
+import { isUniqueViolation } from "@/lib/db-errors";
 import { sendOrderEmails } from "@/lib/email";
 import { refreshDateReservationStatus } from "@/lib/inventory";
 import { cancelOrderAndReleaseStock } from "@/lib/orders";
@@ -49,15 +50,6 @@ class OrderValidationError extends Error {
     this.name = "OrderValidationError";
     this.details = details;
   }
-}
-
-function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: string }).code === "23505"
-  );
 }
 
 export async function POST(request: NextRequest) {

@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "test": "tsx --test tests/unit.test.ts",
+    "test:integration": "tsx --test --test-concurrency=1 tests/api.test.ts tests/admin.test.ts",
     "square:register-apple-pay": "tsx scripts/register-apple-pay-domain.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",

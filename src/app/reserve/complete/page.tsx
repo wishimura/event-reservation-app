@@ -17,12 +17,19 @@ export default function CompletePage() {
   const router = useRouter();
   const [order, setOrder] = useState<OrderWithItems | null>(null);
 
+  /**
+   * The order is handed over in localStorage, which only exists in the
+   * browser — reading it while rendering would throw on the server. An
+   * effect is the right place for it, so the lint rule against setting state
+   * in one does not apply here.
+   */
   useEffect(() => {
     const data = localStorage.getItem("lastOrder");
     if (!data) {
       router.push("/");
       return;
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOrder(JSON.parse(data) as OrderWithItems);
   }, [router]);
 

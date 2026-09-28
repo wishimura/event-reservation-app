@@ -3,20 +3,12 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { dailyProductInventory, eventDates, products } from "@/db/schema";
 import { getActiveEvent } from "@/lib/queries";
+import { isUniqueViolation } from "@/lib/db-errors";
 import { defaultReservationCloseAt } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code?: string }).code === "23505"
-  );
-}
 
 /**
  * Adds a pickup date.

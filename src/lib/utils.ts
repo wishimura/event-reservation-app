@@ -28,11 +28,16 @@ export function formatPrice(price: number): string {
 }
 
 export function generateOrderNumber(): string {
-  const now = new Date();
-  const ts = now.getFullYear().toString().slice(2) +
-    String(now.getMonth() + 1).padStart(2, "0") +
-    String(now.getDate()).padStart(2, "0");
-  const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
+  // The date part is JST, like every other date the shop sees. Built from
+  // the server's own clock it read as the previous day for anything ordered
+  // before 9am, since the server runs on UTC.
+  const ts = todayInJST().slice(2).replace(/-/g, "");
+
+  // Six characters rather than four. Collisions are retried, but a retry
+  // replays the whole transaction — stock included — so they are worth
+  // making rare: 36^6 is about two billion.
+  const rand = Math.random().toString(36).slice(2, 8).toUpperCase().padEnd(6, "0");
+
   return `ORD-${ts}-${rand}`;
 }
 
