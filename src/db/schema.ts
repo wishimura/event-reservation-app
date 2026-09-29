@@ -58,6 +58,27 @@ export const pickupStatusEnum = pgEnum("pickup_status", [
  */
 export const orderSourceEnum = pgEnum("order_source", ["online", "walk_in"]);
 
+/**
+ * Product photos uploaded from the console.
+ *
+ * Kept in their own table rather than on `products`, because every product
+ * query selects the whole row — a picture living there would be dragged into
+ * the customer's product list on every page load.
+ *
+ * Stored as base64 text rather than bytea: a handful of photos at a few
+ * hundred kilobytes each costs nothing at this size, and text behaves the
+ * same whichever Postgres driver is in use.
+ */
+export const productImages = pgTable("product_images", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  content_type: text("content_type").notNull(),
+  byte_size: integer("byte_size").notNull(),
+  data_base64: text("data_base64").notNull(),
+  created_at: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 export const events = pgTable("events", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),

@@ -35,7 +35,6 @@ export default function SettingsPage() {
   );
 
   const [newDate, setNewDate] = useState("");
-  const [newDateCapacity, setNewDateCapacity] = useState("0");
   const [busyDateId, setBusyDateId] = useState<string | null>(null);
 
   const [applePay, setApplePay] = useState<{
@@ -161,14 +160,13 @@ export default function SettingsPage() {
           method: "POST",
           body: JSON.stringify({
             pickup_date: newDate,
-            default_capacity: parseInt(newDateCapacity, 10) || 0,
           }),
         }
       );
       setNewDate("");
       await load();
       notify(
-        `受取日を追加し、商品 ${res.inventory_rows} 件ぶんの受付枠を作成しました`,
+        `受取日を追加しました。商品 ${res.inventory_rows} 件の受付枠は0です。「在庫管理」で設定してください`,
         true
       );
     } catch (err) {
@@ -374,7 +372,7 @@ export default function SettingsPage() {
       <div className="bg-white rounded-xl border border-slate-200 p-5">
         <h3 className="text-sm font-bold text-slate-700 mb-1">受取日</h3>
         <p className="text-xs text-slate-500 mb-4">
-          日付を追加すると、全商品ぶんの受付枠が自動で作られます。上限は追加後に「在庫管理」で調整してください。
+          日付を追加すると、全商品ぶんの受付枠が0で作られます。商品ごとの上限は「在庫管理」で設定してください。
         </p>
 
         <div className="flex flex-wrap items-end gap-3 mb-5 rounded-lg bg-slate-50 p-4">
@@ -386,18 +384,6 @@ export default function SettingsPage() {
               className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none"
               value={newDate}
               onChange={(e) => setNewDate(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className={label}>受付上限の初期値</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              className="w-28 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 outline-none"
-              value={newDateCapacity}
-              onChange={(e) =>
-                setNewDateCapacity(e.target.value.replace(/[^0-9]/g, ""))
-              }
             />
           </div>
           <button

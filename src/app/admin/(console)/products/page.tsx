@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ApiError, fetchJson } from "@/lib/api-client";
 import { LoadErrorNotice } from "@/components/LoadErrorNotice";
+import { ProductImageField } from "@/components/ProductImageField";
 import { Toast } from "@/components/Toast";
 import { formatPrice } from "@/lib/utils";
 import type { Product } from "@/lib/types";
@@ -204,18 +205,10 @@ export default function ProductsPage() {
             onChange={(e) => set({ ...d, description: e.target.value })}
           />
         </div>
-        <div>
-          <label className={label}>商品画像のURL（任意）</label>
-          <input
-            className={field}
-            placeholder="https://..."
-            value={d.image_url}
-            onChange={(e) => set({ ...d, image_url: e.target.value })}
-          />
-          <p className="mt-1 text-xs text-slate-400">
-            画像は外部に置いたものをURLで指定します。空にすると絵文字が表示されます。
-          </p>
-        </div>
+        <ProductImageField
+          value={d.image_url}
+          onChange={(url) => set({ ...d, image_url: url })}
+        />
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={label}>価格（円・税込）</label>

@@ -64,6 +64,12 @@ async function reserve(page: Page, label: string) {
   await page.getByRole("button", { name: "注文を確定する" }).click();
   await page.waitForURL(/\/reserve\/complete/, { timeout: 20000 });
 
+  // 完了画面は localStorage を読んでから描くので、番号が出るまで待つ
+  await page
+    .getByText(/ORD-\d{6}-[A-Z0-9]{6}/)
+    .first()
+    .waitFor({ timeout: 15000 });
+
   const body = await page.locator("body").innerText();
   const orderNumber = body.match(/ORD-\d{6}-[A-Z0-9]{6}/)?.[0];
   assert.ok(orderNumber, "完了画面に注文番号が出ていない");

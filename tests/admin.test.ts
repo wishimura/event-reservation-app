@@ -605,3 +605,141 @@ test("CSVで予約と店頭販売が見分けられる", async () => {
     "店頭販売の行が CSV に出ていない"
   );
 });
+
+/* ============================================ 商品画像 */
+
+/** 1x1 の PNG（本物のバイト列）。 */
+const TINY_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64"
+);
+
+async function uploadImage(bytes: Buffer, type: string, filename = "p.png") {
+  const form = new FormData();
+  form.append("file", new Blob([new Uint8Array(bytes)], { type }), filename);
+  const res = await fetch(`${BASE}/api/admin/images`, {
+    method: "POST",
+    headers: { Cookie: cookie },
+    body: form,
+  });
+  return { status: res.status, body: await res.json().catch(() => ({})) };
+}
+
+test("画像をアップロードすると、そのURLで取り出せる", async () => {
+  const { status, body } = await uploadImage(TINY_PNG, "image/png");
+  assert.equal(status, 201);
+
+  const { url } = body as { url: string };
+  assert.match(url, /^\/api\/images\/[0-9a-f-]{36}$/);
+
+  const res = await fetch(`${BASE}${url}`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("content-type"), "image/png");
+  assert.match(res.headers.get("cache-control") ?? "", /immutable/);
+
+  const got = Buffer.from(new Uint8Array(await res.arrayBuffer()));
+  assert.deepEqual([...got], [...TINY_PNG], "取り出したバイトが元と違う");
+});
+
+test("画像はログイン無しではアップロードできない", async () => {
+  const form = new FormData();
+  form.append("file", new Blob([new Uint8Array(TINY_PNG)], { type: "image/png" }), "p.png");
+  const res = await fetch(`${BASE}/api/admin/images`, { method: "POST", body: form });
+  assert.equal(res.status, 401);
+});
+
+test("画像：対応していない形式は断られる", async () => {
+  for (const type of ["image/svg+xml", "application/pdf", "text/html"]) {
+    const { status } = await uploadImage(TINY_PNG, type, "x");
+    assert.equal(status, 400, `${type} が通ってしまう`);
+  }
+});
+
+test("画像：空・大きすぎるものは断られる", async () => {
+  const empty = await uploadImage(Buffer.alloc(0), "image/png");
+  assert.equal(empty.status, 400, "空の画像が通ってしまう");
+
+  const huge = await uploadImage(Buffer.alloc(4 * 1024 * 1024, 1), "image/png");
+  assert.equal(huge.status, 400, "4MB の画像が通ってしまう");
+});
+
+test("画像：ファイルが無いと断られる", async () => {
+  const form = new FormData();
+  form.append("note", "ファイルなし");
+  const res = await fetch(`${BASE}/api/admin/images`, {
+    method: "POST",
+    headers: { Cookie: cookie },
+    body: form,
+  });
+  assert.equal(res.status, 400);
+});
+
+test("画像：存在しないIDや不正なIDは404", async () => {
+  for (const id of ["11111111-1111-4111-8111-111111111111", "not-a-uuid", "../../etc/passwd"]) {
+    const res = await fetch(`${BASE}/api/images/${encodeURIComponent(id)}`);
+    assert.equal(res.status, 404, `${id} が 404 を返さない`);
+  }
+});
+
+test("アップロードした画像を商品に設定でき、お客様側にも出る", async () => {
+  const { body } = await uploadImage(TINY_PNG, "image/png");
+  const { url } = body as { url: string };
+
+  const { status, body: created } = await api("/api/admin/products", {
+    method: "POST",
+    body: JSON.stringify({
+      name: "画像つきQA商品",
+      description: "",
+      price: 100,
+      sort_order: 97,
+      image_url: url,
+    }),
+  });
+  assert.equal(status, 201);
+  const { product } = created as { product: { id: string; image_url: string | null } };
+
+  try {
+    assert.equal(product.image_url, url, "商品に画像URLが保存されていない");
+
+    // お客様が見る商品一覧にも同じURLが出ること
+    const event = await loadEvent();
+    const date = futureDate(event);
+    const { body: detail } = await api(`/api/reserve/${date.id}`);
+    const rows = (detail as { inventory: Array<{ product: { id: string; image_url: string | null } }> })
+      .inventory;
+    const shown = rows.find((r) => r.product.id === product.id);
+    assert.ok(shown, "新しい商品がお客様側に出ていない");
+    assert.equal(shown.product.image_url, url, "お客様側に画像URLが渡っていない");
+  } finally {
+    await api(`/api/admin/products/${product.id}`, { method: "DELETE" });
+  }
+});
+
+/* ============================================ 受取日の追加 */
+
+test("受取日を追加すると、受付枠は0で作られる", async () => {
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+
+  const { body: all } = await api("/api/admin/event");
+  const stale = (all as { dates: Array<{ id: string; pickup_date: string }> }).dates
+    .find((d) => d.pickup_date === tomorrow);
+  if (stale) await api(`/api/admin/event/dates/${stale.id}`, { method: "DELETE" });
+
+  const { status, body } = await api("/api/admin/event/dates", {
+    method: "POST",
+    body: JSON.stringify({ pickup_date: tomorrow }),
+  });
+  assert.equal(status, 201);
+  const { date } = body as { date: { id: string } };
+
+  try {
+    const rows = await inventoryFor(date.id);
+    assert.ok(rows.length > 0, "受付枠が1行も作られていない");
+    assert.ok(
+      rows.every((r) => r.production_quantity === 0),
+      "受付枠が0で作られていない"
+    );
+  } finally {
+    await api(`/api/admin/event/dates/${date.id}`, { method: "DELETE" });
+  }
+});
