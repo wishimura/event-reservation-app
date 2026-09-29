@@ -59,6 +59,8 @@ export interface Order {
   payment_method: "cash" | "credit_card";
   order_status: "temporary" | "confirmed" | "cancelled";
   pickup_status: "not_picked_up" | "picked_up";
+  /** online: お客様がサイトから予約 / walk_in: 店頭で販売したものを記録 */
+  source: "online" | "walk_in";
   created_at: string;
   paid_at: string | null;
   square_payment_id: string | null;

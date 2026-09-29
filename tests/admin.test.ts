@@ -116,9 +116,24 @@ function orderBody(eventId: string, dateId: string, productId: string, qty: numb
 test("受付上限を予約数より下げようとすると、商品名つきで断られる", async () => {
   const event = await loadEvent();
   const date = futureDate(event);
-  const rows = await inventoryFor(date.id);
+  let rows = await inventoryFor(date.id);
+
+  // 他のテストに頼らず、自分で1件入れてから試す
+  if (!rows.some((r) => r.reserved_quantity > 0)) {
+    const row = rows.find((r) => r.production_quantity > r.reserved_quantity)!;
+    const { status } = await api("/api/admin/orders", {
+      method: "POST",
+      body: JSON.stringify({
+        event_date_id: date.id,
+        items: [{ product_id: row.product_id, quantity: 1 }],
+      }),
+    });
+    assert.equal(status, 201, "下準備の登録に失敗した");
+    rows = await inventoryFor(date.id);
+  }
+
   const withOrders = rows.find((r) => r.reserved_quantity > 0);
-  assert.ok(withOrders, "予約の入った在庫行がない（先に api.test.ts を流すこと）");
+  assert.ok(withOrders, "予約の入った在庫行がない");
 
   const { status, body } = await saveInventory([
     { ...withOrders, production_quantity: withOrders.reserved_quantity - 1 },
@@ -426,4 +441,167 @@ test("価格が負や文字の商品は登録できない", async () => {
     body: JSON.stringify({ name: "  ", description: "", price: 100, sort_order: 1 }),
   });
   assert.equal(status, 400, "商品名が空でも登録できてしまう");
+});
+
+/* ============================================ 店頭販売の記録 */
+
+test("店頭販売を登録すると受付枠が減り、店頭として記録される", async () => {
+  const event = await loadEvent();
+  const date = futureDate(event);
+  const rows = await inventoryFor(date.id);
+  const row = rows.find((r) => r.production_quantity > r.reserved_quantity);
+  assert.ok(row, "余裕のある在庫行がない");
+  const before = row.reserved_quantity;
+
+  const { status, body } = await api("/api/admin/orders", {
+    method: "POST",
+    body: JSON.stringify({
+      event_date_id: date.id,
+      customer_name: "店頭 花子",
+      payment_method: "cash",
+      handed_over: true,
+      items: [{ product_id: row.product_id, quantity: 2 }],
+    }),
+  });
+
+  assert.equal(status, 201);
+  const { order } = body as {
+    order: {
+      order_number: string;
+      source: string;
+      payment_status: string;
+      order_status: string;
+      pickup_status: string;
+      total_amount: number;
+    };
+  };
+  assert.equal(order.source, "walk_in");
+  assert.equal(order.payment_status, "paid", "店頭販売は支払い済みで入るべき");
+  assert.equal(order.order_status, "confirmed");
+  assert.equal(order.pickup_status, "picked_up", "お渡し済みなら受取済みで入るべき");
+  assert.ok(order.total_amount > 0);
+
+  const after = (await inventoryFor(date.id)).find((r) => r.id === row.id)!;
+  assert.equal(after.reserved_quantity, before + 2, "受付枠が減っていない");
+});
+
+test("店頭販売でも受付枠を超えられない", async () => {
+  const event = await loadEvent();
+  const date = futureDate(event);
+  const rows = await inventoryFor(date.id);
+  const row = rows[0];
+
+  // 残り1個ちょうどにする
+  await saveInventory([
+    { ...row, production_quantity: row.reserved_quantity + 1, is_sold_out: false },
+  ]);
+
+  const { status, body } = await api("/api/admin/orders", {
+    method: "POST",
+    body: JSON.stringify({
+      event_date_id: date.id,
+      items: [{ product_id: row.product_id, quantity: 5 }],
+    }),
+  });
+
+  assert.equal(status, 400, "受付枠を超えて登録できてしまう");
+  assert.match((body as { details: string[] }).details[0], /残り/);
+});
+
+test("店頭販売：お名前を省くと既定の名前で入る", async () => {
+  const event = await loadEvent();
+  const date = futureDate(event);
+  const rows = await inventoryFor(date.id);
+  const row = rows.find((r) => r.production_quantity > r.reserved_quantity)!;
+
+  const { status, body } = await api("/api/admin/orders", {
+    method: "POST",
+    body: JSON.stringify({
+      event_date_id: date.id,
+      handed_over: false,
+      items: [{ product_id: row.product_id, quantity: 1 }],
+    }),
+  });
+
+  assert.equal(status, 201);
+  const { order } = body as { order: { customer_name: string; pickup_status: string } };
+  assert.equal(order.customer_name, "店頭のお客様");
+  assert.equal(order.pickup_status, "not_picked_up", "お渡し前なら未受取で入るべき");
+});
+
+test("店頭販売：商品なし・数量0・存在しない受取日は断られる", async () => {
+  const event = await loadEvent();
+  const date = futureDate(event);
+  const rows = await inventoryFor(date.id);
+
+  const cases: Array<[string, Record<string, unknown>]> = [
+    ["商品なし", { event_date_id: date.id, items: [] }],
+    ["数量0", { event_date_id: date.id, items: [{ product_id: rows[0].product_id, quantity: 0 }] }],
+    ["受取日なし", { items: [{ product_id: rows[0].product_id, quantity: 1 }] }],
+    [
+      "存在しない受取日",
+      {
+        event_date_id: "11111111-1111-4111-8111-111111111111",
+        items: [{ product_id: rows[0].product_id, quantity: 1 }],
+      },
+    ],
+  ];
+
+  for (const [name, payload] of cases) {
+    const { status } = await api("/api/admin/orders", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    assert.equal(status, 400, `${name} が通ってしまう`);
+  }
+});
+
+test("店頭販売は未ログインでは登録できない", async () => {
+  const event = await loadEvent();
+  const date = futureDate(event);
+  const rows = await inventoryFor(date.id);
+
+  const res = await fetch(`${BASE}/api/admin/orders`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      event_date_id: date.id,
+      items: [{ product_id: rows[0].product_id, quantity: 1 }],
+    }),
+  });
+  assert.equal(res.status, 401);
+});
+
+test("店頭販売もキャンセルでき、受付枠が戻る", async () => {
+  const event = await loadEvent();
+  const date = futureDate(event);
+  const rows = await inventoryFor(date.id);
+  const row = rows.find((r) => r.production_quantity > r.reserved_quantity)!;
+
+  const { body } = await api("/api/admin/orders", {
+    method: "POST",
+    body: JSON.stringify({
+      event_date_id: date.id,
+      items: [{ product_id: row.product_id, quantity: 1 }],
+    }),
+  });
+  const { order } = body as { order: { id: string } };
+
+  const before = (await inventoryFor(date.id)).find((r) => r.id === row.id)!.reserved_quantity;
+  const { status } = await api(`/api/admin/orders/${order.id}/cancel`, { method: "PATCH" });
+  assert.equal(status, 200);
+
+  const after = (await inventoryFor(date.id)).find((r) => r.id === row.id)!.reserved_quantity;
+  assert.equal(after, before - 1, "店頭販売をキャンセルしても受付枠が戻らない");
+});
+
+test("CSVで予約と店頭販売が見分けられる", async () => {
+  const res = await fetch(`${BASE}/api/admin/orders/csv`, { headers: { Cookie: cookie } });
+  const text = new TextDecoder().decode(new Uint8Array(await res.arrayBuffer()));
+  const [header, ...lines] = text.split("\n");
+  assert.ok(header.includes("経路"), "CSVに「経路」列が無い");
+  assert.ok(
+    lines.some((l) => l.includes("店頭販売")),
+    "店頭販売の行が CSV に出ていない"
+  );
 });

@@ -49,6 +49,15 @@ export const pickupStatusEnum = pgEnum("pickup_status", [
   "picked_up",
 ]);
 
+/**
+ * Where an order came from.
+ *
+ * The shop also sells over the counter to people who never used the site, and
+ * those sales have to come out of the same day's stock or the production plan
+ * lies. Recording which is which keeps the two tellable apart afterwards.
+ */
+export const orderSourceEnum = pgEnum("order_source", ["online", "walk_in"]);
+
 export const events = pgTable("events", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
@@ -184,6 +193,7 @@ export const orders = pgTable(
     pickup_status: pickupStatusEnum("pickup_status")
       .notNull()
       .default("not_picked_up"),
+    source: orderSourceEnum("source").notNull().default("online"),
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

@@ -3,6 +3,8 @@
 import { Fragment, useEffect, useState } from "react";
 import { ApiError, fetchJson } from "@/lib/api-client";
 import { LoadErrorNotice } from "@/components/LoadErrorNotice";
+import { Toast } from "@/components/Toast";
+import { WalkInOrderForm } from "@/components/WalkInOrderForm";
 import { formatDate, formatPrice } from "@/lib/utils";
 import type { Order, OrderItem, EventDate } from "@/lib/types";
 
@@ -24,6 +26,11 @@ const orderStatusLabels: Record<string, { label: string; cls: string }> = {
   cancelled: { label: "キャンセル", cls: "bg-red-100 text-red-700" },
 };
 
+const sourceLabels: Record<string, { label: string; cls: string }> = {
+  online: { label: "予約", cls: "bg-indigo-50 text-indigo-700" },
+  walk_in: { label: "店頭", cls: "bg-orange-100 text-orange-700" },
+};
+
 const pickupStatusLabels: Record<string, { label: string; cls: string }> = {
   not_picked_up: { label: "未受取", cls: "bg-slate-100 text-slate-600" },
   picked_up: { label: "受取済", cls: "bg-emerald-100 text-emerald-700" },
@@ -38,6 +45,7 @@ export default function OrdersPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const [csvDownloading, setCsvDownloading] = useState(false);
+  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   // Filters
@@ -194,6 +202,17 @@ export default function OrdersPage() {
         </div>
       </div>
 
+      <Toast message={message} />
+
+      <WalkInOrderForm
+        dates={eventDates}
+        onCreated={(text) => {
+          setMessage({ text, ok: true });
+          setTimeout(() => setMessage(null), 4000);
+          loadOrders();
+        }}
+      />
+
       {/* Filters */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
         <div className="flex flex-col sm:flex-row gap-3">
@@ -271,6 +290,13 @@ export default function OrdersPage() {
                     >
                       <td className="px-4 py-3 font-mono text-xs text-slate-600">
                         {order.order_number}
+                        {order.source === "walk_in" && (
+                          <span
+                            className={`ml-2 rounded px-1.5 py-0.5 font-sans text-[10px] font-medium ${sourceLabels.walk_in.cls}`}
+                          >
+                            {sourceLabels.walk_in.label}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-slate-800 font-medium">{order.customer_name}</td>
                       <td className="px-4 py-3 text-slate-600">
