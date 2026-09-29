@@ -474,14 +474,14 @@ export default function ConfirmPage() {
 
   if (!selectedDate || cart.length === 0) {
     return (
-      <main className="min-h-screen bg-stone-50 flex items-center justify-center">
-        <div className="animate-pulse text-stone-400">読み込み中...</div>
+      <main className="min-h-screen bg-paper flex items-center justify-center">
+        <div className="animate-pulse text-zinc-400">読み込み中...</div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-stone-50 pb-8">
+    <main className="min-h-screen bg-paper pb-8">
       {/*
         While the money is moving, nothing else on the page can be touched.
         The request takes a few seconds, and a stray tap on the back arrow or
@@ -492,11 +492,11 @@ export default function ConfirmPage() {
         <div
           role="alertdialog"
           aria-busy="true"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 px-6 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/60 px-6 backdrop-blur-sm"
         >
           <div className="w-full max-w-xs rounded-2xl bg-white px-6 py-7 text-center shadow-xl">
             <svg
-              className="mx-auto mb-4 h-8 w-8 animate-spin text-amber-700"
+              className="mx-auto mb-4 h-8 w-8 animate-spin text-brand-600"
               viewBox="0 0 24 24"
               fill="none"
             >
@@ -514,8 +514,8 @@ export default function ConfirmPage() {
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
               />
             </svg>
-            <p className="font-bold text-stone-800">お支払いを処理しています</p>
-            <p className="mt-2 text-sm leading-relaxed text-stone-500">
+            <p className="font-bold text-zinc-800">お支払いを処理しています</p>
+            <p className="mt-2 text-sm leading-relaxed text-zinc-500">
               数秒かかります。
               <br />
               この画面を閉じずにお待ちください。
@@ -525,12 +525,12 @@ export default function ConfirmPage() {
       )}
 
       {/* Header */}
-      <div className="bg-white border-b border-stone-200 sticky top-0 z-10">
+      <div className="bg-white border-b border-zinc-200 sticky top-0 z-10">
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center gap-3">
           <button
             onClick={() => router.back()}
             disabled={submitting}
-            className="text-stone-400 transition-colors hover:text-stone-600 disabled:opacity-40"
+            className="text-zinc-400 transition-colors hover:text-zinc-600 disabled:opacity-40"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -547,7 +547,7 @@ export default function ConfirmPage() {
               />
             </svg>
           </button>
-          <h1 className="text-lg font-bold text-stone-800">
+          <h1 className="text-lg font-bold text-zinc-800">
             ご注文の確認
           </h1>
         </div>
@@ -555,20 +555,20 @@ export default function ConfirmPage() {
 
       <div className="max-w-lg mx-auto px-4 py-6 space-y-5">
         {/* Pickup Date */}
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 text-center">
-          <p className="text-xs text-amber-600 font-medium mb-1">受取日</p>
-          <p className="text-2xl font-bold text-amber-900">
+        <div className="bg-brand-50 border border-brand-200 rounded-2xl p-5 text-center">
+          <p className="text-xs text-brand-500 font-medium mb-1">受取日</p>
+          <p className="text-2xl font-bold text-brand-800">
             {formatDate(selectedDate.pickup_date)}
           </p>
         </div>
 
         {/* Pickup time — only when the shop offers a choice. */}
         {timeSlots.length > 0 && (
-          <div className="bg-white rounded-2xl border border-stone-200 p-4">
-            <h2 className="font-bold text-stone-700 text-sm mb-1">
+          <div className="bg-white rounded-2xl border border-zinc-200 p-4">
+            <h2 className="font-bold text-zinc-700 text-sm mb-1">
               受取時間 <span className="text-red-400">*</span>
             </h2>
-            <p className="text-xs text-stone-400 mb-3">
+            <p className="text-xs text-zinc-400 mb-3">
               ご来店の時間帯をお選びください。
             </p>
             <div className="grid grid-cols-2 gap-2">
@@ -582,8 +582,8 @@ export default function ConfirmPage() {
                     aria-pressed={selected}
                     className={`rounded-xl border-2 px-3 py-3 text-sm font-medium transition-colors ${
                       selected
-                        ? "border-amber-500 bg-amber-50 text-amber-900"
-                        : "border-stone-200 bg-white text-stone-600 hover:border-stone-300"
+                        ? "border-brand-500 bg-brand-50 text-brand-800"
+                        : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300"
                     }`}
                   >
                     {slot}
@@ -600,16 +600,16 @@ export default function ConfirmPage() {
         )}
 
         {/* Product List */}
-        <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
-          <div className="px-4 py-3 border-b border-stone-100">
-            <h2 className="font-bold text-stone-700 text-sm">
+        <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden">
+          <div className="px-4 py-3 border-b border-zinc-100">
+            <h2 className="font-bold text-zinc-700 text-sm">
               ご注文内容
             </h2>
           </div>
-          <div className="divide-y divide-stone-100">
+          <div className="divide-y divide-zinc-100">
             {cart.map((item) => (
               <div key={item.product.id} className="flex items-center gap-3 p-4">
-                <div className="w-14 h-14 rounded-lg bg-stone-100 overflow-hidden shrink-0 relative">
+                <div className="w-14 h-14 rounded-lg bg-zinc-100 overflow-hidden shrink-0 relative">
                   {item.product.image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -619,28 +619,28 @@ export default function ConfirmPage() {
                       className="absolute inset-0 h-full w-full object-cover"
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-stone-300">
+                    <div className="w-full h-full flex items-center justify-center text-zinc-300">
                       <Icon name="coffee" className="w-6 h-6" />
                     </div>
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-stone-800 truncate">
+                  <p className="text-sm font-semibold text-zinc-800 truncate">
                     {item.product.name}
                   </p>
-                  <p className="text-xs text-stone-400">
+                  <p className="text-xs text-zinc-400">
                     {formatPrice(item.product.price)} x {item.quantity}
                   </p>
                 </div>
-                <p className="font-bold text-stone-800 text-sm shrink-0">
+                <p className="font-bold text-zinc-800 text-sm shrink-0">
                   {formatPrice(item.product.price * item.quantity)}
                 </p>
               </div>
             ))}
           </div>
-          <div className="border-t border-stone-200 px-4 py-4 flex items-center justify-between bg-stone-50/50">
-            <span className="font-bold text-stone-600">合計</span>
-            <span className="text-xl font-bold text-amber-800">
+          <div className="border-t border-zinc-200 px-4 py-4 flex items-center justify-between bg-paper/50">
+            <span className="font-bold text-zinc-600">合計</span>
+            <span className="text-xl font-bold text-brand-700">
               {formatPrice(totalAmount)}
             </span>
           </div>
@@ -648,26 +648,26 @@ export default function ConfirmPage() {
 
         {/* Pickup Info */}
         {event && (
-          <div className="bg-white rounded-2xl border border-stone-200 p-4">
-            <h2 className="font-bold text-stone-700 text-sm mb-3">
+          <div className="bg-white rounded-2xl border border-zinc-200 p-4">
+            <h2 className="font-bold text-zinc-700 text-sm mb-3">
               受取情報
             </h2>
             <div className="space-y-2">
               <div className="flex items-start gap-2">
-                <Icon name="pin" className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                <Icon name="pin" className="w-4 h-4 text-brand-500 mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-xs text-stone-400">受取場所</p>
-                  <p className="text-stone-800 text-sm font-medium">
+                  <p className="text-xs text-zinc-400">受取場所</p>
+                  <p className="text-zinc-800 text-sm font-medium">
                     {event.pickup_location}
                   </p>
                 </div>
               </div>
               {event.reservation_note && (
                 <div className="flex items-start gap-2">
-                  <Icon name="note" className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                  <Icon name="note" className="w-4 h-4 text-brand-500 mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-xs text-stone-400">備考</p>
-                    <p className="text-stone-600 text-sm whitespace-pre-line">
+                    <p className="text-xs text-zinc-400">備考</p>
+                    <p className="text-zinc-600 text-sm whitespace-pre-line">
                       {event.reservation_note}
                     </p>
                   </div>
@@ -678,13 +678,13 @@ export default function ConfirmPage() {
         )}
 
         {/* Customer Info Form */}
-        <div className="bg-white rounded-2xl border border-stone-200 p-4">
-          <h2 className="font-bold text-stone-700 text-sm mb-4">
+        <div className="bg-white rounded-2xl border border-zinc-200 p-4">
+          <h2 className="font-bold text-zinc-700 text-sm mb-4">
             お客様情報
           </h2>
           <div className="space-y-4">
             <div>
-              <label className="block text-xs text-stone-500 mb-1.5 font-medium">
+              <label className="block text-xs text-zinc-500 mb-1.5 font-medium">
                 お名前 <span className="text-red-400">*</span>
               </label>
               <input
@@ -692,8 +692,8 @@ export default function ConfirmPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="山田 太郎"
-                className={`w-full px-4 py-3 rounded-xl border text-sm bg-stone-50 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent ${
-                  errors.name ? "border-red-300" : "border-stone-200"
+                className={`w-full px-4 py-3 rounded-xl border text-sm bg-paper transition-colors focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent ${
+                  errors.name ? "border-red-300" : "border-zinc-200"
                 }`}
               />
               {errors.name && (
@@ -701,7 +701,7 @@ export default function ConfirmPage() {
               )}
             </div>
             <div>
-              <label className="block text-xs text-stone-500 mb-1.5 font-medium">
+              <label className="block text-xs text-zinc-500 mb-1.5 font-medium">
                 メールアドレス <span className="text-red-400">*</span>
               </label>
               <input
@@ -709,8 +709,8 @@ export default function ConfirmPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="taro@example.com"
-                className={`w-full px-4 py-3 rounded-xl border text-sm bg-stone-50 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent ${
-                  errors.email ? "border-red-300" : "border-stone-200"
+                className={`w-full px-4 py-3 rounded-xl border text-sm bg-paper transition-colors focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent ${
+                  errors.email ? "border-red-300" : "border-zinc-200"
                 }`}
               />
               {errors.email && (
@@ -718,7 +718,7 @@ export default function ConfirmPage() {
               )}
             </div>
             <div>
-              <label className="block text-xs text-stone-500 mb-1.5 font-medium">
+              <label className="block text-xs text-zinc-500 mb-1.5 font-medium">
                 電話番号 <span className="text-red-400">*</span>
               </label>
               <input
@@ -726,8 +726,8 @@ export default function ConfirmPage() {
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="090-1234-5678"
-                className={`w-full px-4 py-3 rounded-xl border text-sm bg-stone-50 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent ${
-                  errors.phone ? "border-red-300" : "border-stone-200"
+                className={`w-full px-4 py-3 rounded-xl border text-sm bg-paper transition-colors focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent ${
+                  errors.phone ? "border-red-300" : "border-zinc-200"
                 }`}
               />
               {errors.phone && (
@@ -738,42 +738,42 @@ export default function ConfirmPage() {
         </div>
 
         {/* Payment Method */}
-        <div className="bg-white rounded-2xl border border-stone-200 p-4">
-          <h2 className="font-bold text-stone-700 text-sm mb-4">
+        <div className="bg-white rounded-2xl border border-zinc-200 p-4">
+          <h2 className="font-bold text-zinc-700 text-sm mb-4">
             お支払い方法
           </h2>
           {payByCard === null && (
-            <p className="text-sm text-stone-400">読み込み中...</p>
+            <p className="text-sm text-zinc-400">読み込み中...</p>
           )}
 
           {payByCard === false && (
-            <div className="flex items-center gap-3 p-3 rounded-xl border-2 border-amber-500 bg-amber-50">
-              <div className="w-5 h-5 rounded-full border-2 border-amber-600 flex items-center justify-center">
-                <div className="w-2.5 h-2.5 rounded-full bg-amber-600" />
+            <div className="flex items-center gap-3 p-3 rounded-xl border-2 border-brand-500 bg-brand-50">
+              <div className="w-5 h-5 rounded-full border-2 border-brand-500 flex items-center justify-center">
+                <div className="w-2.5 h-2.5 rounded-full bg-brand-500" />
               </div>
               <div className="flex-1">
-                <p className="text-sm font-semibold text-stone-800">現地払い</p>
-                <p className="text-xs text-stone-500">受取時にお支払い</p>
+                <p className="text-sm font-semibold text-zinc-800">現地払い</p>
+                <p className="text-xs text-zinc-500">受取時にお支払い</p>
               </div>
-              <Icon name="cash" className="w-5 h-5 text-amber-700" />
+              <Icon name="cash" className="w-5 h-5 text-brand-600" />
             </div>
           )}
 
           {payByCard === true && (
             <div className="space-y-3">
-              <div className="flex items-center gap-3 p-3 rounded-xl border-2 border-amber-500 bg-amber-50">
-                <div className="w-5 h-5 rounded-full border-2 border-amber-600 flex items-center justify-center">
-                  <div className="w-2.5 h-2.5 rounded-full bg-amber-600" />
+              <div className="flex items-center gap-3 p-3 rounded-xl border-2 border-brand-500 bg-brand-50">
+                <div className="w-5 h-5 rounded-full border-2 border-brand-500 flex items-center justify-center">
+                  <div className="w-2.5 h-2.5 rounded-full bg-brand-500" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-stone-800">
+                  <p className="text-sm font-semibold text-zinc-800">
                     クレジットカード
                   </p>
-                  <p className="text-xs text-stone-500">
+                  <p className="text-xs text-zinc-500">
                     ご予約の確定時にお支払いが完了します
                   </p>
                 </div>
-                <Icon name="card" className="w-5 h-5 text-amber-700" />
+                <Icon name="card" className="w-5 h-5 text-brand-600" />
               </div>
 
               {/*
@@ -808,21 +808,21 @@ export default function ConfirmPage() {
 
               {(applePayStatus === "ready" || googlePayStatus === "ready") && (
                 <div className="flex items-center gap-3 py-1">
-                  <div className="h-px flex-1 bg-stone-200" />
-                  <span className="text-xs text-stone-400">
+                  <div className="h-px flex-1 bg-zinc-200" />
+                  <span className="text-xs text-zinc-400">
                     またはカード番号を入力
                   </span>
-                  <div className="h-px flex-1 bg-stone-200" />
+                  <div className="h-px flex-1 bg-zinc-200" />
                 </div>
               )}
 
               <div
                 id="square-card"
-                className="rounded-xl border border-stone-200 bg-white p-3 min-h-[92px]"
+                className="rounded-xl border border-zinc-200 bg-white p-3 min-h-[92px]"
               />
 
               {!cardReady && !cardError && (
-                <p className="text-xs text-stone-400">
+                <p className="text-xs text-zinc-400">
                   決済フォームを読み込んでいます...
                 </p>
               )}
@@ -833,7 +833,7 @@ export default function ConfirmPage() {
                 </p>
               )}
 
-              <p className="text-xs leading-relaxed text-stone-400">
+              <p className="text-xs leading-relaxed text-zinc-400">
                 カード情報は決済代行会社（Square）が直接受け取ります。当店のサーバーには保存されません。
                 <br />
                 ご注文の確定時に、カード会社の本人認証（3Dセキュア）画面が表示される場合があります。
@@ -848,8 +848,8 @@ export default function ConfirmPage() {
           disabled={submitting || payByCard === null || (payByCard && !cardReady)}
           className={`w-full py-4 rounded-2xl font-bold text-lg transition-colors ${
             submitting
-              ? "bg-stone-300 text-stone-500 cursor-not-allowed"
-              : "bg-amber-700 hover:bg-amber-800 active:bg-amber-900 text-white shadow-lg shadow-amber-700/20"
+              ? "bg-zinc-300 text-zinc-500 cursor-not-allowed"
+              : "bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white shadow-lg shadow-brand-600/20"
           }`}
         >
           {submitting ? (
@@ -880,7 +880,7 @@ export default function ConfirmPage() {
           )}
         </button>
 
-        <p className="text-center text-xs text-stone-400">
+        <p className="text-center text-xs text-zinc-400">
           注文確定後、確認メールが送信されます
         </p>
 

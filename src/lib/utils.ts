@@ -48,13 +48,13 @@ export function getRemainingQuantity(inv: { production_quantity: number; reserve
 export function getStatusLabel(status: string): { label: string; color: string } {
   switch (status) {
     case "open":
-      return { label: "受付中", color: "bg-emerald-100 text-emerald-800" };
+      return { label: "受付中", color: "bg-brand-100 text-brand-700" };
     case "few_left":
       return { label: "残りわずか", color: "bg-amber-100 text-amber-800" };
     case "closed":
-      return { label: "受付終了", color: "bg-stone-200 text-stone-500" };
+      return { label: "受付終了", color: "bg-zinc-200 text-zinc-500" };
     default:
-      return { label: status, color: "bg-stone-100 text-stone-600" };
+      return { label: status, color: "bg-zinc-100 text-zinc-600" };
   }
 }
 

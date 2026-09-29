@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { SiteFooter } from "@/components/SiteFooter";
 import { Icon } from "@/components/Icon";
@@ -17,13 +18,13 @@ export default async function EventTopPage() {
 
   if (!event) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-stone-50 px-4">
+      <main className="min-h-screen flex items-center justify-center bg-paper px-4">
         <div className="text-center">
-          <Icon name="coffee" className="w-14 h-14 mx-auto mb-4 text-stone-300" />
-          <h1 className="text-xl font-bold text-stone-700 mb-2">
+          <Icon name="coffee" className="w-14 h-14 mx-auto mb-4 text-zinc-300" />
+          <h1 className="text-xl font-bold text-zinc-700 mb-2">
             現在開催中のイベントはありません
           </h1>
-          <p className="text-stone-500">
+          <p className="text-zinc-500">
             次回のイベントをお楽しみに！
           </p>
         </div>
@@ -34,18 +35,32 @@ export default async function EventTopPage() {
   const dates = event.event_dates as EventDate[];
 
   return (
-    <main className="min-h-screen bg-stone-50">
+    <main className="min-h-screen bg-paper">
+      {/* The shop first, then the event — people come here from その店の告知 */}
+      <header className="bg-white">
+        <div className="mx-auto flex max-w-lg justify-center px-4 py-6">
+          <Image
+            src="/logo.png"
+            alt="となりのと commons kitchen"
+            width={931}
+            height={977}
+            priority
+            className="h-20 w-auto"
+          />
+        </div>
+      </header>
+
       {/* Hero */}
-      <div className="bg-gradient-to-br from-amber-800 via-amber-900 to-stone-900 text-white">
-        <div className="max-w-lg mx-auto px-4 pt-12 pb-10">
-          <p className="text-amber-300 text-sm font-medium tracking-wider mb-2 flex items-center gap-1.5">
+      <div className="bg-gradient-to-br from-brand-500 to-brand-700 text-white">
+        <div className="max-w-lg mx-auto px-4 pt-9 pb-10">
+          <p className="mb-2 flex items-center gap-1.5 text-sm font-medium tracking-wider text-sun-200">
             <Icon name="coffee" className="w-4 h-4" />
             CAFE EVENT
           </p>
           <h1 className="text-3xl font-bold leading-tight mb-3">
             {event.name}
           </h1>
-          <p className="text-amber-100/80 text-sm leading-relaxed">
+          <p className="text-white/85 text-sm leading-relaxed">
             {event.description}
           </p>
         </div>
@@ -54,38 +69,38 @@ export default async function EventTopPage() {
       {/* Content */}
       <div className="max-w-lg mx-auto px-4 -mt-4">
         {/* Info Card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-5 mb-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-5 mb-6">
           <div className="space-y-4">
             <div className="flex items-start gap-3">
-              <Icon name="calendar" className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+              <Icon name="calendar" className="w-4 h-4 text-brand-500 mt-0.5 shrink-0" />
               <div>
-                <p className="text-xs text-stone-400 font-medium mb-0.5">
+                <p className="text-xs text-zinc-400 font-medium mb-0.5">
                   開催期間
                 </p>
-                <p className="text-stone-800 font-medium">
+                <p className="text-zinc-800 font-medium">
                   {formatDate(event.start_date)} 〜 {formatDate(event.end_date)}
                 </p>
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <Icon name="pin" className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+              <Icon name="pin" className="w-4 h-4 text-brand-500 mt-0.5 shrink-0" />
               <div>
-                <p className="text-xs text-stone-400 font-medium mb-0.5">
+                <p className="text-xs text-zinc-400 font-medium mb-0.5">
                   受取場所
                 </p>
-                <p className="text-stone-800 font-medium">
+                <p className="text-zinc-800 font-medium">
                   {event.pickup_location}
                 </p>
               </div>
             </div>
             {event.reservation_note && (
               <div className="flex items-start gap-3">
-                <Icon name="note" className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                <Icon name="note" className="w-4 h-4 text-brand-500 mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-xs text-stone-400 font-medium mb-0.5">
+                  <p className="text-xs text-zinc-400 font-medium mb-0.5">
                     ご注意
                   </p>
-                  <p className="text-stone-600 text-sm leading-relaxed whitespace-pre-line">
+                  <p className="text-zinc-600 text-sm leading-relaxed whitespace-pre-line">
                     {event.reservation_note}
                   </p>
                 </div>
@@ -97,10 +112,10 @@ export default async function EventTopPage() {
         {/* Date Selection - Click to Reserve */}
         {dates.length > 0 && (
           <div className="mb-6">
-            <h2 className="text-sm font-bold text-stone-500 uppercase tracking-wider mb-3">
+            <h2 className="text-sm font-bold text-zinc-500 uppercase tracking-wider mb-3">
               受取日を選んで予約
             </h2>
-            <p className="text-xs text-stone-400 mb-4">
+            <p className="text-xs text-zinc-400 mb-4">
               ご希望の受取日をタップすると、商品選択に進みます。
             </p>
             <div className="space-y-3">
@@ -118,18 +133,18 @@ export default async function EventTopPage() {
                   return (
                     <div
                       key={d.id}
-                      className="w-full rounded-2xl border border-stone-200 bg-stone-100 p-4 opacity-60 cursor-not-allowed"
+                      className="w-full rounded-2xl border border-zinc-200 bg-zinc-100 p-4 opacity-60 cursor-not-allowed"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-xl bg-stone-200 text-stone-400 flex items-center justify-center text-lg font-bold">
+                          <div className="w-12 h-12 rounded-xl bg-zinc-200 text-zinc-400 flex items-center justify-center text-lg font-bold">
                             {dayNum}
                           </div>
                           <div>
-                            <p className="font-bold text-base text-stone-400">
+                            <p className="font-bold text-base text-zinc-400">
                               {formatDate(d.pickup_date)}
                             </p>
-                            <p className="text-xs text-stone-400 mt-0.5">受取日</p>
+                            <p className="text-xs text-zinc-400 mt-0.5">受取日</p>
                           </div>
                         </div>
                         <span
@@ -146,18 +161,18 @@ export default async function EventTopPage() {
                   <Link
                     key={d.id}
                     href={`/reserve/${d.id}`}
-                    className="block w-full rounded-2xl border border-stone-200 bg-white p-4 hover:border-amber-400 hover:shadow-md active:scale-[0.98] transition-all"
+                    className="block w-full rounded-2xl border border-zinc-200 bg-white p-4 hover:border-brand-400 hover:shadow-md active:scale-[0.98] transition-all"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center text-lg font-bold">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-sun-300 text-lg font-bold text-brand-800">
                           {dayNum}
                         </div>
                         <div>
-                          <p className="font-bold text-base text-stone-800">
+                          <p className="font-bold text-base text-zinc-800">
                             {formatDate(d.pickup_date)}
                           </p>
-                          <p className="text-xs text-stone-400 mt-0.5">受取日</p>
+                          <p className="text-xs text-zinc-400 mt-0.5">受取日</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -168,7 +183,7 @@ export default async function EventTopPage() {
                         </span>
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
-                          className="h-4 w-4 text-stone-300"
+                          className="h-4 w-4 text-zinc-300"
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
@@ -190,8 +205,8 @@ export default async function EventTopPage() {
         )}
 
         {dates.length === 0 && (
-          <div className="text-center py-8 text-stone-400 mb-6">
-            <Icon name="calendar" className="w-10 h-10 mx-auto mb-3 text-stone-300" />
+          <div className="text-center py-8 text-zinc-400 mb-6">
+            <Icon name="calendar" className="w-10 h-10 mx-auto mb-3 text-zinc-300" />
             <p>予約可能な日程がまだありません</p>
           </div>
         )}

@@ -1,5 +1,37 @@
 @import "tailwindcss";
 
+/**
+ * となりのと の配色。
+ *
+ * ロゴとお店のカレンダーから実際に拾った色です。
+ *   brand … 扉のティール #398d8d
+ *   sun   … 営業日の黄 #f5ec72
+ *   paper … 余白の淡い青白 #f4f8f9
+ *
+ * 中間の段階はこの3色から作っています。お客様向けの画面だけで使い、
+ * 管理画面はこれまでどおりです。
+ */
+@theme {
+  --color-brand-50: #eff7f7;
+  --color-brand-100: #d9ecec;
+  --color-brand-200: #b4d9d8;
+  --color-brand-300: #85c0bf;
+  --color-brand-400: #57a5a4;
+  --color-brand-500: #398d8d;
+  --color-brand-600: #2f7676;
+  --color-brand-700: #285f5f;
+  --color-brand-800: #234e4e;
+  --color-brand-900: #1e4141;
+
+  --color-sun-50: #fefdf1;
+  --color-sun-100: #fdfad8;
+  --color-sun-200: #faf3a8;
+  --color-sun-300: #f5ec72;
+  --color-sun-400: #e7d947;
+
+  --color-paper: #f4f8f9;
+}
+
 /* Restart-able nudge used when a quantity stepper is tapped at its cap. */
 @keyframes cap-nudge {
   0%,

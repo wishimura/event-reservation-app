@@ -120,22 +120,22 @@ export default function ProductSelectionPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-stone-50 flex items-center justify-center">
-        <div className="animate-pulse text-stone-400">読み込み中...</div>
+      <main className="min-h-screen bg-paper flex items-center justify-center">
+        <div className="animate-pulse text-zinc-400">読み込み中...</div>
       </main>
     );
   }
 
   if (loadError || !eventDate) {
     return (
-      <main className="min-h-screen bg-stone-50 flex items-center justify-center px-4">
+      <main className="min-h-screen bg-paper flex items-center justify-center px-4">
         <div className="text-center">
-          <p className="text-stone-600 mb-4">
+          <p className="text-zinc-600 mb-4">
             {loadError || "受取日が見つかりませんでした"}
           </p>
           <Link
             href="/"
-            className="text-sm text-amber-700 underline underline-offset-4"
+            className="text-sm text-brand-600 underline underline-offset-4"
           >
             トップへ戻る
           </Link>
@@ -145,13 +145,13 @@ export default function ProductSelectionPage() {
   }
 
   return (
-    <main className="min-h-screen bg-stone-50 pb-28">
+    <main className="min-h-screen bg-paper pb-28">
       {/* Header */}
-      <div className="bg-white border-b border-stone-200 sticky top-0 z-10">
+      <div className="bg-white border-b border-zinc-200 sticky top-0 z-10">
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center gap-3">
           <Link
             href="/"
-            className="text-stone-400 hover:text-stone-600 transition-colors"
+            className="text-zinc-400 hover:text-zinc-600 transition-colors"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -168,7 +168,7 @@ export default function ProductSelectionPage() {
               />
             </svg>
           </Link>
-          <h1 className="text-lg font-bold text-stone-800">
+          <h1 className="text-lg font-bold text-zinc-800">
             商品を選ぶ
           </h1>
         </div>
@@ -177,13 +177,13 @@ export default function ProductSelectionPage() {
       <div className="max-w-lg mx-auto px-4 py-6">
         {/* Selected Date Banner */}
         {eventDate && (
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 flex items-center gap-3">
-            <div className="w-12 h-12 bg-amber-600 text-white rounded-xl flex items-center justify-center text-lg font-bold shrink-0">
+          <div className="bg-brand-50 border border-brand-200 rounded-2xl p-4 mb-6 flex items-center gap-3">
+            <div className="w-12 h-12 bg-brand-500 text-white rounded-xl flex items-center justify-center text-lg font-bold shrink-0">
               {new Date(eventDate.pickup_date + "T00:00:00").getDate()}
             </div>
             <div>
-              <p className="text-xs text-amber-600 font-medium">受取日</p>
-              <p className="text-amber-900 font-bold text-lg">
+              <p className="text-xs text-brand-500 font-medium">受取日</p>
+              <p className="text-brand-800 font-bold text-lg">
                 {formatDate(eventDate.pickup_date)}
               </p>
             </div>
@@ -210,13 +210,13 @@ export default function ProductSelectionPage() {
                 onAnimationEnd={(e) =>
                   e.currentTarget.classList.remove("animate-cap-nudge")
                 }
-                className={`bg-white rounded-2xl border border-stone-200 overflow-hidden transition-opacity ${
+                className={`bg-white rounded-2xl border border-zinc-200 overflow-hidden transition-opacity ${
                   isSoldOut ? "opacity-50" : ""
                 }`}
               >
                 <div className="flex gap-4 p-4">
                   {/* Product Image */}
-                  <div className="w-24 h-24 rounded-xl bg-stone-100 overflow-hidden shrink-0 relative">
+                  <div className="w-24 h-24 rounded-xl bg-zinc-100 overflow-hidden shrink-0 relative">
                     {product.image_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -226,13 +226,13 @@ export default function ProductSelectionPage() {
                         className="absolute inset-0 h-full w-full object-cover"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-stone-300">
+                      <div className="w-full h-full flex items-center justify-center text-zinc-300">
                         <Icon name="coffee" className="w-8 h-8" />
                       </div>
                     )}
                     {isSoldOut && (
-                      <div className="absolute inset-0 bg-stone-900/50 flex items-center justify-center">
-                        <span className="text-white text-xs font-bold bg-stone-800 px-2 py-1 rounded">
+                      <div className="absolute inset-0 bg-zinc-900/50 flex items-center justify-center">
+                        <span className="text-white text-xs font-bold bg-zinc-800 px-2 py-1 rounded">
                           SOLD OUT
                         </span>
                       </div>
@@ -241,15 +241,15 @@ export default function ProductSelectionPage() {
 
                   {/* Product Info */}
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-stone-800 text-sm mb-1 truncate">
+                    <h3 className="font-bold text-zinc-800 text-sm mb-1 truncate">
                       {product.name}
                     </h3>
                     {product.description && (
-                      <p className="text-xs text-stone-400 mb-2 line-clamp-2">
+                      <p className="text-xs text-zinc-400 mb-2 line-clamp-2">
                         {product.description}
                       </p>
                     )}
-                    <p className="text-amber-700 font-bold text-base">
+                    <p className="text-brand-600 font-bold text-base">
                       {formatPrice(product.price)}
                     </p>
                     {!isSoldOut && isLowStock && (
@@ -266,12 +266,12 @@ export default function ProductSelectionPage() {
                 {/* Quantity Selector */}
                 {!isSoldOut && (
                   <>
-                  <div className="border-t border-stone-100 px-4 py-3 flex items-center justify-between bg-stone-50/50">
+                  <div className="border-t border-zinc-100 px-4 py-3 flex items-center justify-between bg-paper/50">
                     <span
                       className={
                         atCap
                           ? "text-xs font-bold text-red-700"
-                          : "text-xs text-stone-500"
+                          : "text-xs text-zinc-500"
                       }
                     >
                       {atCap ? "上限に達しました" : "数量"}
@@ -284,13 +284,13 @@ export default function ProductSelectionPage() {
                         disabled={qty === 0}
                         className={`w-9 h-9 rounded-full flex items-center justify-center text-lg font-medium transition-colors ${
                           qty === 0
-                            ? "bg-stone-200 text-stone-400 cursor-not-allowed"
-                            : "bg-amber-100 text-amber-800 hover:bg-amber-200 active:bg-amber-300"
+                            ? "bg-zinc-200 text-zinc-400 cursor-not-allowed"
+                            : "bg-brand-100 text-brand-700 hover:bg-brand-200 active:bg-brand-300"
                         }`}
                       >
                         -
                       </button>
-                      <span className="w-8 text-center font-bold text-stone-800 text-lg tabular-nums">
+                      <span className="w-8 text-center font-bold text-zinc-800 text-lg tabular-nums">
                         {qty}
                       </span>
                       <button
@@ -306,8 +306,8 @@ export default function ProductSelectionPage() {
                         }}
                         className={`w-9 h-9 rounded-full flex items-center justify-center text-lg font-medium transition-colors ${
                           atCap
-                            ? "bg-stone-200 text-stone-400"
-                            : "bg-amber-600 text-white hover:bg-amber-700 active:bg-amber-800"
+                            ? "bg-zinc-200 text-zinc-400"
+                            : "bg-brand-500 text-white hover:bg-brand-600 active:bg-brand-700"
                         }`}
                       >
                         +
@@ -345,8 +345,8 @@ export default function ProductSelectionPage() {
         </div>
 
         {inventories.length === 0 && (
-          <div className="text-center py-12 text-stone-400">
-            <Icon name="box" className="w-10 h-10 mx-auto mb-3 text-stone-300" />
+          <div className="text-center py-12 text-zinc-400">
+            <Icon name="box" className="w-10 h-10 mx-auto mb-3 text-zinc-300" />
             <p>この日の商品はまだ登録されていません</p>
           </div>
         )}
@@ -355,16 +355,16 @@ export default function ProductSelectionPage() {
       {/* Floating Cart Bar */}
       <div className="fixed bottom-0 left-0 right-0 z-20">
         <div className="max-w-lg mx-auto">
-          <div className="bg-white border-t border-stone-200 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] px-4 py-4">
+          <div className="bg-white border-t border-zinc-200 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] px-4 py-4">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <span className="text-xs text-stone-400">合計</span>
-                <span className="text-stone-400 mx-1">|</span>
-                <span className="text-xs text-stone-500">
+                <span className="text-xs text-zinc-400">合計</span>
+                <span className="text-zinc-400 mx-1">|</span>
+                <span className="text-xs text-zinc-500">
                   {totalCount} 点
                 </span>
               </div>
-              <p className="text-xl font-bold text-amber-800">
+              <p className="text-xl font-bold text-brand-700">
                 {formatPrice(totalAmount)}
               </p>
             </div>
@@ -373,8 +373,8 @@ export default function ProductSelectionPage() {
               disabled={totalCount === 0}
               className={`w-full py-3.5 rounded-2xl font-bold text-base transition-colors ${
                 totalCount === 0
-                  ? "bg-stone-200 text-stone-400 cursor-not-allowed"
-                  : "bg-amber-700 hover:bg-amber-800 active:bg-amber-900 text-white shadow-lg shadow-amber-700/20"
+                  ? "bg-zinc-200 text-zinc-400 cursor-not-allowed"
+                  : "bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white shadow-lg shadow-brand-600/20"
               }`}
             >
               確認へ進む

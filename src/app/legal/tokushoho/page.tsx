@@ -82,12 +82,12 @@ export const metadata = {
 
 export default function TokushohoPage() {
   return (
-    <main className="min-h-screen bg-stone-50">
-      <div className="bg-white border-b border-stone-200">
+    <main className="min-h-screen bg-paper">
+      <div className="bg-white border-b border-zinc-200">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
           <Link
             href="/"
-            className="text-stone-400 hover:text-stone-600 transition-colors"
+            className="text-zinc-400 hover:text-zinc-600 transition-colors"
             aria-label="トップへ戻る"
           >
             <svg
@@ -105,27 +105,27 @@ export default function TokushohoPage() {
               />
             </svg>
           </Link>
-          <h1 className="text-lg font-bold text-stone-800">
+          <h1 className="text-lg font-bold text-zinc-800">
             特定商取引法に基づく表記
           </h1>
         </div>
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-8">
-        <dl className="overflow-hidden rounded-2xl border border-stone-200 bg-white">
+        <dl className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
           {ENTRIES.map((entry, i) => (
             <div
               key={entry.label}
               className={`grid grid-cols-1 sm:grid-cols-[13rem_1fr] ${
-                i > 0 ? "border-t border-stone-100" : ""
+                i > 0 ? "border-t border-zinc-100" : ""
               }`}
             >
-              <dt className="bg-stone-50/70 px-5 py-4 text-sm font-bold text-stone-700">
+              <dt className="bg-paper/70 px-5 py-4 text-sm font-bold text-zinc-700">
                 {entry.label}
               </dt>
-              <dd className="px-5 py-4 text-sm leading-relaxed text-stone-700 whitespace-pre-line">
+              <dd className="px-5 py-4 text-sm leading-relaxed text-zinc-700 whitespace-pre-line">
                 {entry.value || (
-                  <span className="text-stone-400">準備中</span>
+                  <span className="text-zinc-400">準備中</span>
                 )}
               </dd>
             </div>
@@ -135,7 +135,7 @@ export default function TokushohoPage() {
         <div className="mt-8 pb-10">
           <Link
             href="/"
-            className="block w-full rounded-2xl border border-stone-200 bg-white py-3.5 text-center text-sm font-semibold text-stone-700 transition-colors hover:bg-stone-50"
+            className="block w-full rounded-2xl border border-zinc-200 bg-white py-3.5 text-center text-sm font-semibold text-zinc-700 transition-colors hover:bg-paper"
           >
             トップに戻る
           </Link>
