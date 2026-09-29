@@ -7,6 +7,9 @@
  *     npx tsx tests/scenario.e2e.ts
  *
  * 使い捨てのデータベースに向けたサーバーに対して実行すること。予約を作る。
+ *
+ * playwright を依存に入れていないので、このファイルは tsconfig.json の exclude に
+ * 入れてある。入れないと `next build` の型チェックが import を解決できずに落ちる。
  */
 import { chromium, type Browser, type Page } from "playwright";
 import assert from "node:assert/strict";
