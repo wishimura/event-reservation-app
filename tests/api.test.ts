@@ -243,3 +243,146 @@ test("壊れたJSONでも500にならない", async () => {
   });
   assert.equal(res.status, 400);
 });
+
+/* =========================================== 二重送信・二重決済を防ぐ */
+
+/** 同じ注文を2回送っても1件にしかならないこと。 */
+test("同じ client_request_id を送り直しても注文は増えない", async () => {
+  const { event, date, row, slot } = await pickBookableDate();
+
+  const before = await api(`/api/reserve/${date.id}`);
+  const stockBefore = (
+    before.body as { inventory: Array<{ product_id: string; reserved_quantity: number }> }
+  ).inventory.find((i) => i.product_id === row.product_id)!.reserved_quantity;
+
+  const requestId = `test-repeat-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const body = JSON.stringify({
+    client_request_id: requestId,
+    event_id: event.id,
+    event_date_id: date.id,
+    customer_name: "二重 太郎",
+    customer_email: "qa-repeat@example.com",
+    customer_phone: "090-0000-0000",
+    payment_method: "cash",
+    pickup_time_slot: slot,
+    items: [{ product_id: row.product_id, quantity: 1 }],
+  });
+
+  const first = await api("/api/orders", { method: "POST", body });
+  assert.equal(first.status, 201);
+
+  const again = await api("/api/orders", { method: "POST", body });
+  assert.equal(again.status, 200, "2回目は既存の注文が返るはず");
+  assert.equal(
+    (again.body as { order_number: string }).order_number,
+    (first.body as { order_number: string }).order_number,
+    "同じ注文番号が返らなければ二重注文になっている"
+  );
+
+  const after = await api(`/api/reserve/${date.id}`);
+  const stockAfter = (
+    after.body as { inventory: Array<{ product_id: string; reserved_quantity: number }> }
+  ).inventory.find((i) => i.product_id === row.product_id)!.reserved_quantity;
+
+  assert.equal(stockAfter, stockBefore + 1, "在庫が二重に引き当てられている");
+});
+
+/** 通信が切れて同時に送り直した場合も、注文は1件だけ。 */
+test("同じ client_request_id を同時に5回送っても注文は1件", async () => {
+  const { event, date, row, slot } = await pickBookableDate();
+
+  const before = await api(`/api/reserve/${date.id}`);
+  const stockBefore = (
+    before.body as { inventory: Array<{ product_id: string; reserved_quantity: number }> }
+  ).inventory.find((i) => i.product_id === row.product_id)!.reserved_quantity;
+
+  const requestId = `test-race-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const body = JSON.stringify({
+    client_request_id: requestId,
+    event_id: event.id,
+    event_date_id: date.id,
+    customer_name: "同時 二重",
+    customer_email: "qa-race@example.com",
+    customer_phone: "090-0000-0000",
+    payment_method: "cash",
+    pickup_time_slot: slot,
+    items: [{ product_id: row.product_id, quantity: 1 }],
+  });
+
+  const results = await Promise.all(
+    Array.from({ length: 5 }, () => api("/api/orders", { method: "POST", body }))
+  );
+
+  const created = results.filter((r) => r.status === 201);
+  assert.equal(created.length, 1, "同時送信で複数の注文が作られている");
+  for (const r of results) {
+    assert.ok(r.status === 200 || r.status === 201, `想定外の ${r.status}`);
+    assert.equal(
+      (r.body as { order_number: string }).order_number,
+      (created[0].body as { order_number: string }).order_number
+    );
+  }
+
+  const after = await api(`/api/reserve/${date.id}`);
+  const stockAfter = (
+    after.body as { inventory: Array<{ product_id: string; reserved_quantity: number }> }
+  ).inventory.find((i) => i.product_id === row.product_id)!.reserved_quantity;
+
+  assert.equal(stockAfter, stockBefore + 1, "在庫が重複して引き当てられている");
+});
+
+/** 同時に殺到しても、受付上限を超えて売れないこと。 */
+test("在庫の最後の1個に同時に殺到しても1件しか通らない", async () => {
+  const { event, date, row, slot } = await pickBookableDate();
+
+  const detail = await api(`/api/reserve/${date.id}`);
+  const current = (
+    detail.body as {
+      inventory: Array<{
+        product_id: string;
+        production_quantity: number;
+        reserved_quantity: number;
+      }>;
+    }
+  ).inventory.find((i) => i.product_id === row.product_id)!;
+  const remaining = current.production_quantity - current.reserved_quantity;
+  assert.ok(remaining > 0, "在庫のある商品が必要");
+
+  // 残りぴったりの数を、同時に人数分ぶつける
+  const attempts = 6;
+  const results = await Promise.all(
+    Array.from({ length: attempts }, (_, i) =>
+      api("/api/orders", {
+        method: "POST",
+        body: JSON.stringify({
+          event_id: event.id,
+          event_date_id: date.id,
+          customer_name: `殺到 ${i}`,
+          customer_email: "qa-rush@example.com",
+          customer_phone: "090-0000-0000",
+          payment_method: "cash",
+          pickup_time_slot: slot,
+          items: [{ product_id: row.product_id, quantity: remaining }],
+        }),
+      })
+    )
+  );
+
+  const ok = results.filter((r) => r.status === 201);
+  assert.equal(ok.length, 1, `${ok.length} 件通っている（1件のはず）`);
+
+  const after = await api(`/api/reserve/${date.id}`);
+  const row2 = (
+    after.body as {
+      inventory: Array<{
+        product_id: string;
+        production_quantity: number;
+        reserved_quantity: number;
+      }>;
+    }
+  ).inventory.find((i) => i.product_id === row.product_id)!;
+  assert.ok(
+    row2.reserved_quantity <= row2.production_quantity,
+    "受付上限を超えて引き当てられている"
+  );
+});

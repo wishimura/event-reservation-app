@@ -27,7 +27,16 @@ function createDb() {
     );
   }
 
-  const pool = globalForDb.__neonPool ?? new Pool({ connectionString, max: 5 });
+  /**
+   * Ten rather than five.
+   *
+   * One instance of this function serves many requests at once, and they
+   * all draw from this pool: an order holds a connection for about half a
+   * second, and while five of them are running everyone else browsing the
+   * site is queued behind them for no reason. Neon's pooler is sized in the
+   * thousands, so this is nowhere near anything.
+   */
+  const pool = globalForDb.__neonPool ?? new Pool({ connectionString, max: 10 });
 
   /**
    * `Pool` inherits EventEmitter, which throws when an "error" event has no

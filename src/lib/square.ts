@@ -101,24 +101,37 @@ export async function chargeOrder(params: {
 
   let response;
   try {
-    response = await getClient().payments.create({
-      sourceId: params.sourceId,
-      idempotencyKey: params.idempotencyKey,
-      amountMoney: {
-        amount: BigInt(params.amountYen),
-        currency: "JPY",
+    response = await getClient().payments.create(
+      {
+        sourceId: params.sourceId,
+        idempotencyKey: params.idempotencyKey,
+        amountMoney: {
+          amount: BigInt(params.amountYen),
+          currency: "JPY",
+        },
+        locationId,
+        // Square truncates these, so keep them short.
+        referenceId: params.referenceId.slice(0, 40),
+        note: params.note.slice(0, 500),
+        buyerEmailAddress: params.customerEmail,
+        // Omitted entirely when absent — Square rejects an empty string.
+        ...(params.verificationToken
+          ? { verificationToken: params.verificationToken }
+          : {}),
+        autocomplete: true,
       },
-      locationId,
-      // Square truncates these, so keep them short.
-      referenceId: params.referenceId.slice(0, 40),
-      note: params.note.slice(0, 500),
-      buyerEmailAddress: params.customerEmail,
-      // Omitted entirely when absent — Square rejects an empty string.
-      ...(params.verificationToken
-        ? { verificationToken: params.verificationToken }
-        : {}),
-      autocomplete: true,
-    });
+      /**
+       * Bounded, because the customer is sitting in front of a spinner and
+       * the function itself is on a clock. A charge normally answers in a
+       * second or two; anything near this is Square or the issuer being
+       * unreachable, and failing then is better than being cut off partway.
+       *
+       * Retrying is safe — the idempotency key means a repeat of a request
+       * that did get through comes back with the original payment rather
+       * than making a second one.
+       */
+      { timeoutInSeconds: 12, maxRetries: 2 }
+    );
   } catch (error) {
     console.error("Square payment failed:", error);
     throw new SquarePaymentError(

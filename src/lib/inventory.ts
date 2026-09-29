@@ -1,6 +1,5 @@
-import { and, eq } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { db } from "@/db";
-import { dailyProductInventory, eventDates } from "@/db/schema";
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -15,40 +14,40 @@ type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
  *
  * Hidden rows are left out: the operator took them off sale deliberately, so
  * they should not be able to close the day on their own.
+ *
+ * One statement rather than a read and a write. This runs inside the order
+ * transaction, while the day's stock rows are locked, and every round trip
+ * to the database is a round trip the next customer in the queue waits for.
  */
 export async function refreshDateReservationStatus(
   tx: Transaction,
   eventDateId: string
 ): Promise<void> {
-  const inventory = await tx
-    .select()
-    .from(dailyProductInventory)
-    .where(
-      and(
-        eq(dailyProductInventory.event_date_id, eventDateId),
-        eq(dailyProductInventory.is_hidden, false)
-      )
-    );
-
-  // Nothing to judge by — leave whatever the operator set.
-  if (inventory.length === 0) return;
-
-  const allSoldOut = inventory.every((i) => i.is_sold_out);
-  const anyNearThreshold = inventory.some((i) => {
-    const remaining = i.production_quantity - i.reserved_quantity;
-    return remaining > 0 && remaining <= i.warning_threshold;
-  });
-
-  await tx
-    .update(eventDates)
-    .set({
-      reservation_status: allSoldOut
-        ? "closed"
-        : anyNearThreshold
-          ? "few_left"
-          : "open",
-    })
-    .where(eq(eventDates.id, eventDateId));
+  await tx.execute(sql`
+    WITH stock AS (
+      SELECT
+        production_quantity - reserved_quantity AS remaining,
+        warning_threshold,
+        is_sold_out OR reserved_quantity >= production_quantity AS sold_out
+      FROM daily_product_inventory
+      WHERE event_date_id = ${eventDateId} AND is_hidden = false
+    ),
+    verdict AS (
+      SELECT
+        count(*) AS rows_seen,
+        bool_and(sold_out) AS all_sold_out,
+        bool_or(remaining > 0 AND remaining <= warning_threshold) AS any_low
+      FROM stock
+    )
+    UPDATE event_dates
+    SET reservation_status = CASE
+      WHEN (SELECT all_sold_out FROM verdict) THEN 'closed'
+      WHEN (SELECT any_low FROM verdict) THEN 'few_left'
+      ELSE 'open'
+    END::reservation_status
+    WHERE id = ${eventDateId}
+      AND (SELECT rows_seen FROM verdict) > 0
+  `);
 }
 
 /**

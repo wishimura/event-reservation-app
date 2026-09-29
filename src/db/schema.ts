@@ -226,11 +226,25 @@ export const orders = pgTable(
      */
     square_payment_id: text("square_payment_id"),
     square_receipt_url: text("square_receipt_url"),
+    /**
+     * The browser's own id for one attempt to place this order.
+     *
+     * A phone that loses signal in the second the card is charged shows the
+     * customer an error for an order that in fact went through, and tapping
+     * again would charge them twice. The browser therefore labels the
+     * attempt, and a second request wearing the same label is recognised as
+     * the same order rather than made into a new one.
+     *
+     * Null for counter sales, and for the reservations taken before this
+     * existed.
+     */
+    client_request_id: text("client_request_id"),
   },
   (t) => [
     index("orders_event_id_idx").on(t.event_id),
     index("orders_event_date_id_idx").on(t.event_date_id),
     index("orders_created_at_idx").on(t.created_at),
+    unique("orders_client_request_id_key").on(t.client_request_id),
   ]
 );
 

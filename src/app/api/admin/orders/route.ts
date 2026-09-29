@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { eventDates, events, orderItems, orders, products } from "@/db/schema";
+import { eventDates, events, orderItems, orders } from "@/db/schema";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { holdStockAndCreateOrder, OrderValidationError } from "@/lib/orders";
 import { getActiveEvent, getAllEventDates } from "@/lib/queries";
@@ -28,11 +28,19 @@ export async function GET() {
       .where(eq(orders.event_id, event.id))
       .orderBy(desc(orders.created_at));
 
+    /**
+     * The lines, without the product they point at.
+     *
+     * Each line already carries the name and the price as they stood when
+     * the order was placed, which is what the screen shows and what the CSV
+     * writes out. Joining the product on top of that added a copy of it to
+     * every line — four hundred kilobytes of an event's worth of orders,
+     * none of it read, all of it over the shop's wifi onto a phone.
+     */
     const itemRows = orderRows.length
       ? await db
-          .select({ item: orderItems, product: products })
+          .select()
           .from(orderItems)
-          .innerJoin(products, eq(products.id, orderItems.product_id))
           .where(
             inArray(
               orderItems.order_id,
@@ -42,10 +50,10 @@ export async function GET() {
       : [];
 
     const itemsByOrder = new Map<string, unknown[]>();
-    for (const row of itemRows) {
-      const list = itemsByOrder.get(row.item.order_id) ?? [];
-      list.push({ ...row.item, product: row.product });
-      itemsByOrder.set(row.item.order_id, list);
+    for (const item of itemRows) {
+      const list = itemsByOrder.get(item.order_id) ?? [];
+      list.push(item);
+      itemsByOrder.set(item.order_id, list);
     }
 
     return NextResponse.json({

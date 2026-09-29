@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { dailyProductInventory, eventDates, orders, products } from "@/db/schema";
 import { getActiveEvent, getAllEventDates } from "@/lib/queries";
@@ -20,17 +20,70 @@ export async function GET() {
     const dates = await getAllEventDates(event.id);
     const today = todayInJST();
 
-    const orderRows = await db
-      .select({ order: orders, event_date: eventDates })
+    /**
+     * Counted in the database rather than in the browser.
+     *
+     * This screen only ever showed totals, but it was fetching every order
+     * of the whole event to add them up — approaching a megabyte by the end
+     * of a run, onto whatever phone the shop happens to have open. The
+     * numbers are the same; the page now receives only the numbers.
+     */
+    const live = and(
+      eq(orders.event_id, event.id),
+      inArray(orders.order_status, ["confirmed", "temporary"])
+    );
+
+    const byDate = await db
+      .select({
+        event_date_id: orders.event_date_id,
+        order_count: sql<number>`count(*)::int`,
+        total_amount: sql<number>`coalesce(sum(${orders.total_amount}), 0)::int`,
+      })
       .from(orders)
-      .innerJoin(eventDates, eq(eventDates.id, orders.event_date_id))
+      .where(live)
+      .groupBy(orders.event_date_id);
+
+    /**
+     * Orders that took stock and then stopped.
+     *
+     * A card order holds the day's stock from the moment it is written,
+     * and is confirmed once Square accepts the payment. Almost always that
+     * is the same second. When it is not — the connection died between the
+     * two, or releasing the stock afterwards failed as well — the order
+     * sits unpaid on stock nobody can buy, and nothing says so.
+     *
+     * Half an hour is far longer than the slowest real payment, so anything
+     * older is stuck. Cancelling it in the order list hands the stock back.
+     */
+    const stuckOrders = await db
+      .select({
+        id: orders.id,
+        order_number: orders.order_number,
+        customer_name: orders.customer_name,
+        total_amount: orders.total_amount,
+        created_at: orders.created_at,
+      })
+      .from(orders)
       .where(
         and(
           eq(orders.event_id, event.id),
-          inArray(orders.order_status, ["confirmed", "temporary"])
+          eq(orders.order_status, "temporary"),
+          eq(orders.payment_status, "pending"),
+          sql`${orders.created_at} < now() - interval '30 minutes'`
         )
       )
-      .orderBy(desc(orders.created_at));
+      .orderBy(asc(orders.created_at))
+      .limit(50);
+
+    const [totals] = await db
+      .select({
+        total_sales: sql<number>`coalesce(sum(${orders.total_amount}) filter (where ${orders.payment_status} = 'paid'), 0)::int`,
+        today_reservations: sql<number>`count(*) filter (where ${eventDates.pickup_date} = ${today} and ${orders.order_status} = 'confirmed')::int`,
+        today_picked_up: sql<number>`count(*) filter (where ${eventDates.pickup_date} = ${today} and ${orders.order_status} = 'confirmed' and ${orders.pickup_status} = 'picked_up')::int`,
+      })
+      .from(orders)
+      .innerJoin(eventDates, eq(eventDates.id, orders.event_date_id))
+      .where(live);
 
     const upcomingDateIds = dates
       .filter((d) => d.pickup_date >= today)
@@ -96,7 +149,13 @@ export async function GET() {
       dates,
       today,
       zeroCapacity,
-      orders: orderRows.map((r) => ({ ...r.order, event_date: r.event_date })),
+      stuckOrders,
+      summary: {
+        total_sales: totals?.total_sales ?? 0,
+        today_reservations: totals?.today_reservations ?? 0,
+        today_picked_up: totals?.today_picked_up ?? 0,
+        by_date: byDate,
+      },
       lowStockItems,
     });
   } catch (error) {

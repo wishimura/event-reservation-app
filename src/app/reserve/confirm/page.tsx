@@ -18,6 +18,43 @@ type PaymentRequest = {
   total: { amount: string; label: string };
 };
 
+/** A label for one attempt at an order, unique enough to tell attempts apart. */
+function newRequestId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+/**
+ * Sends the order, and sends it again if the connection failed outright.
+ *
+ * A phone on shop wifi drops requests, and the customer cannot tell a
+ * request that never arrived from one whose answer was lost on the way back.
+ * Both are safe to repeat: the order carries an id the server recognises, so
+ * a second copy is answered with the first one's result rather than charged
+ * again. Only a dead connection is retried — an answer, of any kind, is the
+ * server's and is passed straight back.
+ */
+async function postOrder(payload: Record<string, unknown>): Promise<Response> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      return await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 1200));
+    }
+  }
+
+  throw lastError;
+}
+
 /** Apple Pay and Google Pay expose the same surface to us. */
 type SquareWallet = {
   attach: (selector: string) => Promise<void>;
@@ -107,6 +144,17 @@ export default function ConfirmPage() {
   const [applePayStatus, setApplePayStatus] = useState<WalletStatus>("pending");
   const [googlePayStatus, setGooglePayStatus] =
     useState<WalletStatus>("pending");
+  /**
+   * One id for this customer's attempt to buy this basket.
+   *
+   * It goes with every send of the order, so if the connection drops in the
+   * second the card is charged and the order is sent again, the server knows
+   * the two are the same attempt and does not charge twice. Made once for the
+   * life of the page, which is exactly as long as the attempt lasts.
+   */
+  const requestIdRef = useRef<string>("");
+  if (!requestIdRef.current) requestIdRef.current = newRequestId();
+
   const cardRef = useRef<{ tokenize: () => Promise<TokenResult> } | null>(null);
   const paymentsRef = useRef<SquarePayments | null>(null);
   const applePayRef = useRef<SquareWallet | null>(null);
@@ -283,6 +331,20 @@ export default function ConfirmPage() {
     };
   }, [paymentsReady, totalAmount]);
 
+  /**
+   * Whether there is enough on hand to take an order.
+   *
+   * Everything below it reads the event — the pickup times most of all — so
+   * a tap that arrives before it has loaded used to fall through every
+   * guard and leave the screen sitting there. Saying so is the least we can
+   * do; it is a second at worst.
+   */
+  function ready(): boolean {
+    if (event && selectedDate) return true;
+    setCardError("読み込み中です。少し待ってからもう一度お試しください。");
+    return false;
+  }
+
   function validate(): boolean {
     const errs: Record<string, string> = {};
     if (!name.trim()) errs.name = "お名前を入力してください";
@@ -316,26 +378,23 @@ export default function ConfirmPage() {
 
     setPlacing(true);
     try {
-      const res = await fetch("/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          event_id: event.id,
-          event_date_id: selectedDate.id,
-          customer_name: name.trim(),
-          customer_email: email.trim(),
-          customer_phone: phone.trim(),
-          pickup_time_slot: pickupTimeSlot || undefined,
-          payment_method: payByCard ? "credit_card" : "cash",
-          payment_source_id: paymentSourceId,
-          verification_token: verificationToken,
-          items: cart.map((item) => ({
-            product_id: item.product.id,
-            product_name_snapshot: item.product.name,
-            unit_price: item.product.price,
-            quantity: item.quantity,
-          })),
-        }),
+      const res = await postOrder({
+        client_request_id: requestIdRef.current,
+        event_id: event.id,
+        event_date_id: selectedDate.id,
+        customer_name: name.trim(),
+        customer_email: email.trim(),
+        customer_phone: phone.trim(),
+        pickup_time_slot: pickupTimeSlot || undefined,
+        payment_method: payByCard ? "credit_card" : "cash",
+        payment_source_id: paymentSourceId,
+        verification_token: verificationToken,
+        items: cart.map((item) => ({
+          product_id: item.product.id,
+          product_name_snapshot: item.product.name,
+          unit_price: item.product.price,
+          quantity: item.quantity,
+        })),
       });
 
       if (!res.ok) {
@@ -359,13 +418,17 @@ export default function ConfirmPage() {
       router.push("/reserve/complete");
     } catch {
       setPlacing(false);
-      alert("エラーが発生しました。もう一度お試しください。");
+      alert(
+        "通信が途切れました。もう一度「注文を確定する」を押してください。\n" +
+          "同じご注文が二重になることはありません。"
+      );
       setSubmitting(false);
     }
   }
 
   /** The card form: tokenise, verify the buyer, then order. */
   async function handleSubmit() {
+    if (!ready()) return;
     if (!validate() || !event || !selectedDate) return;
 
     setSubmitting(true);
@@ -446,6 +509,7 @@ export default function ConfirmPage() {
    */
   async function handleWalletPay(wallet: SquareWallet | null) {
     if (!wallet || submitting) return;
+    if (!ready()) return;
     // Validated before the sheet opens, so the customer is not asked to pay
     // only to be sent back to a missing field afterwards.
     if (!validate() || !event || !selectedDate) return;
@@ -845,9 +909,21 @@ export default function ConfirmPage() {
         {/* Submit Button */}
         <button
           onClick={handleSubmit}
-          disabled={submitting || payByCard === null || (payByCard && !cardReady)}
+          /*
+            `event` has to be here too. Without it the button could go live
+            on the strength of the payment settings alone, while the event —
+            which is where the pickup times come from — was still loading;
+            tapping then fell straight out of handleSubmit and the screen
+            did nothing at all, with nothing to say why.
+          */
+          disabled={
+            submitting ||
+            !event ||
+            payByCard === null ||
+            (payByCard && !cardReady)
+          }
           className={`w-full py-4 rounded-2xl font-bold text-lg transition-colors ${
-            submitting
+            submitting || !event
               ? "bg-zinc-300 text-zinc-500 cursor-not-allowed"
               : "bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white shadow-lg shadow-brand-600/20"
           }`}

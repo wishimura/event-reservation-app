@@ -9,13 +9,23 @@
  *
  * Walk the chain instead, with a bound in case anything ever links to itself.
  */
-function postgresErrorCode(error: unknown): string | undefined {
+function postgresError(
+  error: unknown
+): { code?: string; constraint?: string } | undefined {
   let current = error;
 
   for (let depth = 0; depth < 5 && current; depth++) {
     if (typeof current === "object" && "code" in current) {
-      const code = (current as { code?: unknown }).code;
-      if (typeof code === "string") return code;
+      const withCode = current as { code?: unknown; constraint?: unknown };
+      if (typeof withCode.code === "string") {
+        return {
+          code: withCode.code,
+          constraint:
+            typeof withCode.constraint === "string"
+              ? withCode.constraint
+              : undefined,
+        };
+      }
     }
     current = (current as { cause?: unknown }).cause;
   }
@@ -25,5 +35,18 @@ function postgresErrorCode(error: unknown): string | undefined {
 
 /** 23505 — a UNIQUE constraint was violated. */
 export function isUniqueViolation(error: unknown): boolean {
-  return postgresErrorCode(error) === "23505";
+  return postgresError(error)?.code === "23505";
+}
+
+/**
+ * Whether a failure is a unique violation on one particular constraint.
+ *
+ * Two of them can come out of the same insert and they mean opposite things:
+ * a clash on the order number is bad luck and the order should be replayed
+ * with a new one, while a clash on the customer's request id means this very
+ * order already exists and must not be made a second time.
+ */
+export function isUniqueViolationOn(error: unknown, constraint: string): boolean {
+  const pg = postgresError(error);
+  return pg?.code === "23505" && pg.constraint === constraint;
 }

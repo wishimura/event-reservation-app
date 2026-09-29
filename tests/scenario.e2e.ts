@@ -54,11 +54,14 @@ async function reserve(page: Page, label: string) {
   await page.getByPlaceholder("taro@example.com").fill("scenario@example.com");
   await page.getByPlaceholder("090-1234-5678").fill("090-2222-3333");
   await page.getByRole("button", { name: "注文を確定する" }).click();
-  await page.waitForTimeout(400);
-  assert.ok(
-    await page.getByText("受取時間を選んでください").isVisible(),
-    "受取時間が未選択でも先へ進めてしまう"
-  );
+  // 最初の1回はサーバーが温まっておらず、固定待ちだと描画が間に合わない
+  await page
+    .getByText("受取時間を選んでください")
+    .first()
+    .waitFor({ timeout: 10000 })
+    .catch(() => {
+      throw new Error("受取時間が未選択でも先へ進めてしまう");
+    });
 
   const slot = page.locator("button", { hasText: /^\d{2}:\d{2}〜\d{2}:\d{2}$/ }).first();
   const slotText = await slot.innerText();

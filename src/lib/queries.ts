@@ -14,17 +14,34 @@ export async function getActiveEvent() {
   return event ?? null;
 }
 
+/**
+ * The event and its dates, in one trip.
+ *
+ * This is the front page, so it is the query every customer makes before
+ * they make any other. The database is in Singapore and the site is in
+ * Tokyo; asking twice in a row cost a visible fraction of a second for
+ * nothing, since the second question never depended on the answer to the
+ * first beyond `is_active`.
+ */
 export async function getActiveEventWithDates() {
-  const event = await getActiveEvent();
-  if (!event) return null;
-
-  const dates = await db
-    .select()
-    .from(eventDates)
-    .where(
-      and(eq(eventDates.event_id, event.id), eq(eventDates.is_active, true))
+  const rows = await db
+    .select({ event: events, event_date: eventDates })
+    .from(events)
+    .leftJoin(
+      eventDates,
+      and(eq(eventDates.event_id, events.id), eq(eventDates.is_active, true))
     )
-    .orderBy(asc(eventDates.pickup_date));
+    .where(eq(events.is_active, true))
+    .orderBy(asc(events.created_at), asc(eventDates.pickup_date));
+
+  if (rows.length === 0) return null;
+
+  // More than one active event would be a mistake, but if it ever happened
+  // the front page should still show the same one `getActiveEvent` picks.
+  const event = rows[0].event;
+  const dates = rows
+    .filter((r) => r.event_date !== null && r.event.id === event.id)
+    .map((r) => r.event_date!);
 
   return { ...event, event_dates: dates };
 }

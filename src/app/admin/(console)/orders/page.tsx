@@ -31,6 +31,9 @@ const sourceLabels: Record<string, { label: string; cls: string }> = {
   walk_in: { label: "店頭", cls: "bg-orange-100 text-orange-700" },
 };
 
+/** Rows drawn before the operator asks for more. */
+const PAGE_SIZE = 100;
+
 const pickupStatusLabels: Record<string, { label: string; cls: string }> = {
   not_picked_up: { label: "未受取", cls: "bg-slate-100 text-slate-600" },
   picked_up: { label: "受取済", cls: "bg-emerald-100 text-emerald-700" },
@@ -52,6 +55,16 @@ export default function OrdersPage() {
   const [filterDate, setFilterDate] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterSearch, setFilterSearch] = useState("");
+
+  /**
+   * How many rows are on the screen at once.
+   *
+   * Searching and filtering still run over every order — it is only the
+   * drawing that is held back. A full run of this event is around a
+   * thousand orders, and putting a thousand rows into the page at once is
+   * what makes the shop's phone crawl on the day it is busiest.
+   */
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   useEffect(() => {
     loadOrders();
@@ -82,6 +95,7 @@ export default function OrdersPage() {
   }
 
   function applyFilters() {
+    setVisibleCount(PAGE_SIZE);
     let result = [...orders];
 
     if (filterDate) {
@@ -274,7 +288,7 @@ export default function OrdersPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredOrders.map((order) => {
+              {filteredOrders.slice(0, visibleCount).map((order) => {
                 const payment = paymentStatusLabels[order.payment_status] || { label: order.payment_status, cls: "bg-slate-100 text-slate-600" };
                 const orderSt = orderStatusLabels[order.order_status] || { label: order.order_status, cls: "bg-slate-100 text-slate-600" };
                 const pickup = pickupStatusLabels[order.pickup_status] || { label: order.pickup_status, cls: "bg-slate-100 text-slate-600" };
@@ -438,6 +452,21 @@ export default function OrdersPage() {
                   </Fragment>
                 );
               })}
+              {filteredOrders.length > visibleCount && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-4 text-center">
+                    <button
+                      onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
+                      className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                    >
+                      さらに {Math.min(PAGE_SIZE, filteredOrders.length - visibleCount)} 件表示
+                      <span className="ml-2 text-xs text-slate-400">
+                        （{visibleCount} / {filteredOrders.length} 件）
+                      </span>
+                    </button>
+                  </td>
+                </tr>
+              )}
               {filteredOrders.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-4 py-12 text-center text-slate-400">

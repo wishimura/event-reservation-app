@@ -10,7 +10,15 @@ import {
   formatPrice,
   getRemainingQuantity,
 } from "@/lib/utils";
-import type { Event, EventDate, Order, DailyProductInventory } from "@/lib/types";
+import type { Event, EventDate, DailyProductInventory } from "@/lib/types";
+
+interface StuckOrder {
+  id: string;
+  order_number: string;
+  customer_name: string;
+  total_amount: number;
+  created_at: string;
+}
 
 interface ZeroCapacityRow {
   product_name: string;
@@ -46,6 +54,7 @@ export default function AdminDashboard() {
   const [totalSales, setTotalSales] = useState(0);
   const [lowStockItems, setLowStockItems] = useState<DailyProductInventory[]>([]);
   const [zeroCapacity, setZeroCapacity] = useState<ZeroCapacityRow[]>([]);
+  const [stuckOrders, setStuckOrders] = useState<StuckOrder[]>([]);
   const [dailySummary, setDailySummary] = useState<DailySummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -61,47 +70,46 @@ export default function AdminDashboard() {
         event: Event;
         dates: EventDate[];
         today: string;
-        orders: Order[];
+        summary: {
+          total_sales: number;
+          today_reservations: number;
+          today_picked_up: number;
+          by_date: Array<{
+            event_date_id: string;
+            order_count: number;
+            total_amount: number;
+          }>;
+        };
         lowStockItems: DailyProductInventory[];
         zeroCapacity: ZeroCapacityRow[];
+        stuckOrders: StuckOrder[];
       }>("/api/admin/dashboard");
 
       setEvent(data.event);
       setLowStockItems(data.lowStockItems);
       setZeroCapacity(data.zeroCapacity ?? []);
+      setStuckOrders(data.stuckOrders ?? []);
 
-      const { today, orders, dates } = data;
+      const { today, summary, dates } = data;
       const tomorrow = addDaysToDateString(today, 1);
+      const byDate = new Map(summary.by_date.map((d) => [d.event_date_id, d]));
 
-      const todayOrders = orders.filter(
-        (o) =>
-          o.event_date?.pickup_date === today && o.order_status === "confirmed"
-      );
-      setTodayPickupCount(todayOrders.length);
-      setTodayPickedUp(
-        todayOrders.filter((o) => o.pickup_status === "picked_up").length
-      );
+      setTodayPickupCount(summary.today_reservations);
+      setTodayPickedUp(summary.today_picked_up);
+      setTotalSales(summary.total_sales);
 
+      const tomorrowDate = dates.find((d) => d.pickup_date === tomorrow);
       setTomorrowReservationCount(
-        orders.filter((o) => o.event_date?.pickup_date === tomorrow).length
-      );
-
-      setTotalSales(
-        orders
-          .filter((o) => o.payment_status === "paid")
-          .reduce((sum, o) => sum + o.total_amount, 0)
+        tomorrowDate ? (byDate.get(tomorrowDate.id)?.order_count ?? 0) : 0
       );
 
       setDailySummary(
-        dates.map((d) => {
-          const dateOrders = orders.filter((o) => o.event_date_id === d.id);
-          return {
-            date: d.pickup_date,
-            dateLabel: formatDate(d.pickup_date),
-            orderCount: dateOrders.length,
-            totalAmount: dateOrders.reduce((s, o) => s + o.total_amount, 0),
-          };
-        })
+        dates.map((d) => ({
+          date: d.pickup_date,
+          dateLabel: formatDate(d.pickup_date),
+          orderCount: byDate.get(d.id)?.order_count ?? 0,
+          totalAmount: byDate.get(d.id)?.total_amount ?? 0,
+        }))
       );
     } catch (err) {
       console.error("Dashboard load error:", err);
@@ -141,6 +149,41 @@ export default function AdminDashboard() {
         <p className="text-sm text-slate-500 mb-6">
           イベント: <span className="font-medium text-slate-700">{event.name}</span>
         </p>
+      )}
+
+      {/*
+        Stock that a half-finished payment is still holding. Rare, and
+        invisible without this: the day simply has fewer left than it
+        should, and the order sits in the list looking like any other.
+      */}
+      {stuckOrders.length > 0 && (
+        <div className="mb-8 rounded-xl border border-red-300 bg-red-50 p-5">
+          <h3 className="text-sm font-bold text-red-800">
+            決済が途中で止まっている注文が {stuckOrders.length} 件あります
+          </h3>
+          <p className="mt-1 text-sm text-red-700">
+            30分以上前のご注文で、お支払いが確認できていません。受付枠だけが
+            押さえられたままなので、そのぶん他のお客様が予約できなくなっています。
+            <br />
+            Square の画面で同じ注文番号の決済があるか確認し、
+            <strong>無ければ注文一覧でキャンセル</strong>してください（受付枠が戻ります）。
+          </p>
+          <ul className="mt-3 space-y-1">
+            {stuckOrders.map((o) => (
+              <li key={o.id} className="text-sm text-red-900">
+                <span className="font-mono font-medium">{o.order_number}</span>
+                <span className="ml-2">{o.customer_name}</span>
+                <span className="ml-2 text-red-700">{formatPrice(o.total_amount)}</span>
+              </li>
+            ))}
+          </ul>
+          <Link
+            href="/admin/orders"
+            className="mt-3 inline-block text-sm font-medium text-red-800 underline"
+          >
+            注文一覧を開く
+          </Link>
+        </div>
       )}
 
       {zeroCapacity.length > 0 && (

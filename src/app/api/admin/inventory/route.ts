@@ -87,10 +87,24 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
+  /**
+   * Always in the same order, whoever is saving.
+   *
+   * A customer's order locks the day's stock rows sorted by id. If this save
+   * took them in the order the form happened to send, the two could each
+   * hold a row the other wants, and Postgres would break the tie by killing
+   * one of them — the customer's, as likely as the shop's.
+   */
+  items = [...items].sort((a, b) => a.id.localeCompare(b.id));
+
   try {
     const updated = await db.transaction(async (tx) => {
       // Reject caps that would fall below what is already reserved, with a
       // message naming the products — the CHECK constraint alone can't say that.
+      //
+      // Locked while we look: without it an order placed in the moment
+      // between reading and writing would leave the row reserved beyond its
+      // new cap, and the CHECK would abort the save with nothing to say.
       const existing = await tx
         .select({ inventory: dailyProductInventory, product: products })
         .from(dailyProductInventory)
@@ -100,7 +114,8 @@ export async function PATCH(request: NextRequest) {
             dailyProductInventory.id,
             items.map((i) => i.id)
           )
-        );
+        )
+        .for("update", { of: dailyProductInventory });
 
       const byId = new Map(existing.map((r) => [r.inventory.id, r]));
       const conflicts: string[] = [];
