@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { count, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { orderItems, products } from "@/db/schema";
+import { isUuid } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,10 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
+
+    if (!isUuid(id)) {
+      return NextResponse.json({ error: "商品が見つかりません" }, { status: 404 });
+    }
 
     let body: ProductPatchBody;
     try {
@@ -82,6 +87,10 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+
+    if (!isUuid(id)) {
+      return NextResponse.json({ error: "商品が見つかりません" }, { status: 404 });
+    }
 
     // order_items references the product with ON DELETE restrict. Past orders
     // must keep pointing at it, so an ordered product is hidden, not deleted.

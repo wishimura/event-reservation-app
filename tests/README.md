@@ -6,7 +6,11 @@
 | --- | --- | --- | --- |
 | 単体 | `unit.test.ts` | 締切・売切・受取時間・注文番号などの判断 | 不要 |
 | 結合 | `api.test.ts` / `admin.test.ts` | API とデータベースの往復 | 使い捨てDB＋起動中のサーバー |
+| 結合（踏み込み） | `deep.test.ts` | 原子性・同時実行・画面とAPIの食い違い | 同上 |
+| 結合（決済） | `payment.test.ts` | 決済が失敗した側に倒れたときの後始末 | 同上＋Square の認証情報を入れたサーバー |
 | シナリオ | `scenario.e2e.ts` | 実ブラウザでの導線 | 上記＋Playwright |
+
+何をどこまで確かめているかの一覧は `docs/test-scenarios.md` にあります。
 
 ## 単体
 
@@ -20,6 +24,21 @@ DBもサーバーも要りません。CI に置くならまずこれです。
 
 **使い捨てのデータベースに向けたサーバーに対してのみ実行してください。**
 予約を作り、在庫を動かし、注文を消します。本番には絶対に向けないこと。
+
+## 決済まわり
+
+`payment.test.ts` だけは、Square の認証情報が入った状態のサーバーに向けて実行します。
+値は本物でなくて構いません（むしろ本物でないほうが、確実に決済が失敗してくれて
+「失敗したときの後始末」を確かめやすくなります）。
+
+```bash
+SQUARE_ACCESS_TOKEN=qa-fake \
+SQUARE_APPLICATION_ID=sandbox-sq0idb-qafake \
+SQUARE_LOCATION_ID=QAFAKELOC \
+  npm run start -- --port 3982
+
+BASE_URL=http://localhost:3982 npm run test:payment
+```
 
 ```bash
 # 1. 空のデータベースにスキーマと本番同等のデータを入れる

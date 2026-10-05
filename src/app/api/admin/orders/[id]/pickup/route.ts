@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { orders } from "@/db/schema";
+import { isUuid } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,10 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
+
+    if (!isUuid(id)) {
+      return NextResponse.json({ error: "注文が見つかりません" }, { status: 404 });
+    }
 
     let pickup_status: unknown;
     try {

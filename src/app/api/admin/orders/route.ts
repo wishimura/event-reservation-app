@@ -6,6 +6,7 @@ import { isUniqueViolation } from "@/lib/db-errors";
 import { holdStockAndCreateOrder, OrderValidationError } from "@/lib/orders";
 import { getActiveEvent, getAllEventDates } from "@/lib/queries";
 import { parsePickupTimeSlots } from "@/lib/utils";
+import { isUuid, readJsonObject } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
@@ -102,14 +103,13 @@ interface WalkInBody {
  * recording what it just sold is the opposite situation.
  */
 export async function POST(request: NextRequest) {
-  let body: WalkInBody;
-  try {
-    body = await request.json();
-  } catch {
+  const parsed = await readJsonObject(request);
+  if (!parsed) {
     return NextResponse.json({ error: "リクエストが不正です" }, { status: 400 });
   }
+  const body = parsed as unknown as WalkInBody;
 
-  if (!body.event_date_id) {
+  if (!isUuid(body.event_date_id)) {
     return NextResponse.json({ error: "受取日を選んでください" }, { status: 400 });
   }
   if (!Array.isArray(body.items) || body.items.length === 0) {
@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
 
   const quantityByProduct = new Map<string, number>();
   for (const item of body.items) {
-    if (!item.product_id || !Number.isInteger(item.quantity) || item.quantity < 1) {
+    if (!isUuid(item.product_id) || !Number.isInteger(item.quantity) || item.quantity < 1) {
       return NextResponse.json({ error: "数量が不正です" }, { status: 400 });
     }
     quantityByProduct.set(

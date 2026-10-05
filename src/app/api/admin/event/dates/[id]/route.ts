@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { count, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { eventDates, orders } from "@/db/schema";
+import { isUuid } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,10 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
+
+    if (!isUuid(id)) {
+      return NextResponse.json({ error: "受取日が見つかりません" }, { status: 404 });
+    }
 
     let is_active: unknown;
     try {
@@ -56,6 +61,10 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+
+    if (!isUuid(id)) {
+      return NextResponse.json({ error: "受取日が見つかりません" }, { status: 404 });
+    }
 
     // Orders reference the date with ON DELETE restrict, so check first and
     // explain rather than letting a foreign key error surface as a 500.

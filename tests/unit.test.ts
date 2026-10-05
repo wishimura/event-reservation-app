@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  addDaysToDateString,
   defaultReservationCloseAt,
   effectiveReservationStatus,
   formatDate,
@@ -192,7 +193,7 @@ test("注文番号：形式が一定で、連続生成しても衝突しにく�
 
 /* ------------------------------------------------------- DBエラーの判定 */
 
-import { isUniqueViolation } from "../src/lib/db-errors";
+import { isUniqueViolation, isUniqueViolationOn } from "../src/lib/db-errors";
 
 test("一意制約エラー：Drizzle が包んだ内側のコードまで見る", () => {
   // Drizzle は実エラーを cause にぶら下げる。表層だけ見ると常に false になる。
@@ -217,4 +218,102 @@ test("一意制約エラー：cause が循環していても止まる", () => {
   const a: { cause?: unknown } = {};
   a.cause = a;
   assert.equal(isUniqueViolation(a), false);
+});
+
+/* ================================================ 追加：境界と環境依存 */
+
+test("注文番号：サーバーのタイムゾーンが変わっても日付部分がずれない", () => {
+  // 過去に、サーバーのローカル時刻（UTC）で日付を作っていたため、
+  // 日本時間の朝9時より前に入った注文が前日の番号になっていた。
+  const original = process.env.TZ;
+  const seen = new Set<string>();
+
+  for (const tz of ["UTC", "Asia/Tokyo", "America/New_York", "Pacific/Kiritimati"]) {
+    process.env.TZ = tz;
+    seen.add(generateOrderNumber().slice(4, 10));
+  }
+
+  process.env.TZ = original;
+  assert.equal(seen.size, 1, `タイムゾーンで日付が変わっている: ${[...seen].join(", ")}`);
+});
+
+test("締切：サーバーのタイムゾーンが変わっても同じ瞬間を指す", () => {
+  const original = process.env.TZ;
+  const seen = new Set<number>();
+
+  for (const tz of ["UTC", "Asia/Tokyo", "America/New_York", "Pacific/Kiritimati"]) {
+    process.env.TZ = tz;
+    seen.add(defaultReservationCloseAt("2026-11-18").getTime());
+  }
+
+  process.env.TZ = original;
+  assert.equal(seen.size, 1, "タイムゾーンで締切の瞬間がずれている");
+});
+
+test("受取時間：Windows からの貼り付け（CRLF）でも正しく分かれる", () => {
+  // 表計算ソフトからコピーすると行末に \r が残る
+  assert.deepEqual(parsePickupTimeSlots("11:00〜12:00\r\n12:00〜13:00\r\n"), [
+    "11:00〜12:00",
+    "12:00〜13:00",
+  ]);
+});
+
+test("受取時間：全角空白だけの行は落ちる", () => {
+  assert.deepEqual(parsePickupTimeSlots("11:00〜12:00\n　\n12:00〜13:00"), [
+    "11:00〜12:00",
+    "12:00〜13:00",
+  ]);
+});
+
+test("日付の加算：月末・年末・うるう年をまたいでも正しい", () => {
+  assert.equal(addDaysToDateString("2026-01-31", 1), "2026-02-01");
+  assert.equal(addDaysToDateString("2026-12-31", 1), "2027-01-01");
+  assert.equal(addDaysToDateString("2028-02-28", 1), "2028-02-29"); // うるう年
+  assert.equal(addDaysToDateString("2027-02-28", 1), "2027-03-01"); // 平年
+  assert.equal(addDaysToDateString("2026-11-18", -1), "2026-11-17");
+  assert.equal(addDaysToDateString("2026-03-01", -1), "2026-02-28");
+});
+
+test("金額：0円と大きな額も崩れない", () => {
+  assert.equal(formatPrice(0), "¥0");
+  assert.equal(formatPrice(1234567), "¥1,234,567");
+});
+
+test("残数：上限より予約が多い異常値でも負を返さない", () => {
+  assert.equal(getRemainingQuantity({ production_quantity: 5, reserved_quantity: 9 }), 0);
+  assert.equal(getRemainingQuantity({ production_quantity: 0, reserved_quantity: 0 }), 0);
+});
+
+test("一意制約エラー：どの制約で落ちたかを見分けられる", () => {
+  // 注文番号の衝突は「番号を作り直して再試行」、
+  // 二重送信の判定用IDの衝突は「同じ注文として扱う」で、意味が正反対。
+  const orderNumberClash = Object.assign(new Error("duplicate key"), {
+    code: "23505",
+    constraint: "orders_order_number_unique",
+  });
+  const repeatedAttempt = Object.assign(new Error("duplicate key"), {
+    code: "23505",
+    constraint: "orders_client_request_id_key",
+  });
+
+  assert.equal(isUniqueViolationOn(repeatedAttempt, "orders_client_request_id_key"), true);
+  assert.equal(isUniqueViolationOn(orderNumberClash, "orders_client_request_id_key"), false);
+  assert.equal(isUniqueViolationOn(orderNumberClash, "orders_order_number_unique"), true);
+});
+
+test("一意制約エラー：Drizzle が包んでいても制約名まで届く", () => {
+  const inner = Object.assign(new Error("duplicate key"), {
+    code: "23505",
+    constraint: "orders_client_request_id_key",
+  });
+  const wrapped = Object.assign(new Error("Failed query"), { cause: inner });
+
+  assert.equal(isUniqueViolationOn(wrapped, "orders_client_request_id_key"), true);
+  assert.equal(isUniqueViolationOn(wrapped, "orders_order_number_unique"), false);
+});
+
+test("一意制約エラー：制約名が無いドライバでも誤判定しない", () => {
+  const noConstraint = Object.assign(new Error("duplicate key"), { code: "23505" });
+  assert.equal(isUniqueViolation(noConstraint), true);
+  assert.equal(isUniqueViolationOn(noConstraint, "orders_client_request_id_key"), false);
 });

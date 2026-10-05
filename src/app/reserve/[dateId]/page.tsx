@@ -296,7 +296,12 @@ export default function ProductSelectionPage() {
                       <button
                         type="button"
                         aria-label="1つ増やす"
-                        aria-disabled={atCap}
+                        /*
+                          `aria-disabled` はここでは付けない。この状態のボタンは
+                          押せば理由を返すので「無効」ではないし、無効と伝えると
+                          読み上げソフトや自動操作からは押せなくなり、肝心の説明に
+                          たどり着けなくなる。見た目で止まっていることは分かる。
+                        */
                         onClick={(e) => {
                           if (atCap) {
                             handleCapAttempt(product.id, e.currentTarget);

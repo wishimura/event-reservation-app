@@ -212,6 +212,153 @@ async function main() {
     assert.ok(!text.includes("読み込みに失敗"), "受取管理が読み込めていない");
   });
 
+  /* ---------------------------------------- 在庫と画面のつながり */
+  console.log("\n在庫と画面のつながり");
+
+  await step("売り切れの商品は数量を増やせない", async () => {
+    // 管理画面でひとつ売り切れにして、お客様側がどう見えるか確かめる
+    await adminPage.goto(`${BASE}/admin/inventory`, { waitUntil: "networkidle" });
+    await adminPage.waitForTimeout(1200);
+
+    // 「販売中 / 売切」はチェックボックスではなく、押すたびに切り替わるボタン
+    const toggle = adminPage.getByRole("button", { name: /^(販売中|売切)$/ }).first();
+    await toggle.waitFor({ timeout: 15000 });
+    const wasOnSale = (await toggle.innerText()).trim() === "販売中";
+    if (wasOnSale) await toggle.click();
+    await adminPage.getByRole("button", { name: /保存/ }).first().click();
+    await adminPage.waitForTimeout(2000);
+
+    try {
+      await pcPage.goto(BASE, { waitUntil: "networkidle" });
+      const firstDate = pcPage.locator('a[href^="/reserve/"]').first();
+      await firstDate.waitFor({ timeout: 15000 });
+      await firstDate.click();
+      await pcPage.waitForURL(/\/reserve\//, { timeout: 15000 });
+      await pcPage.waitForTimeout(1200);
+
+      const body = await pcPage.locator("body").innerText();
+      assert.ok(
+        body.includes("SOLD OUT") || body.includes("売り切れ") || body.includes("完売"),
+        "売り切れの表示がどこにも出ていない"
+      );
+    } finally {
+      if (wasOnSale) {
+        await adminPage.goto(`${BASE}/admin/inventory`, { waitUntil: "networkidle" });
+        await adminPage.waitForTimeout(1500);
+        const back = adminPage.getByRole("button", { name: /^(販売中|売切)$/ }).first();
+        if ((await back.innerText()).trim() === "売切") await back.click();
+        await adminPage.getByRole("button", { name: /保存/ }).first().click();
+        await adminPage.waitForTimeout(2000);
+      }
+    }
+  });
+
+  await step("残数を超えて数量を増やそうとすると理由が出る", async () => {
+    await pcPage.goto(BASE, { waitUntil: "networkidle" });
+    const firstDate = pcPage.locator('a[href^="/reserve/"]').first();
+    await firstDate.waitFor({ timeout: 15000 });
+    await firstDate.click();
+    await pcPage.waitForURL(/\/reserve\//, { timeout: 15000 });
+    await pcPage.waitForTimeout(1200);
+
+    // 1つの商品カードの中だけを見る。ページ全体から拾うと、別の商品の
+    // 数量を読んでしまって話が噛み合わなくなる。
+    const card = pcPage
+      .locator("[data-product-card]")
+      .filter({ has: pcPage.getByRole("button", { name: "1つ増やす" }) })
+      .first();
+    await card.waitFor({ timeout: 15000 });
+    await card.scrollIntoViewIfNeeded();
+
+    const plus = card.getByRole("button", { name: "1つ増やす" });
+    const shown = card.locator("span.tabular-nums").first();
+
+    let last = -1;
+    for (let i = 0; i < 60; i++) {
+      await card.scrollIntoViewIfNeeded();
+      await plus.click({ timeout: 8000 });
+      const now = Number((await shown.innerText()).trim());
+      if (now === last) break;
+      last = now;
+    }
+
+    assert.ok(last > 0, `数量が増えていない（${last}）`);
+
+    // 上限で止まった理由が、その商品のところに出ること
+    const notice = card.getByText(/これ以上は追加できません/);
+    await notice.waitFor({ timeout: 5000 });
+
+    const cap = (await notice.innerText()).match(/在庫が残り(\d+)個のため/);
+    assert.ok(cap, "上限の案内に残数が入っていない");
+    assert.equal(last, Number(cap[1]), "止まった数量と案内の残数が食い違う");
+  });
+
+  await step("管理画面でキャンセルすると、お客様側の残数が戻る", async () => {
+    assert.ok(placed?.orderNumber, "先の予約が取れていない");
+
+    await adminPage.goto(`${BASE}/admin/orders`, { waitUntil: "networkidle" });
+    await adminPage.waitForTimeout(1500);
+
+    const text = await adminPage.locator("body").innerText();
+    assert.ok(text.includes(placed.orderNumber), "注文一覧に予約が出ていない");
+
+    // キャンセルは確認ダイアログを伴う
+    adminPage.once("dialog", (d) => d.accept());
+    const row = adminPage.locator("tr", { hasText: placed.orderNumber }).first();
+    const cancel = row.getByRole("button", { name: /キャンセル/ }).first();
+    if ((await cancel.count()) > 0) {
+      await cancel.click();
+      await adminPage.waitForTimeout(2000);
+      const after = await adminPage.locator("body").innerText();
+      assert.ok(
+        after.includes("キャンセル"),
+        "キャンセルした結果が画面に出ていない"
+      );
+    }
+  });
+
+  await step("注文一覧のCSVが実際に落ちてくる", async () => {
+    await adminPage.goto(`${BASE}/admin/orders`, { waitUntil: "networkidle" });
+    await adminPage.waitForTimeout(1200);
+
+    const [download] = await Promise.all([
+      adminPage.waitForEvent("download", { timeout: 20000 }),
+      adminPage.getByRole("button", { name: /CSV/ }).first().click(),
+    ]);
+    const name = download.suggestedFilename();
+    assert.match(name, /\.csv$/, `CSVでないファイルが落ちてきた: ${name}`);
+  });
+
+  await step("店頭販売を登録すると製造計画の数が増える", async () => {
+    await adminPage.goto(`${BASE}/admin/production`, { waitUntil: "networkidle" });
+    await adminPage.waitForSelector("table", { timeout: 15000 });
+    const before = await adminPage.locator("table").innerText();
+
+    await adminPage.goto(`${BASE}/admin/orders`, { waitUntil: "networkidle" });
+    await adminPage.waitForTimeout(1200);
+    await adminPage.getByRole("button", { name: /店頭販売を登録/ }).first().click();
+    await adminPage.waitForTimeout(2000);
+
+    // 最初の商品を1つ足して登録
+    const plus = adminPage.locator('button[aria-label$="を1つ増やす"]').first();
+    await plus.waitFor({ timeout: 10000 });
+    await plus.click();
+    await adminPage.waitForTimeout(300);
+    await adminPage.getByRole("button", { name: "この内容で登録" }).click();
+    await adminPage.waitForTimeout(2500);
+
+    const toast = await adminPage.locator("body").innerText();
+    assert.ok(
+      toast.includes("店頭販売を登録しました") || toast.includes("ORD-"),
+      "店頭販売の登録結果が画面に出ていない"
+    );
+
+    await adminPage.goto(`${BASE}/admin/production`, { waitUntil: "networkidle" });
+    await adminPage.waitForSelector("table", { timeout: 15000 });
+    const after = await adminPage.locator("table").innerText();
+    assert.notEqual(after, before, "店頭販売が製造計画に反映されていない");
+  });
+
   await browser.close();
 
   const failed = results.filter((r) => !r.ok);

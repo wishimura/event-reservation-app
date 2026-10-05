@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { productImages } from "@/db/schema";
+import { isUuid } from "@/lib/http";
 
 /**
  * Serves an uploaded product photo.
@@ -17,7 +18,7 @@ export async function GET(
   const { id } = await params;
 
   // Postgres rejects a malformed uuid rather than returning nothing.
-  if (!/^[0-9a-f-]{36}$/i.test(id)) {
+  if (!isUuid(id)) {
     return new NextResponse(null, { status: 404 });
   }
 

@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { dailyProductInventory, products } from "@/db/schema";
 import { refreshDateReservationStatus, resolveSoldOut } from "@/lib/inventory";
 import { getActiveEvent, getAllEventDates } from "@/lib/queries";
+import { isUuid, readJsonObject } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
@@ -61,12 +62,11 @@ interface InventoryPatchItem {
 }
 
 export async function PATCH(request: NextRequest) {
-  let items: InventoryPatchItem[];
-  try {
-    ({ items } = await request.json());
-  } catch {
+  const parsed = await readJsonObject(request);
+  if (!parsed) {
     return NextResponse.json({ error: "リクエストが不正です" }, { status: 400 });
   }
+  let items = parsed.items as InventoryPatchItem[];
 
   if (!Array.isArray(items) || items.length === 0) {
     return NextResponse.json({ error: "更新対象がありません" }, { status: 400 });
@@ -74,7 +74,7 @@ export async function PATCH(request: NextRequest) {
 
   for (const item of items) {
     if (
-      !item.id ||
+      !isUuid(item.id) ||
       !Number.isInteger(item.production_quantity) ||
       item.production_quantity < 0 ||
       typeof item.is_sold_out !== "boolean" ||

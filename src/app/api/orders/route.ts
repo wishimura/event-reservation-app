@@ -20,6 +20,7 @@ import {
   isPastReservationDeadline,
   parsePickupTimeSlots,
 } from "@/lib/utils";
+import { isUuid, readJsonObject } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
@@ -61,12 +62,13 @@ interface OrderRequestBody {
 }
 
 export async function POST(request: NextRequest) {
-  let body: OrderRequestBody;
-  try {
-    body = await request.json();
-  } catch {
+  // `request.json()` は null や配列も素通しする。そこからフィールドを
+  // 読むと例外になり、本来 400 で済む話が 500 になる。
+  const parsed = await readJsonObject(request);
+  if (!parsed) {
     return NextResponse.json({ error: "リクエストが不正です" }, { status: 400 });
   }
+  const body = parsed as unknown as OrderRequestBody;
 
   if (
     !body.event_id ||
@@ -86,6 +88,15 @@ export async function POST(request: NextRequest) {
 
   if (body.payment_method !== "cash" && body.payment_method !== "credit_card") {
     return NextResponse.json({ error: "支払方法が不正です" }, { status: 400 });
+  }
+
+  // uuid でないものは、問い合わせた先の Postgres が型エラーで突き返す。
+  // 手前で見ておかないと「見つからない」が「サーバーエラー」として出る。
+  if (!isUuid(body.event_id) || !isUuid(body.event_date_id)) {
+    return NextResponse.json(
+      { error: "指定された受取日が見つかりません" },
+      { status: 400 }
+    );
   }
 
   /**
@@ -111,7 +122,7 @@ export async function POST(request: NextRequest) {
   const quantityByProduct = new Map<string, number>();
   for (const item of body.items) {
     if (
-      !item.product_id ||
+      !isUuid(item.product_id) ||
       !Number.isInteger(item.quantity) ||
       item.quantity < 1
     ) {

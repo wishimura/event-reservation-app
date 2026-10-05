@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cancelOrderAndReleaseStock, OrderCancelError } from "@/lib/orders";
+import { isUuid } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,11 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
+
+    if (!isUuid(id)) {
+      return NextResponse.json({ error: "注文が見つかりません" }, { status: 404 });
+    }
+
     const result = await cancelOrderAndReleaseStock(id);
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {

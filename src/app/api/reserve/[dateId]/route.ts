@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { dailyProductInventory, eventDates, events, products } from "@/db/schema";
+import { isUuid } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +17,12 @@ export async function GET(
   try {
     const { dateId } = await params;
 
-    if (!dateId) {
+    // Postgres はこの形でないものを型エラーで弾くので、問い合わせる前に見る。
+    // 壊れたリンクを踏んだお客様に出すべきは 500 ではなく「見つかりません」。
+    if (!isUuid(dateId)) {
       return NextResponse.json(
-        { error: "日付IDが指定されていません" },
-        { status: 400 }
+        { error: "指定された受取日が見つかりません" },
+        { status: 404 }
       );
     }
 
