@@ -3,6 +3,7 @@ import {
   closeE2eDb,
   FIXTURE,
   loginAsAdmin,
+  openPickupGroup,
   pickupGroup,
   pickupOrder,
   reserve,
@@ -66,7 +67,13 @@ test.describe("S-05 受取管理と名寄せ", () => {
     await loginAsAdmin(page);
     await page.goto("/admin/pickup");
 
-    const group = pickupGroup(page, first.orderNumber);
+    // 畳んだ状態でも、どなたかを見分けるものは出ている。
+    const collapsed = pickupGroup(page, NAME);
+    await expect(collapsed).toContainText("3件まとめ");
+    await expect(collapsed).toContainText(REPEATER.email);
+    await expect(collapsed).toContainText("0/3 受取済");
+
+    const group = await openPickupGroup(page, NAME);
     await expect(group).toContainText("3件まとめ");
     // 黙ってまとめるのがいちばん危ない。理由をその場に出す。
     await expect(group).toContainText("メールアドレスと電話番号が一致");
@@ -86,12 +93,28 @@ test.describe("S-05 受取管理と名寄せ", () => {
     await loginAsAdmin(page);
     await page.goto("/admin/pickup");
 
-    // 当日に効くのはこの一行だけ。両方のカードに出ていること。
-    for (const number of [first.orderNumber, other.orderNumber]) {
-      await expect(pickupGroup(page, number)).toContainText(
+    /*
+      当日に効くのはこの一行だけなので、**畳んだままでも**出ていること。
+      クリックの向こうに隠れていると、開かずに渡してしまいます。
+    */
+    const cards = page.locator("[data-pickup-group]");
+    await expect(cards).toHaveCount(2);
+    for (let i = 0; i < 2; i++) {
+      await expect(cards.nth(i)).toContainText(
         `同じ「${NAME}」様が他にもいらっしゃいます`
       );
     }
+
+    // 開けば、それぞれの注文番号で見分けられる。
+    for (const number of [first.orderNumber, other.orderNumber]) {
+      const group = page
+        .locator("[data-pickup-group]")
+        .filter({ hasText: `同じ「${NAME}」様` })
+        .nth(number === first.orderNumber ? 0 : 1);
+      await group.getByRole("button").first().click();
+    }
+    await expect(pickupOrder(page, first.orderNumber)).toBeVisible();
+    await expect(pickupOrder(page, other.orderNumber)).toBeVisible();
   });
 
   test("名前でもメールでも注文番号でも、まとまりごと出てくる", async ({ page }) => {
@@ -103,7 +126,10 @@ test.describe("S-05 受取管理と名寄せ", () => {
 
     for (const term of [NAME, REPEATER.email, first.orderNumber]) {
       await search.fill(term);
-      await expect(pickupGroup(page, first.orderNumber)).toContainText("3件まとめ");
+      // 検索中は開いたまま。番号で引いたのにもう一度押させない。
+      const group = pickupGroup(page, NAME);
+      await expect(group).toContainText("3件まとめ");
+      await expect(group.locator(`[data-order-row="${first.orderNumber}"]`)).toBeVisible();
     }
   });
 
@@ -112,6 +138,7 @@ test.describe("S-05 受取管理と名寄せ", () => {
 
     await loginAsAdmin(page);
     await page.goto("/admin/pickup");
+    await openPickupGroup(page, NAME);
 
     const row = pickupOrder(page, third.orderNumber);
     await expect(row).toContainText("テイクアウト");
@@ -128,7 +155,44 @@ test.describe("S-05 受取管理と名寄せ", () => {
     await expect(row).toContainText("テイクアウト");
 
     await page.reload();
+    await openPickupGroup(page, NAME);
     await expect(pickupOrder(page, third.orderNumber)).toContainText("テイクアウト");
+  });
+
+  test("既定では畳んであり、押すと中身が開く", async ({ page }) => {
+    /*
+      当日は20件ほど並びます。全部広げたままだと、お客様1人ぶんが縦に何行も
+      積み上がって、目当ての方を探すだけでスクロールし続けることになります。
+    */
+    const { first } = await placeOrders(page);
+
+    await loginAsAdmin(page);
+    await page.goto("/admin/pickup");
+
+    const group = pickupGroup(page, NAME);
+    await expect(group).toBeVisible();
+
+    // 畳んでいても、見分けるのに要るものは出ている。
+    await expect(group).toContainText(NAME);
+    await expect(group).toContainText(REPEATER.email);
+    await expect(group).toContainText(REPEATER.phone);
+    await expect(group).toContainText("0/3 受取済");
+
+    // 注文の中身と、渡すためのボタンは隠れている。
+    await expect(pickupOrder(page, first.orderNumber)).toBeHidden();
+    await expect(
+      group.getByRole("button", { name: "残り3件をまとめて受取完了" })
+    ).toBeHidden();
+
+    await openPickupGroup(page, NAME);
+    await expect(pickupOrder(page, first.orderNumber)).toBeVisible();
+    await expect(
+      group.getByRole("button", { name: "残り3件をまとめて受取完了" })
+    ).toBeVisible();
+
+    // もう一度押せば畳める。
+    await group.getByRole("button").first().click();
+    await expect(pickupOrder(page, first.orderNumber)).toBeHidden();
   });
 
   test("1件ずつでも、残りをまとめてでも渡せる", async ({ page }) => {
@@ -137,7 +201,7 @@ test.describe("S-05 受取管理と名寄せ", () => {
     await loginAsAdmin(page);
     await page.goto("/admin/pickup");
 
-    const group = pickupGroup(page, first.orderNumber);
+    const group = await openPickupGroup(page, NAME);
     await pickupOrder(page, first.orderNumber)
       .getByRole("button", { name: "受取完了" })
       .click();

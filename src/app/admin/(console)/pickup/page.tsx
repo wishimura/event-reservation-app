@@ -18,6 +18,15 @@ export default function PickupPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  /**
+   * 開いているまとまり。
+   *
+   * 当日は20件ほどが並びます。全部を広げたまま出すと、お客様1人ぶんが縦に
+   * 4行ずつ積み上がって、目当ての方を探すだけでスクロールし続けることに
+   * なります。畳んだ状態では、どなたかを見分けるのに要るもの（お名前・
+   * メールアドレス・電話番号・残り件数）だけを出します。
+   */
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadTodayOrders();
@@ -35,6 +44,8 @@ export default function PickupPage() {
    * お客様が完了メールを1枚だけ見せてこられたとき、その番号で引けば
    * 「他にも2件ありますよ」がその場で分かるようにするため。
    */
+  const searching = search.trim().length > 0;
+
   const visibleGroups = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return groups;
@@ -49,6 +60,15 @@ export default function PickupPage() {
       )
     );
   }, [groups, search]);
+
+  function toggleGroup(key: string) {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   async function loadTodayOrders() {
     setLoadError("");
@@ -225,6 +245,12 @@ export default function PickupPage() {
           );
           const head = groupOrders[0];
           const multiple = groupOrders.length > 1;
+          /*
+            検索しているあいだは開いたままにする。お客様が完了メールを見せて
+            こられて番号で引いたのに、もう一度押さないと中身が見えないのでは
+            一手増えるだけです。
+          */
+          const isOpen = searching || openGroups.has(group.key);
 
           return (
             <div
@@ -234,9 +260,30 @@ export default function PickupPage() {
                 allDone ? "border-emerald-200 bg-emerald-50/30" : "border-slate-200"
               }`}
             >
-              {/* お客様 */}
-              <div className="border-b border-slate-100 px-4 pt-4 pb-3">
+              {/*
+                お客様。ここを押すと中身が開く。
+
+                畳んでいても出しておくのは、どなたかを見分けるのに要るものだけ:
+                お名前・連絡先・残り件数、そして**同姓同名の警告**。警告を
+                クリックの向こうに隠すと、開かずに渡してしまう事故が起きます。
+              */}
+              <button
+                type="button"
+                onClick={() => toggleGroup(group.key)}
+                aria-expanded={isOpen}
+                className={`w-full px-4 pt-4 pb-3 text-left transition-colors hover:bg-slate-50 ${
+                  isOpen ? "border-b border-slate-100" : ""
+                }`}
+              >
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span
+                    aria-hidden
+                    className={`text-slate-400 transition-transform ${
+                      isOpen ? "rotate-90" : ""
+                    }`}
+                  >
+                    ▶
+                  </span>
                   <span className="text-lg font-bold text-slate-800">
                     {head.customer_name}
                   </span>
@@ -271,7 +318,7 @@ export default function PickupPage() {
 
                 {/*
                   同姓同名の別の方がいる場合の警告。連絡先が違えば別人として
-                  扱うので、取り違えを防げるのはこの一行だけ。
+                  扱うので、取り違えを防げるのはこの一行だけ。畳んでいても出す。
                 */}
                 {group.hasNameCollision && (
                   <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
@@ -279,10 +326,10 @@ export default function PickupPage() {
                     連絡先が異なるため、別の方として表示しています。注文番号をご確認ください。
                   </p>
                 )}
-              </div>
+              </button>
 
               {/* 注文（まとめても1件ずつ見せる） */}
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-slate-100" hidden={!isOpen}>
                 {groupOrders.map((order) => {
                   const isPickedUp = order.pickup_status === "picked_up";
                   const busy = updatingId === order.id;
@@ -378,7 +425,7 @@ export default function PickupPage() {
               </div>
 
               {/* まとめ */}
-              {multiple && (
+              {multiple && isOpen && (
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3">
                   <p className="text-sm text-slate-600">
                     合計 {groupItems} 点

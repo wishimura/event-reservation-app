@@ -43,6 +43,22 @@ export function pickupOrder(page: Page, orderNumber: string): Locator {
 }
 
 /**
+ * 受取管理のまとまりを開く。
+ *
+ * 当日は20件ほど並ぶので、既定では畳んであります。すでに開いていれば何もしません
+ * （検索中は開いたままになるため）。
+ */
+export async function openPickupGroup(page: Page, text: string): Promise<Locator> {
+  const group = pickupGroup(page, text);
+  const header = group.getByRole("button").first();
+  if ((await header.getAttribute("aria-expanded")) !== "true") {
+    await header.click();
+  }
+  await expect(header).toHaveAttribute("aria-expanded", "true");
+  return group;
+}
+
+/**
  * 横にはみ出していないこと。
  *
  * スマホで横スクロールが出ると、ボタンが画面の外に逃げて押せなくなります。
