@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, notInArray } from "drizzle-orm";
 import { db } from "@/db";
-import { dailyProductInventory, products } from "@/db/schema";
+import { dailyProductInventory, eventDates, products } from "@/db/schema";
 import { refreshDateReservationStatus, resolveSoldOut } from "@/lib/inventory";
 import { getActiveEvent, getAllEventDates } from "@/lib/queries";
 import { isUuid, readJsonObject } from "@/lib/http";
@@ -44,7 +44,32 @@ export async function GET(request: NextRequest) {
         ).map((r) => ({ ...r.inventory, product: r.product }))
       : [];
 
-    return NextResponse.json({ event, dates, inventory });
+    /*
+      その受取日に行が無い商品。
+
+      行が無い商品は、その日には存在しない扱いになります。お店から見ると
+      「ある1日だけ、その品が在庫管理にも出てこない」という形で、放っておくと
+      当日まで気づけません。画面から塞げるよう、ここで数えて返します。
+    */
+    const missing = dateId
+      ? await db
+          .select({ id: products.id, name: products.name })
+          .from(products)
+          .where(
+            and(
+              eq(products.event_id, event.id),
+              inventory.length > 0
+                ? notInArray(
+                    products.id,
+                    inventory.map((i) => i.product_id)
+                  )
+                : undefined
+            )
+          )
+          .orderBy(asc(products.sort_order))
+      : [];
+
+    return NextResponse.json({ event, dates, inventory, missing_products: missing });
   } catch (error) {
     console.error("Inventory load error:", error);
     return NextResponse.json(
@@ -59,6 +84,82 @@ interface InventoryPatchItem {
   production_quantity: number;
   is_sold_out: boolean;
   is_hidden: boolean;
+}
+
+/**
+ * その受取日に行が無い商品の行を作る（受付枠は0）。
+ *
+ * 0 で作るのは、勝手に売り始めないためです。お店が在庫管理で数を入れて初めて
+ * 並びます。何度押しても結果は同じになります。
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const body = await readJsonObject(request);
+    const dateId = body?.event_date_id;
+
+    if (typeof dateId !== "string" || !isUuid(dateId)) {
+      return NextResponse.json(
+        { error: "受取日が見つかりません" },
+        { status: 404 }
+      );
+    }
+
+    const event = await getActiveEvent();
+    if (!event) {
+      return NextResponse.json(
+        { error: "現在開催中のイベントはありません" },
+        { status: 404 }
+      );
+    }
+
+    const [date] = await db
+      .select()
+      .from(eventDates)
+      .where(
+        and(eq(eventDates.id, dateId), eq(eventDates.event_id, event.id))
+      );
+
+    if (!date) {
+      return NextResponse.json(
+        { error: "受取日が見つかりません" },
+        { status: 404 }
+      );
+    }
+
+    const added = await db.transaction(async (tx) => {
+      const existing = await tx
+        .select({ product_id: dailyProductInventory.product_id })
+        .from(dailyProductInventory)
+        .where(eq(dailyProductInventory.event_date_id, dateId));
+
+      const have = new Set(existing.map((r) => r.product_id));
+
+      const all = await tx
+        .select({ id: products.id })
+        .from(products)
+        .where(eq(products.event_id, event.id));
+
+      const missing = all.filter((p) => !have.has(p.id));
+      if (missing.length === 0) return 0;
+
+      await tx.insert(dailyProductInventory).values(
+        missing.map((p) => ({
+          event_date_id: dateId,
+          product_id: p.id,
+          production_quantity: 0,
+        }))
+      );
+      return missing.length;
+    });
+
+    return NextResponse.json({ added });
+  } catch (error) {
+    console.error("Inventory backfill error:", error);
+    return NextResponse.json(
+      { error: "商品の追加に失敗しました" },
+      { status: 500 }
+    );
+  }
 }
 
 export async function PATCH(request: NextRequest) {

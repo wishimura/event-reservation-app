@@ -58,16 +58,25 @@ export async function POST(request: NextRequest) {
         })
         .returning();
 
-      const activeProducts = await tx
+      /*
+        販売中かどうかで絞りません。
+
+        絞ると、その時点で販売停止だった商品は**この日だけ行が作られず**、
+        あとで販売を再開しても戻りません。お店から見ると「ある1日だけ、その品が
+        在庫管理にも出てこない」という形になり、画面から直す手段もありません。
+        気づくのはたいてい当日です。
+
+        販売停止の商品はお客様の画面に出ないので（/api/reserve が
+        products.is_active で絞っています）、行があっても害はありません。
+      */
+      const allProducts = await tx
         .select()
         .from(products)
-        .where(
-          and(eq(products.event_id, event.id), eq(products.is_active, true))
-        );
+        .where(eq(products.event_id, event.id));
 
-      if (activeProducts.length > 0) {
+      if (allProducts.length > 0) {
         await tx.insert(dailyProductInventory).values(
-          activeProducts.map((p) => ({
+          allProducts.map((p) => ({
             event_date_id: date.id,
             product_id: p.id,
             production_quantity: capacity,
@@ -75,7 +84,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      return { date, inventory_rows: activeProducts.length };
+      return { date, inventory_rows: allProducts.length };
     });
 
     return NextResponse.json(created, { status: 201 });

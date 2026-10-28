@@ -714,6 +714,104 @@ test("アップロードした画像を商品に設定でき、お客様側に�
 
 /* ============================================ 受取日の追加 */
 
+test("販売停止中の商品も、受取日を足したときに一緒に作られる", async () => {
+  /*
+    ここを絞ると、販売停止だった商品だけ**その日の行が作られず**、販売を再開
+    しても戻りません。お店から見ると「ある1日だけ、その品が在庫管理にも出て
+    こない」という形になり、気づくのは当日です。実際に本番で起きました。
+  */
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+
+  const { body: created } = await api("/api/admin/products", {
+    method: "POST",
+    body: JSON.stringify({ name: `停止中 ${Date.now()}`, price: 500 }),
+  });
+  const productId = (created as { product: { id: string } }).product.id;
+
+  await api(`/api/admin/products/${productId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ is_active: false }),
+  });
+
+  const { body: all } = await api("/api/admin/event");
+  const stale = (all as { dates: Array<{ id: string; pickup_date: string }> }).dates
+    .find((d) => d.pickup_date === tomorrow);
+  if (stale) await api(`/api/admin/event/dates/${stale.id}`, { method: "DELETE" });
+
+  const { status, body } = await api("/api/admin/event/dates", {
+    method: "POST",
+    body: JSON.stringify({ pickup_date: tomorrow }),
+  });
+  assert.equal(status, 201);
+  const { date } = body as { date: { id: string } };
+
+  try {
+    const rows = await inventoryFor(date.id);
+    assert.ok(
+      rows.some((r) => r.product_id === productId),
+      "販売停止中の商品の行が作られていない（再開してもこの日だけ並ばなくなる）"
+    );
+  } finally {
+    await api(`/api/admin/event/dates/${date.id}`, { method: "DELETE" });
+    await api(`/api/admin/products/${productId}`, { method: "DELETE" });
+  }
+});
+
+test("その日に無い商品を、画面から足し直せる", async () => {
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+
+  const { body: all } = await api("/api/admin/event");
+  const stale = (all as { dates: Array<{ id: string; pickup_date: string }> }).dates
+    .find((d) => d.pickup_date === tomorrow);
+  if (stale) await api(`/api/admin/event/dates/${stale.id}`, { method: "DELETE" });
+
+  const { body } = await api("/api/admin/event/dates", {
+    method: "POST",
+    body: JSON.stringify({ pickup_date: tomorrow }),
+  });
+  const { date } = body as { date: { id: string } };
+
+  try {
+    // この受取日より後に足した商品は、全受取日ぶん作られるので穴はあかない。
+    // 穴があいた状態そのものは、この経路からは作れない。ここで確かめるのは
+    // 「押しても壊れない」「二度押しても増えない」こと。
+    const first = await api("/api/admin/inventory", {
+      method: "POST",
+      body: JSON.stringify({ event_date_id: date.id }),
+    });
+    assert.equal(first.status, 200);
+
+    const before = await inventoryFor(date.id);
+    const second = await api("/api/admin/inventory", {
+      method: "POST",
+      body: JSON.stringify({ event_date_id: date.id }),
+    });
+    assert.equal(second.status, 200);
+    assert.equal((second.body as { added: number }).added, 0, "二度押しで増えている");
+
+    const after = await inventoryFor(date.id);
+    assert.equal(after.length, before.length, "二度押しで行が増えている");
+  } finally {
+    await api(`/api/admin/event/dates/${date.id}`, { method: "DELETE" });
+  }
+});
+
+test("足し直しは、おかしな受取日を断る", async () => {
+  for (const bad of [{}, { event_date_id: "not-a-uuid" }, { event_date_id: 123 }]) {
+    const { status } = await api("/api/admin/inventory", {
+      method: "POST",
+      body: JSON.stringify(bad),
+    });
+    assert.equal(status, 404, `${JSON.stringify(bad)} が通っている`);
+  }
+
+  const { status } = await api("/api/admin/inventory", {
+    method: "POST",
+    body: JSON.stringify({ event_date_id: "00000000-0000-4000-8000-000000000000" }),
+  });
+  assert.equal(status, 404, "存在しない受取日が通っている");
+});
+
 test("受取日を追加すると、受付枠は0で作られる", async () => {
   const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
 

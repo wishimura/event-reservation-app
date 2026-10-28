@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
   closeE2eDb,
+  e2eDb,
   FIXTURE,
   loginAsAdmin,
   productCard,
@@ -102,6 +103,41 @@ test.describe("S-03 在庫", () => {
 
     await page.goto(`/reserve/${data.today.id}`);
     await expect(productCard(page, FIXTURE.plenty.name)).toContainText("SOLD OUT");
+  });
+
+  test("その日だけ並ばない商品があれば、画面が知らせて、その場で直せる", async ({ page }) => {
+    /*
+      （受取日 × 商品）の行が無い商品は、その日には存在しない扱いになります。
+      以前は受取日を足すときに「販売中」の商品だけを作っていたため、そのとき
+      販売停止だった品が1日だけ抜け、画面から直す手段もありませんでした。
+      本番で実際に起きています。
+
+      ここでは行を1つ消して、抜けている状態を作ります。
+    */
+    await e2eDb().query(
+      `delete from daily_product_inventory
+        where event_date_id = $1 and product_id = $2`,
+      [data.today.id, data.products.plenty]
+    );
+
+    await loginAsAdmin(page);
+    await page.goto("/admin/inventory");
+    await page.getByRole("button", { name: /\(今日\)$/ }).click();
+
+    // 黙って消えているのがいちばん危ない。名前を出して知らせること。
+    await expect(page.getByText(/設定されていない商品が 1 件あります/)).toBeVisible();
+    await expect(page.locator("main")).toContainText(FIXTURE.plenty.name);
+
+    await page.getByRole("button", { name: "この受取日にも並べる" }).click();
+    await expect(page.getByText(/1 件を追加しました/)).toBeVisible();
+
+    // 戻ってくるが、受付枠は0。お店が数を入れるまで勝手には売らない。
+    const row = rowContaining(page, FIXTURE.plenty.name);
+    await expect(row).toBeVisible();
+    await expect(row.locator('input[inputmode="numeric"]')).toHaveValue("0");
+
+    // 知らせは消えている。
+    await expect(page.getByText(/設定されていない商品が/)).toHaveCount(0);
   });
 
   test("受付上限を予約数より下げようとすると、商品名つきで断られる", async ({ page }) => {

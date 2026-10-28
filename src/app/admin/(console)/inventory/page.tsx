@@ -17,6 +17,9 @@ export default function InventoryPage() {
   const [eventDates, setEventDates] = useState<EventDate[]>([]);
   const [selectedDateId, setSelectedDateId] = useState<string>("");
   const [inventory, setInventory] = useState<EditableInventory[]>([]);
+  /** この受取日に行が無い商品。あれば、その日だけ並ばないということ。 */
+  const [missing, setMissing] = useState<{ id: string; name: string }[]>([]);
+  const [fixing, setFixing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
@@ -30,10 +33,12 @@ export default function InventoryPage() {
     if (!dateId) return;
     setLoading(true);
     try {
-      const { inventory: rows } = await fetchJson<{
+      const { inventory: rows, missing_products } = await fetchJson<{
         inventory: DailyProductInventory[];
+        missing_products?: { id: string; name: string }[];
       }>(`/api/admin/inventory?dateId=${encodeURIComponent(dateId)}`);
 
+      setMissing(missing_products ?? []);
       setInventory(
         rows.map((inv) => ({
           ...inv,
@@ -171,6 +176,34 @@ export default function InventoryPage() {
     }
   }
 
+  /** この受取日に無い商品の行を作る。受付枠は0なので、勝手には売れない。 */
+  async function handleAddMissing() {
+    if (!selectedDateId) return;
+    setFixing(true);
+    try {
+      const { added } = await fetchJson<{ added: number }>(
+        "/api/admin/inventory",
+        {
+          method: "POST",
+          body: JSON.stringify({ event_date_id: selectedDateId }),
+        }
+      );
+      await loadInventory(selectedDateId);
+      setSaveMsg(
+        `${added} 件を追加しました。受付上限は0なので、この画面で数を入れてください`
+      );
+      setTimeout(() => setSaveMsg(""), 6000);
+    } catch (err) {
+      console.error("Inventory backfill error:", err);
+      setSaveMsg(
+        err instanceof ApiError ? err.message : "商品の追加に失敗しました"
+      );
+      setTimeout(() => setSaveMsg(""), 7000);
+    } finally {
+      setFixing(false);
+    }
+  }
+
   const hasDirtyItems = inventory.some((i) => i._dirty);
 
   return (
@@ -248,6 +281,30 @@ export default function InventoryPage() {
               }
             }}
           />
+        </div>
+      )}
+
+      {/*
+        この日だけ並ばない商品があることを、その場で知らせる。放っておくと
+        気づくのは当日になる。
+      */}
+      {missing.length > 0 && (
+        <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-bold text-amber-900">
+            この受取日に設定されていない商品が {missing.length} 件あります
+          </p>
+          <p className="mt-1 text-xs leading-relaxed text-amber-800">
+            {missing.map((m) => m.name).join("、")}
+            <br />
+            このままだと、この日だけこの商品は並びません。
+          </p>
+          <button
+            onClick={handleAddMissing}
+            disabled={fixing}
+            className="mt-2 rounded-lg bg-amber-700 px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-amber-800 disabled:opacity-50"
+          >
+            {fixing ? "追加中..." : "この受取日にも並べる"}
+          </button>
         </div>
       )}
 
