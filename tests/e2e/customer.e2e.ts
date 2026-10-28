@@ -31,15 +31,34 @@ test.describe("S-01 お客様の予約", () => {
     await expect(page.getByText(placed.orderNumber)).toBeVisible();
   });
 
-  test("受取時間の枠を選ばせる画面がどこにも残っていない", async ({ page }) => {
-    // 時間枠はやめた仕様。消し残すと、選べない欄をお客様に見せることになる。
+  test("受取時間の枠を選ばせる操作がどこにも残っていない", async ({ page }) => {
+    /*
+      時間枠はやめた仕様です。消し残すと、選べない欄をお客様に見せることになります。
+
+      ここで見るのは**選ばせる操作が無いこと**であって、「受取時間」という語が
+      無いことではありません。本番のご案内文には「受取時間は各日 11:00〜16:00 です」
+      と書かれていて、これはお店の文章なので消す理由がないからです。
+    */
+    const slotPicker = /受取時間|時間帯|時間枠/;
+
     await page.goto("/");
-    await expect(page.locator("body")).not.toContainText("受取時間");
-    await expect(page.locator("body")).not.toContainText("時間帯");
+    await expect(page.getByRole("combobox", { name: slotPicker })).toHaveCount(0);
+    await expect(page.getByRole("radio", { name: slotPicker })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: slotPicker })).toHaveCount(0);
 
     await page.goto(`/reserve/${data.today.id}`);
-    await expect(page.locator("body")).not.toContainText("受取時間");
-    await expect(page.locator("body")).not.toContainText("時間帯");
+    await productCard(page, FIXTURE.plenty.name)
+      .getByRole("button", { name: "1つ増やす" })
+      .click();
+    await page.getByRole("button", { name: /確認へ進む/ }).click();
+    await page.waitForURL(/\/reserve\/confirm/);
+
+    // 選ばせるとしたらこの画面。お召し上がり方法だけが並んでいること。
+    await expect(page.getByRole("combobox", { name: slotPicker })).toHaveCount(0);
+    await expect(page.getByRole("radio", { name: slotPicker })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: slotPicker })).toHaveCount(0);
+    await expect(page.locator("select")).toHaveCount(0);
+    await expect(page.getByText("お召し上がり方法")).toBeVisible();
   });
 
   test("受付を止めた日は押せず、直接叩いても注文が通らない", async ({ page }) => {
