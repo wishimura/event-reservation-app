@@ -6,6 +6,30 @@ config({ path: ".env.local" });
  * `src/db/index.ts` reads DATABASE_URL at import time, so it has to be pulled
  * in *after* dotenv has populated the environment.
  */
+
+/** `YYYY-MM-DD`, n 日後。日本時間で数える。 */
+function dayFromToday(n: number): string {
+  const jst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  jst.setUTCDate(jst.getUTCDate() + n);
+  return jst.toISOString().slice(0, 10);
+}
+
+/**
+ * 受取日は「今日から数えて」作ります。
+ *
+ * 固定の日付を書いておくと、その日を過ぎた瞬間に種データが使えなくなります
+ * （実際に 2026-10 の日付のまま残っていて、受付中の受取日が1つも無いせいで
+ * 結合テストが14件落ちました）。今日を含めるのは、受取管理の画面が「今日」の
+ * ぶんしか映さないためです。
+ */
+const PICKUP_DATES = {
+  today: dayFromToday(0),
+  tomorrow: dayFromToday(1),
+  dayAfter: dayFromToday(2),
+  /** 受付を止めてある日。お客様の一覧に出ないことを確かめるために要る。 */
+  closed: dayFromToday(3),
+} as const;
+
 async function main() {
   const { db } = await import("./index");
   const { events, products, eventDates, dailyProductInventory, orders, orderItems } =
@@ -27,8 +51,8 @@ async function main() {
       name: "秋の焙煎まつり",
       description:
         "自家焙煎のコーヒーと、その日の朝に焼き上げる菓子をお持ち帰りいただけます。すべて受注生産のため、事前のご予約をお願いしています。",
-      start_date: "2026-10-10",
-      end_date: "2026-10-13",
+      start_date: PICKUP_DATES.today,
+      end_date: PICKUP_DATES.closed,
       pickup_location: "となりのと 本店（1F カウンター）",
       contact_phone: "070-6669-1010",
       reservation_note:
@@ -83,10 +107,15 @@ async function main() {
   const dateRows = await db
     .insert(eventDates)
     .values([
-      { event_id: event.id, pickup_date: "2026-10-10" },
-      { event_id: event.id, pickup_date: "2026-10-11" },
-      { event_id: event.id, pickup_date: "2026-10-12" },
-      { event_id: event.id, pickup_date: "2026-10-13" },
+      { event_id: event.id, pickup_date: PICKUP_DATES.today },
+      { event_id: event.id, pickup_date: PICKUP_DATES.tomorrow },
+      { event_id: event.id, pickup_date: PICKUP_DATES.dayAfter },
+      {
+        event_id: event.id,
+        pickup_date: PICKUP_DATES.closed,
+        reservation_open: false,
+        reservation_status: "closed" as const,
+      },
     ])
     .returning();
 

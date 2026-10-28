@@ -179,6 +179,7 @@ test("注文番号：形式が一定で、連続生成しても衝突しにく�
 /* ------------------------------------------------------- DBエラーの判定 */
 
 import { isUniqueViolation, isUniqueViolationOn } from "../src/lib/db-errors";
+import { isLocalPostgres } from "../src/db/index";
 import {
   diningStyleLabel,
   handoverWording,
@@ -375,6 +376,31 @@ test("表示名：区分が未設定なら、持ち帰りの言い回しに倒�
   // 旧い注文には区分が入っていない。「来店日」と出すほうが事故になる。
   assert.deepEqual(handoverWording(null), handoverWording("takeout"));
   assert.deepEqual(handoverWording(undefined), handoverWording("takeout"));
+});
+
+/* ============================================== 接続先の見分け */
+
+test("接続先：Neon の URL を手元の DB と間違えない", () => {
+  // 間違えると本番で繋がらない。迷ったら Neon 側に倒すのが正。
+  for (const url of [
+    "postgresql://u:p@ep-cool-name-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require",
+    "postgres://u:p@db.example.com:5432/app",
+    "postgresql://u:p@10.0.0.5/app",
+    "これはURLではない",
+    "",
+  ]) {
+    assert.equal(isLocalPostgres(url), false, `Neon 側に倒せていない: ${url}`);
+  }
+});
+
+test("接続先：このコンテナの PostgreSQL は手元の DB と分かる", () => {
+  for (const url of [
+    "postgresql://postgres:postgres@localhost:5432/app_dev?sslmode=disable",
+    "postgresql://postgres:postgres@127.0.0.1:5432/app_e2e",
+    "postgres://postgres@localhost/app",
+  ]) {
+    assert.equal(isLocalPostgres(url), true, `手元の DB と判定できていない: ${url}`);
+  }
 });
 
 /* ============================================== 同じ方の名寄せ */
