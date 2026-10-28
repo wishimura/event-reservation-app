@@ -186,6 +186,16 @@ export default function ConfirmPage() {
 
   useEffect(() => {
     let cancelled = false;
+    /*
+      この画面を離れるときに必ず片付けるための控え。
+
+      片付けずに出ていくと、同じタブで2件目を頼みに戻ってきたときに、前の
+      カード欄が #square-card に残ったままもう一度 attach しようとして失敗し、
+      「決済フォームの読み込みに失敗しました」になります。1件目は通るのに
+      2件目だけ通らない、という形で出ます（本番で実際に起きました）。
+      ページを再読み込みすれば直るのは、残骸ごと消えるからです。
+    */
+    let attachedCard: { destroy?: () => Promise<unknown> } | null = null;
 
     async function setUpPayment() {
       try {
@@ -214,8 +224,10 @@ export default function ConfirmPage() {
 
         const card = await sq.card();
         await card.attach("#square-card");
+        attachedCard = card;
         if (cancelled) {
           card.destroy();
+          attachedCard = null;
           return;
         }
 
@@ -236,6 +248,11 @@ export default function ConfirmPage() {
     setUpPayment();
     return () => {
       cancelled = true;
+      // 財布（Apple Pay / Google Pay）と同じように、カード欄も必ず片付ける。
+      attachedCard?.destroy?.().catch(() => {});
+      attachedCard = null;
+      cardRef.current = null;
+      paymentsRef.current = null;
     };
   }, []);
 
@@ -859,6 +876,17 @@ export default function ConfirmPage() {
                     : ""
                 }`}
               >
+                {/*
+                  財布で払うと、カードを選んだ時点でご予約まで決まります。
+                  下の「注文を確定する」を押す操作が無いので、そのつもりでいないと
+                  「いきなり終わった」と感じます。先に書いておく。
+                */}
+                {(applePayStatus === "ready" || googlePayStatus === "ready") && (
+                  <p className="text-xs leading-relaxed text-zinc-500">
+                    下のボタンから進むと、カードを選んだ時点でお支払いとご予約が
+                    確定します（このあとの確認画面はありません）。
+                  </p>
+                )}
                 <div
                   id="square-apple-pay"
                   onClick={() => handleWalletPay(applePayRef.current)}
