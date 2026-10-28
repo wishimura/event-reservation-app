@@ -6,7 +6,9 @@ import { LoadErrorNotice } from "@/components/LoadErrorNotice";
 import { Toast } from "@/components/Toast";
 import {
   formatDate,
+  fromJstInputValue,
   isPastReservationDeadline,
+  toJstInputValue,
   todayInJST,
 } from "@/lib/utils";
 import type { Event, EventDate } from "@/lib/types";
@@ -35,6 +37,8 @@ export default function SettingsPage() {
 
   const [newDate, setNewDate] = useState("");
   const [busyDateId, setBusyDateId] = useState<string | null>(null);
+  /** 入力中の締切。保存するまで画面の値だけを変える。 */
+  const [deadlineDraft, setDeadlineDraft] = useState<Record<string, string>>({});
 
   const [applePay, setApplePay] = useState<{
     configured: boolean;
@@ -192,6 +196,49 @@ export default function SettingsPage() {
     } catch (err) {
       console.error("Date toggle error:", err);
       notify(describe(err, "受取日の更新に失敗しました"), false);
+    } finally {
+      setBusyDateId(null);
+    }
+  }
+
+  /**
+   * 締切を入れ替える。
+   *
+   * 締切はこれまでデータベースを直接さわるしかなく、お店が営業時間の外で
+   * 試すことも、その日だけ少し延ばすこともできませんでした。
+   */
+  async function handleSaveDeadline(date: DateWithCount) {
+    const typed = deadlineDraft[date.id] ?? "";
+    const at = typed === "" ? null : fromJstInputValue(typed);
+
+    if (typed !== "" && !at) {
+      notify("締切の日時が読み取れません", false);
+      return;
+    }
+
+    setBusyDateId(date.id);
+    try {
+      await fetchJson(`/api/admin/event/dates/${date.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          reservation_close_at: at ? at.toISOString() : null,
+        }),
+      });
+      setDeadlineDraft((prev) => {
+        const next = { ...prev };
+        delete next[date.id];
+        return next;
+      });
+      await load();
+      notify(
+        at
+          ? `${formatDate(date.pickup_date)} の締切を ${formatDeadline(at.toISOString())} にしました`
+          : `${formatDate(date.pickup_date)} の締切を外しました（在庫が尽きるまで受付）`,
+        true
+      );
+    } catch (err) {
+      console.error("Deadline update error:", err);
+      notify(describe(err, "締切の変更に失敗しました"), false);
     } finally {
       setBusyDateId(null);
     }
@@ -397,7 +444,7 @@ export default function SettingsPage() {
                 <span className="text-xs text-slate-500">
                   予約 {d.order_count} 件
                 </span>
-                {d.reservation_close_at && (
+                {d.reservation_close_at ? (
                   <span
                     className={`text-xs ${
                       isPastReservationDeadline(d.reservation_close_at)
@@ -409,6 +456,8 @@ export default function SettingsPage() {
                       ? "受付締切済み"
                       : `締切 ${formatDeadline(d.reservation_close_at)}`}
                   </span>
+                ) : (
+                  <span className="text-xs text-slate-400">締切なし</span>
                 )}
               </div>
               <div className="flex items-center gap-2">
@@ -431,6 +480,47 @@ export default function SettingsPage() {
                 >
                   削除
                 </button>
+              </div>
+
+              {/*
+                締切をここで変えられるようにしてある。営業時間の外で試したいとき、
+                その日だけ延ばしたいとき、どちらもデータベースを触らずに済む。
+                日時は日本時間で読み書きする（端末の時計がどこに合っていても）。
+              */}
+              <div className="flex w-full flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
+                <label
+                  htmlFor={`deadline-${d.id}`}
+                  className="text-xs font-medium text-slate-500"
+                >
+                  受付の締切（日本時間）
+                </label>
+                <input
+                  id={`deadline-${d.id}`}
+                  type="datetime-local"
+                  className="rounded-lg border border-slate-300 px-2 py-1 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-300"
+                  value={
+                    deadlineDraft[d.id] ??
+                    (d.reservation_close_at
+                      ? toJstInputValue(d.reservation_close_at)
+                      : "")
+                  }
+                  onChange={(e) =>
+                    setDeadlineDraft((prev) => ({
+                      ...prev,
+                      [d.id]: e.target.value,
+                    }))
+                  }
+                />
+                <button
+                  onClick={() => handleSaveDeadline(d)}
+                  disabled={busyDateId === d.id || deadlineDraft[d.id] === undefined}
+                  className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400"
+                >
+                  {busyDateId === d.id ? "保存中..." : "締切を保存"}
+                </button>
+                <span className="text-xs text-slate-400">
+                  空にすると締切なし（在庫が尽きるまで受付）
+                </span>
               </div>
             </div>
           ))}

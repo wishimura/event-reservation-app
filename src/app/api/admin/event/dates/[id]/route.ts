@@ -2,11 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { count, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { eventDates, orders } from "@/db/schema";
-import { isUuid } from "@/lib/http";
+import { isUuid, readJsonObject } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
-/** Toggles whether the date is offered to customers. */
+/**
+ * Changes one pickup date: whether it is offered, and when it stops taking
+ * bookings.
+ *
+ * The deadline used to be settable only by hand in the database, which meant
+ * the shop could not try the site outside its own opening hours and could not
+ * extend a day that needed a little longer. Both fields are optional; send
+ * only the one being changed.
+ */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -18,23 +26,55 @@ export async function PATCH(
       return NextResponse.json({ error: "受取日が見つかりません" }, { status: 404 });
     }
 
-    let is_active: unknown;
-    try {
-      ({ is_active } = await request.json());
-    } catch {
+    const body = await readJsonObject(request);
+    if (!body) {
       return NextResponse.json(
         { error: "リクエストが不正です" },
         { status: 400 }
       );
     }
 
-    if (typeof is_active !== "boolean") {
-      return NextResponse.json({ error: "値が不正です" }, { status: 400 });
+    const changes: { is_active?: boolean; reservation_close_at?: Date | null } = {};
+
+    if ("is_active" in body) {
+      if (typeof body.is_active !== "boolean") {
+        return NextResponse.json({ error: "値が不正です" }, { status: 400 });
+      }
+      changes.is_active = body.is_active;
+    }
+
+    if ("reservation_close_at" in body) {
+      const value = body.reservation_close_at;
+      if (value === null || value === "") {
+        // 締切なし。在庫が尽きるまで開いたままになります。
+        changes.reservation_close_at = null;
+      } else if (typeof value === "string") {
+        const at = new Date(value);
+        if (Number.isNaN(at.getTime())) {
+          return NextResponse.json(
+            { error: "締切の日時が読み取れません" },
+            { status: 400 }
+          );
+        }
+        changes.reservation_close_at = at;
+      } else {
+        return NextResponse.json(
+          { error: "締切の日時が読み取れません" },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (Object.keys(changes).length === 0) {
+      return NextResponse.json(
+        { error: "変更する項目がありません" },
+        { status: 400 }
+      );
     }
 
     const [updated] = await db
       .update(eventDates)
-      .set({ is_active })
+      .set(changes)
       .where(eq(eventDates.id, id))
       .returning();
 

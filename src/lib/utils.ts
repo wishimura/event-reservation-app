@@ -103,10 +103,52 @@ export function effectiveReservationStatus(
  * before it starts. Written as a +09:00 offset rather than built from local
  * parts, so the server's own timezone never moves it.
  */
-export function defaultReservationCloseAt(pickupDate: string): Date {
+export function defaultReservationCloseAt(
+  pickupDate: string,
+  now: Date = new Date()
+): Date {
   const [year, month, day] = pickupDate.split("-").map(Number);
   const dayBefore = new Date(Date.UTC(year, month - 1, day - 1));
   const iso = dayBefore.toISOString().slice(0, 10);
+  const evening = new Date(`${iso}T23:59:59+09:00`);
 
-  return new Date(`${iso}T23:59:59+09:00`);
+  /*
+    前日の夜がもう過ぎていて、当日の夜はまだ来ていないなら、その日の終わりまで
+    受け付けます。要するに「今日」を足したときです。
+
+    これが無いと、当日の受取日を足した瞬間に「受付締切済み」になります。足した
+    本人に締切のつもりは無いので、作ったそばから閉じている理由が分かりません
+    （テストのために今日を1日足すときに、必ずここを踏みます）。
+
+    過ぎた日を足した場合は前日のままにします。閉じているのが正しいからです。
+  */
+  const dayEnd = new Date(`${pickupDate}T23:59:59+09:00`);
+  if (evening.getTime() <= now.getTime() && dayEnd.getTime() > now.getTime()) {
+    return dayEnd;
+  }
+  return evening;
+}
+
+/**
+ * 日本時間の「YYYY-MM-DDTHH:mm」。`<input type="datetime-local">` に入れる形。
+ *
+ * 端末の時計がどこの国に合っていても、画面に出るのは日本時間です。店舗は日本に
+ * ありますが、端末の設定は端末のものなので、こちら側で揃えます。
+ */
+export function toJstInputValue(value: string | Date): string {
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+  return jst.toISOString().slice(0, 16);
+}
+
+/**
+ * `<input type="datetime-local">` の値を、日本時間として読む。
+ *
+ * 読めない文字列には null を返します。呼ぶ側で弾いてください。
+ */
+export function fromJstInputValue(value: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return null;
+  const d = new Date(`${value}:59+09:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
 }

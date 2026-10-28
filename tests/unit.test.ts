@@ -9,6 +9,8 @@ import assert from "node:assert/strict";
 import {
   addDaysToDateString,
   defaultReservationCloseAt,
+  fromJstInputValue,
+  toJstInputValue,
   effectiveReservationStatus,
   formatDate,
   formatPrice,
@@ -27,6 +29,59 @@ import { resolveSoldOut } from "../src/lib/inventory";
 test("締切：前日23:59:59（日本時間）になる", () => {
   const d = defaultReservationCloseAt("2026-11-18");
   assert.equal(d.toISOString(), "2026-11-17T14:59:59.000Z");
+});
+
+test("締切：今日を受取日に足したら、その日の終わりまで受け付ける", () => {
+  // 前日の夜はもう過ぎている。ここで前日を返すと、足した瞬間に閉じた日ができる。
+  const now = new Date("2026-11-18T05:00:00+09:00");
+  assert.equal(
+    defaultReservationCloseAt("2026-11-18", now).toISOString(),
+    "2026-11-18T14:59:59.000Z"
+  );
+});
+
+test("締切：過ぎた日を足した場合は、閉じたままにする", () => {
+  // 昨日の受取日に締切だけ未来を与えると、売れないものが売れてしまう。
+  const now = new Date("2026-11-18T05:00:00+09:00");
+  assert.equal(
+    defaultReservationCloseAt("2026-11-17", now).toISOString(),
+    "2026-11-16T14:59:59.000Z"
+  );
+});
+
+test("締切：明日以降なら、いつ足しても前日の夜のまま", () => {
+  const now = new Date("2026-11-18T05:00:00+09:00");
+  assert.equal(
+    defaultReservationCloseAt("2026-11-19", now).toISOString(),
+    "2026-11-18T14:59:59.000Z"
+  );
+});
+
+/* -------------------------------------------- 締切の入力（日本時間） */
+
+test("締切の入力：端末の時計がどこでも、画面には日本時間が出る", () => {
+  assert.equal(toJstInputValue("2026-11-17T14:59:59.000Z"), "2026-11-17T23:59");
+  assert.equal(toJstInputValue(new Date("2026-11-17T15:00:00.000Z")), "2026-11-18T00:00");
+  assert.equal(toJstInputValue("読めない値"), "");
+});
+
+test("締切の入力：入れた時刻は日本時間として読む", () => {
+  const at = fromJstInputValue("2026-11-17T23:59");
+  assert.ok(at);
+  assert.equal(at.toISOString(), "2026-11-17T14:59:59.000Z");
+});
+
+test("締切の入力：読めない形は null で返し、呼ぶ側に判断させる", () => {
+  for (const bad of ["", "2026-11-17", "17/11/2026 23:59", "2026-11-17T23", "x"]) {
+    assert.equal(fromJstInputValue(bad), null, `弾けていない: ${bad}`);
+  }
+});
+
+test("締切の入力：画面に出した値をそのまま戻すと、同じ瞬間になる", () => {
+  const original = "2026-11-17T14:59:59.000Z";
+  const roundTrip = fromJstInputValue(toJstInputValue(original));
+  assert.ok(roundTrip);
+  assert.equal(roundTrip.toISOString(), original);
 });
 
 test("締切：月初・年初でも前日にまたがる", () => {
