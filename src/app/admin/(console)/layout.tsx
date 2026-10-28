@@ -72,7 +72,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* Mobile header */}
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="md:hidden bg-indigo-900 text-white px-4 py-3 flex items-center justify-between">
+        {/* 入る項目が増えても横にはみ出さないよう、折り返す。 */}
+        <header className="md:hidden flex flex-wrap items-center justify-between gap-y-2 bg-indigo-900 px-4 py-3 text-white">
           <h1 className="text-base font-bold">管理画面</h1>
           <nav className="flex gap-1">
             {navItems.map((item) => {
@@ -96,6 +97,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 </Link>
               );
             })}
+            {/*
+              スマホからも必ず出られるようにしておく。カウンターで使う端末に
+              入りっぱなしになると、そこからお客様全員の連絡先が見えてしまう。
+              横の並びは狭いので、文字は小さくして最後に置く。
+            */}
+            <button
+              onClick={handleLogout}
+              className="ml-1 shrink-0 rounded px-2 py-2 text-xs text-indigo-300 transition-colors hover:text-white"
+            >
+              ログアウト
+            </button>
           </nav>
         </header>
 

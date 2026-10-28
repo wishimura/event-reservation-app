@@ -1,0 +1,123 @@
+# 本番に出る前に、壊れているものを見つけるための検査。
+#
+# この仕組みを入れた直接のきっかけは、テストファイルが宣言していない
+# パッケージを import していて **Vercel のビルドが落ちた**ことです。手元では
+# 動いていたので、押してから気づきました。ここで同じことをすれば先に気づけます。
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # コミットを作らずに回したいときのために、画面から手で起動できるようにする
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: 静的検査・単体テスト・ビルド
+    runs-on: ubuntu-latest
+    # 普段は数分で終わる。止まったまま課金され続けないよう上限を置く
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: 型チェック
+        run: npm run typecheck
+
+      - name: 単体テスト
+        run: npm test
+
+      - name: シナリオ仕様書 ↔ E2E の対応
+        run: npm run check:scenarios
+
+      # Vercel が落ちる前にここで落ちる。
+      - name: ビルド
+        run: npm run build
+
+  e2e:
+    name: E2E と結合テスト
+    runs-on: ubuntu-latest
+    # 正常なら10分前後。超えたら何かがおかしいので打ち切る
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16
+        # 安全ガード（tests/e2e/_helpers/db.ts）が要求する条件に合わせる:
+        # DATABASE_URL と別の DB で、名前に test / e2e / _ci を含むこと
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: event_reservation_e2e
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # 結合テスト用。E2E 用とは別の DB にしないとガードが落とす
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/event_reservation_dev
+      E2E_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/event_reservation_e2e
+      ADMIN_PASSWORD: ci-password
+      ADMIN_SESSION_SECRET: ci-only-secret-at-least-32-characters-long
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: 結合テスト用のデータベースを作る
+        run: |
+          PGPASSWORD=postgres createdb -h localhost -U postgres event_reservation_dev
+
+      - name: マイグレーション
+        run: |
+          npx drizzle-kit migrate
+          DATABASE_URL="$E2E_DATABASE_URL" npx drizzle-kit migrate
+
+      - name: Chromium を入れる
+        run: npx playwright install --with-deps chromium
+
+      # 本番ビルドに対して流す（playwright.config.ts の webServer がビルドする）
+      - name: E2E
+        run: npm run test:e2e
+
+      # 結合テストは、立ち上げたサーバーに HTTP で当てる。
+      # E2E とは別の DB を使うので、互いのデータを消さない。
+      - name: 結合テスト
+        run: |
+          npm run db:seed
+          npx next start --port 3981 &
+          for _ in $(seq 1 60); do
+            curl -sf -o /dev/null http://127.0.0.1:3981/admin/login && break
+            sleep 1
+          done
+          BASE_URL=http://127.0.0.1:3981 npm run test:integration
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

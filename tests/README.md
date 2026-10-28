@@ -1,16 +1,27 @@
 # テスト
 
-3層あります。下に行くほど準備が要ります。
+何をどこで確かめるかの方針と、E2E が何を保証しているかは
+`docs/シナリオテスト仕様書.md` にあります。本書は動かし方です。
 
 | 層 | ファイル | 何を見るか | 準備 |
 | --- | --- | --- | --- |
-| 単体 | `unit.test.ts` | 締切・売切・消費税・名寄せ・注文番号などの判断 | 不要 |
+| 単体 | `unit.test.ts` | 締切・売切・消費税・名寄せ・注文番号・接続先の判定 | 不要 |
 | 結合 | `api.test.ts` / `admin.test.ts` | API とデータベースの往復 | 使い捨てDB＋起動中のサーバー |
 | 結合（踏み込み） | `deep.test.ts` | 原子性・同時実行・画面とAPIの食い違い | 同上 |
 | 結合（決済） | `payment.test.ts` | 決済が失敗した側に倒れたときの後始末 | 同上＋Square の認証情報を入れたサーバー |
-| シナリオ | `scenario.e2e.ts` | 実ブラウザでの導線 | 上記＋Playwright |
+| E2E | `e2e/*.e2e.ts` | 実ブラウザでの導線（PC幅・スマホ幅） | 専用DB（`E2E_DATABASE_URL`） |
 
-何をどこまで確かめているかの一覧は `docs/test-scenarios.md` にあります。
+**E2E のファイル名は `*.e2e.ts` です。名前に `spec` も `test` も入れないでください。**
+入れると `npm test`（node:test）の収集に拾われて落ちます。逆に `.spec.ts` で作ると
+Playwright の `testMatch` から外れて**黙って実行されない**ので、
+`npm run check:scenarios` が見つけて落とします。
+
+## まとめて
+
+```bash
+npm run check      # lint → 型 → 単体 → 仕様書とE2Eの対応
+npm run test:e2e   # ブラウザを通した確認（数分）
+```
 
 ## 単体
 
@@ -18,12 +29,46 @@
 npm test
 ```
 
-DBもサーバーも要りません。CI に置くならまずこれです。
+DBもサーバーも要りません。
+
+## E2E
+
+```bash
+npm run test:e2e                      # PC幅とスマホ幅の両方
+npx playwright test -g "S-05"         # 名寄せのシナリオだけ
+npx playwright test --project=desktop # PC幅だけ
+```
+
+`playwright.config.ts` が `npm run build` から本番サーバーまで面倒を見ます。
+すでにサーバーを立てているなら `E2E_BASE_URL` を渡せば使い回します。
+
+**専用のデータベースが要ります。** 各テストの前に全テーブルを空にするので、
+`E2E_DATABASE_URL` は `DATABASE_URL` と別の、名前に `e2e` / `test` / `_ci` を
+含むものにしてください。満たさないと安全ガード（`e2e/_helpers/db.ts`）が止めます。
+
+ブラウザの場所が違う環境では `E2E_CHROMIUM_PATH` で指定します
+（このコンテナなら `/opt/pw-browsers/chromium`）。
+
+落ちたときは `test-results/` にスクリーンショットと trace が残ります。
+
+```bash
+npx playwright show-trace test-results/<失敗したテスト>/trace.zip
+```
 
 ## 結合
 
 **使い捨てのデータベースに向けたサーバーに対してのみ実行してください。**
 予約を作り、在庫を動かし、注文を消します。本番には絶対に向けないこと。
+
+```bash
+npm run db:seed                    # 受取日は今日から数えて作られる
+npx next start --port 3981 &
+BASE_URL=http://127.0.0.1:3981 ADMIN_PASSWORD=<開発用> npm run test:integration
+```
+
+テストは互いの結果に依存しないよう「今日以降の受取日」だけを使い、作った受取日や
+商品は後片付けします。それでも失敗が続くときは `npm run db:seed` で入れ直して
+ください。
 
 ## 決済まわり
 
@@ -35,46 +80,36 @@ DBもサーバーも要りません。CI に置くならまずこれです。
 SQUARE_ACCESS_TOKEN=qa-fake \
 SQUARE_APPLICATION_ID=sandbox-sq0idb-qafake \
 SQUARE_LOCATION_ID=QAFAKELOC \
-  npm run start -- --port 3982
+  npx next start --port 3982 &
 
 BASE_URL=http://localhost:3982 npm run test:payment
 ```
 
-```bash
-# 1. 空のデータベースにスキーマと本番同等のデータを入れる
-psql "$DATABASE_URL" -f drizzle/0000_init.sql   # 0001〜も順に
-psql "$DATABASE_URL" -f docs/production-data-2026-11.sql
+**カード決済が通ること自体は、どのテストでも確かめていません。** 本番で人が
+1件通してください（`docs/シナリオテスト仕様書.md` の「保証していないこと」）。
 
-# 2. そのDBを指してサーバーを起動
-npm run dev
+## ローカルのデータベース
 
-# 3. 別のターミナルで
-BASE_URL=http://localhost:3927 ADMIN_PASSWORD=<開発用> npm run test:integration
-```
+本番は Neon、手元はこのコンテナの PostgreSQL です。**どちらのドライバを使うかは
+`src/db/index.ts` が接続先の URL から選びます**。ファイルを書き換える必要はありません
+（以前は手で差し替えていて、戻し忘れると本番が繋がらなくなる作業でした）。
 
-テストは互いの結果に依存しないよう「今日以降の受取日」だけを使い、作った受取日や
-商品は後片付けします。それでも失敗が続くときは、データを入れ直してから再実行して
-ください。
-
-## シナリオ
-
-Playwright は依存に入れていません。実行するときだけ入れます。
+クラウドのセッションでは `.claude/hooks/session-start.sh` が、PostgreSQL の起動から
+2つのデータベースの作成、マイグレーション、種データまで用意します。手でやるなら:
 
 ```bash
-npm i --no-save playwright
-BASE_URL=http://localhost:3927 ADMIN_PASSWORD=<開発用> npx tsx tests/scenario.e2e.ts
+pg_ctlcluster 16 main start
+su postgres -c "psql -c \"ALTER USER postgres PASSWORD 'postgres';\""
+su postgres -c "createdb event_reservation_dev; createdb event_reservation_e2e"
+
+cat > .env.local <<'ENV'
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/event_reservation_dev?sslmode=disable
+E2E_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/event_reservation_e2e?sslmode=disable
+ADMIN_PASSWORD=qa-password
+ADMIN_SESSION_SECRET=<openssl rand -base64 32>
+ENV
+
+npx drizzle-kit migrate
+DATABASE_URL="$E2E_DATABASE_URL" npx drizzle-kit migrate
+npm run db:seed
 ```
-
-お客様の予約（PC・スマホ）、店休日が一覧に出ないこと、管理画面の各ページ、
-スマホ幅で横スクロールが出ないことを通しで見ます。
-
-Chromium の場所が違う場合は `CHROME_PATH` で指定してください。
-
-## ローカルのデータベースについて
-
-本番は Neon で、アプリは `drizzle-orm/neon-serverless`（WebSocket）を使います。
-このドライバは**素の PostgreSQL には繋がりません**。手元の PostgreSQL で動かす
-場合は、`src/db/index.ts` のドライバを一時的に `drizzle-orm/node-postgres` +
-`pg` に差し替えてください（コミットしないこと）。
-
-Neon のブランチ機能で使い捨てDBを作れば、差し替えは不要です。

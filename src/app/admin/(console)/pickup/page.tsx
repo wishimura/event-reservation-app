@@ -229,6 +229,7 @@ export default function PickupPage() {
           return (
             <div
               key={group.key}
+              data-pickup-group={group.key}
               className={`rounded-xl border bg-white transition-all ${
                 allDone ? "border-emerald-200 bg-emerald-50/30" : "border-slate-200"
               }`}
@@ -289,6 +290,7 @@ export default function PickupPage() {
                   return (
                     <div
                       key={order.id}
+                      data-order-row={order.order_number}
                       className="flex flex-wrap items-start gap-3 px-4 py-3"
                     >
                       <div className="min-w-0 flex-1">

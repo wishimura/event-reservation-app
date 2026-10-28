@@ -16,7 +16,11 @@
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx src/db/seed.ts",
     "test:payment": "tsx --test --test-concurrency=1 tests/payment.test.ts",
-    "test:scenario": "tsx tests/scenario.e2e.ts"
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "check:scenarios": "tsx scripts/check-scenarios.ts",
+    "check": "npm run lint && npm run typecheck && npm test && npm run check:scenarios"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
@@ -30,6 +34,7 @@
     "square": "^46.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.56.1",
     "@tailwindcss/postcss": "^4.2.2",
     "@types/node": "^25.5.0",
     "@types/pg": "^8.23.1",
