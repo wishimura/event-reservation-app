@@ -76,5 +76,56 @@ export function diningStyleLabel(style: DiningStyle): string {
  * 呼びます。まだ選ぶ前の一覧では、どちらの方も見るので「受取日」のままです。
  */
 export function pickupDateLabel(style: DiningStyle | null | undefined): string {
-  return style === "eat_in" ? "来店日" : "受取日";
+  return handoverWording(style).dateLabel;
+}
+
+/**
+ * 受け渡しまわりの言い回し。
+ *
+ * 中身はどちらも同じで、変わるのは呼び方だけです。店内で召し上がる方に
+ * 「お受け取り」「受取日」と申し上げるのは少しよそよそしいので、ご予約が
+ * 確定したあとの画面とメールでは言葉を分けます。
+ *
+ * 日付の一覧のように、まだどちらか決まっていない場面では使いません。
+ */
+export interface HandoverWording {
+  /** 日付の見出し。 */
+  dateLabel: string;
+  /** 「受取について」にあたる見出し。 */
+  sectionTitle: string;
+  /** 注文番号の下に添える一言。 */
+  numberHint: string;
+  /** 場所の見出し。 */
+  placeLabel: string;
+  /** 現地払いのときの書き方。 */
+  cashNote: string;
+  /** 当日のお願い。 */
+  reminder: string;
+  /** 件名の末尾など、短く言い切るとき。 */
+  shortAction: string;
+}
+
+export function handoverWording(
+  style: DiningStyle | null | undefined
+): HandoverWording {
+  if (style === "eat_in") {
+    return {
+      dateLabel: "来店日",
+      sectionTitle: "ご来店について",
+      numberHint: "ご来店時にこの番号をお伝えください",
+      placeLabel: "店舗",
+      cashNote: "現地払い（ご来店時にお支払い）",
+      reminder: "来店日当日に店頭で、注文番号をスタッフにお伝えください。",
+      shortAction: "ご来店",
+    };
+  }
+  return {
+    dateLabel: "受取日",
+    sectionTitle: "受取について",
+    numberHint: "受取時にこの番号をお伝えください",
+    placeLabel: "受取場所",
+    cashNote: "現地払い（受取時にお支払い）",
+    reminder: "受取日当日にご来店の上、注文番号をスタッフにお伝えください。",
+    shortAction: "お受け取り",
+  };
 }

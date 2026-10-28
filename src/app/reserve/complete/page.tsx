@@ -6,7 +6,7 @@ import Link from "next/link";
 import type { Order, OrderItem } from "@/lib/types";
 import { formatDate, formatPrice } from "@/lib/utils";
 import { Icon } from "@/components/Icon";
-import { diningStyleLabel, pickupDateLabel } from "@/lib/tax";
+import { diningStyleLabel, handoverWording } from "@/lib/tax";
 
 interface OrderWithItems extends Order {
   items?: OrderItem[];
@@ -43,6 +43,8 @@ export default function CompletePage() {
   }
 
   const pickupDate = order.event_date?.pickup_date ?? "";
+  // 店内で召し上がる方には「受取」ではなく「来店」でお声がけする。
+  const wording = handoverWording(order.dining_style);
 
   return (
     <main className="min-h-screen bg-paper">
@@ -94,7 +96,7 @@ export default function CompletePage() {
             {order.order_number}
           </p>
           <p className="text-xs text-zinc-400 mt-2">
-            受取時にこの番号をお伝えください
+            {wording.numberHint}
           </p>
         </div>
 
@@ -102,7 +104,7 @@ export default function CompletePage() {
         {pickupDate && (
           <div className="bg-brand-50 border border-brand-200 rounded-2xl p-5 mb-5 text-center">
             <p className="text-xs text-brand-500 font-medium mb-1">
-              {pickupDateLabel(order.dining_style)}
+              {wording.dateLabel}
             </p>
             <p className="text-2xl font-bold text-brand-800">
               {formatDate(pickupDate)}
@@ -151,14 +153,16 @@ export default function CompletePage() {
         {/* Pickup Instructions */}
         <div className="bg-white rounded-2xl border border-zinc-200 p-5 mb-5">
           <h2 className="font-bold text-zinc-700 text-sm mb-3">
-            受取について
+            {wording.sectionTitle}
           </h2>
           <div className="space-y-3">
             {order.pickup_location && (
               <div className="flex items-start gap-2.5">
                 <Icon name="pin" className="w-4 h-4 text-brand-500 mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-xs text-zinc-400 mb-0.5">受取場所</p>
+                  <p className="text-xs text-zinc-400 mb-0.5">
+                    {wording.placeLabel}
+                  </p>
                   <p className="text-zinc-800 text-sm font-medium">
                     {order.pickup_location}
                   </p>
@@ -172,7 +176,7 @@ export default function CompletePage() {
                 <p className="text-zinc-800 text-sm font-medium">
                   {order.payment_method === "credit_card"
                     ? "クレジットカード（お支払い済み）"
-                    : "現地払い（受取時にお支払い）"}
+                    : wording.cashNote}
                 </p>
               </div>
             </div>
@@ -180,9 +184,7 @@ export default function CompletePage() {
               <Icon name="note" className="w-4 h-4 text-brand-500 mt-0.5 shrink-0" />
               <div>
                 <p className="text-xs text-zinc-400 mb-0.5">ご注意</p>
-                <p className="text-zinc-600 text-sm">
-                  受取日当日にご来店の上、注文番号をスタッフにお伝えください。
-                </p>
+                <p className="text-zinc-600 text-sm">{wording.reminder}</p>
               </div>
             </div>
           </div>

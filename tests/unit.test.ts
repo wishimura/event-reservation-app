@@ -179,7 +179,12 @@ test("注文番号：形式が一定で、連続生成しても衝突しにく�
 /* ------------------------------------------------------- DBエラーの判定 */
 
 import { isUniqueViolation, isUniqueViolationOn } from "../src/lib/db-errors";
-import { diningStyleLabel, pickupDateLabel, taxBreakdown } from "../src/lib/tax";
+import {
+  diningStyleLabel,
+  handoverWording,
+  pickupDateLabel,
+  taxBreakdown,
+} from "../src/lib/tax";
 import {
   groupByCustomer,
   matchedByLabel,
@@ -340,6 +345,36 @@ test("表示名：イートインの受取日は「来店日」と呼ぶ", () =>
   assert.equal(pickupDateLabel("eat_in"), "来店日");
   assert.equal(pickupDateLabel("takeout"), "受取日");
   assert.equal(pickupDateLabel(null), "受取日");
+});
+
+test("表示名：店内で召し上がる方に「受取」と申し上げない", () => {
+  const eatIn = handoverWording("eat_in");
+  const takeout = handoverWording("takeout");
+
+  // 言い回しが混ざると、店内のお客様に「お受け取りください」と出る。
+  for (const [key, value] of Object.entries(eatIn)) {
+    assert.ok(
+      !value.includes("受取"),
+      `イートインの ${key} に「受取」が残っている: ${value}`
+    );
+  }
+
+  assert.equal(eatIn.dateLabel, "来店日");
+  assert.equal(takeout.dateLabel, "受取日");
+  assert.equal(eatIn.shortAction, "ご来店");
+  assert.equal(takeout.shortAction, "お受け取り");
+
+  // 項目が増えたときに、片方だけ埋め忘れないこと。
+  assert.deepEqual(Object.keys(eatIn), Object.keys(takeout));
+  for (const value of [...Object.values(eatIn), ...Object.values(takeout)]) {
+    assert.ok(value.length > 0, "空の言い回しがある");
+  }
+});
+
+test("表示名：区分が未設定なら、持ち帰りの言い回しに倒す", () => {
+  // 旧い注文には区分が入っていない。「来店日」と出すほうが事故になる。
+  assert.deepEqual(handoverWording(null), handoverWording("takeout"));
+  assert.deepEqual(handoverWording(undefined), handoverWording("takeout"));
 });
 
 /* ============================================== 同じ方の名寄せ */

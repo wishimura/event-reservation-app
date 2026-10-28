@@ -1,5 +1,5 @@
 import { Resend } from "resend";
-import { diningStyleLabel, pickupDateLabel } from "./tax";
+import { diningStyleLabel, handoverWording } from "./tax";
 import type { DiningStyle } from "./types";
 import { formatDate, formatPrice } from "./utils";
 
@@ -104,7 +104,7 @@ function detailBlock(payload: OrderMailPayload): string {
       </tr>
       <tr>
         <td style="padding:4px 0;color:#a8a29e;font-size:12px;">${escapeHtml(
-          pickupDateLabel(payload.dining_style)
+          handoverWording(payload.dining_style).dateLabel
         )}</td>
       </tr>
       <tr>
@@ -122,7 +122,9 @@ function detailBlock(payload: OrderMailPayload): string {
       </tr>
       ${
         payload.pickup_location
-          ? `<tr><td style="padding:4px 0;color:#a8a29e;font-size:12px;">受取場所</td></tr>
+          ? `<tr><td style="padding:4px 0;color:#a8a29e;font-size:12px;">${escapeHtml(
+               handoverWording(payload.dining_style).placeLabel
+             )}</td></tr>
              <tr><td style="padding-bottom:12px;color:#292524;">${escapeHtml(payload.pickup_location)}</td></tr>`
           : ""
       }
@@ -143,11 +145,14 @@ function detailBlock(payload: OrderMailPayload): string {
 }
 
 function textDetail(payload: OrderMailPayload): string {
+  const wording = handoverWording(payload.dining_style);
   return [
     `注文番号: ${payload.order_number}`,
-    `${pickupDateLabel(payload.dining_style)}: ${formatDate(payload.pickup_date)}`,
+    `${wording.dateLabel}: ${formatDate(payload.pickup_date)}`,
     `お召し上がり方法: ${diningStyleLabel(payload.dining_style)}`,
-    payload.pickup_location ? `受取場所: ${payload.pickup_location}` : null,
+    payload.pickup_location
+      ? `${wording.placeLabel}: ${payload.pickup_location}`
+      : null,
     "",
     "ご注文内容",
     itemLines(payload.items),
@@ -162,7 +167,9 @@ export function buildCustomerEmail(payload: OrderMailPayload) {
     detailBlock(payload) +
     `
     <div style="margin-top:16px;padding:12px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;font-size:13px;color:#78350f;line-height:1.7;">
-      お支払いは<strong>受取時に店頭</strong>でお願いいたします。
+      お支払いは<strong>${escapeHtml(
+        handoverWording(payload.dining_style).shortAction
+      )}の際に店頭</strong>でお願いいたします。
     </div>` +
     (payload.contact_phone
       ? `<div style="margin-top:12px;padding:12px 14px;border:1px solid #e7e5e4;border-radius:10px;font-size:13px;color:#57534e;line-height:1.7;">
@@ -179,7 +186,7 @@ export function buildCustomerEmail(payload: OrderMailPayload) {
   return {
     subject: `【ご予約確認】${payload.event_name}（${formatDate(
       payload.pickup_date
-    )}${payload.dining_style === "eat_in" ? "ご来店" : "お受け取り"}）`,
+    )}${handoverWording(payload.dining_style).shortAction}）`,
     html: layout(
       "ご予約ありがとうございます",
       `${escapeHtml(payload.customer_name)} 様<br>下記の内容でご予約を承りました。`,
@@ -192,7 +199,7 @@ export function buildCustomerEmail(payload: OrderMailPayload) {
       "",
       textDetail(payload),
       "",
-      "お支払いは受取時に店頭でお願いいたします。",
+      `お支払いは${handoverWording(payload.dining_style).shortAction}の際に店頭でお願いいたします。`,
       payload.contact_phone
         ? `\nご予約の変更・キャンセルはお電話でお願いいたします。\n${payload.contact_phone}`
         : null,
