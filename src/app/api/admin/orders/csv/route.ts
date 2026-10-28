@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { eventDates, orderItems, orders } from "@/db/schema";
 import { getActiveEvent } from "@/lib/queries";
 import { todayInJST } from "@/lib/utils";
+import { diningStyleLabel, taxBreakdown } from "@/lib/tax";
 
 export const dynamic = "force-dynamic";
 
@@ -79,7 +80,7 @@ export async function GET() {
 
     const headers = [
       "受取日",
-      "受取時間",
+      "提供区分",
       "経路",
       "注文番号",
       "注文日時",
@@ -91,10 +92,15 @@ export async function GET() {
       "数量",
       "小計",
       "注文合計",
+      "税率",
+      "税抜額",
+      "消費税額",
       "支払方法",
       "決済ステータス",
       "注文ステータス",
       "受取ステータス",
+      "当日変更",
+      "Square決済ID",
     ];
 
     const rows: string[] = [headers.join(",")];
@@ -102,7 +108,7 @@ export async function GET() {
     for (const { order, event_date } of orderRows) {
       const base = [
         escapeCSV(formatDateJP(event_date.pickup_date)),
-        escapeCSV(order.pickup_time_slot ?? ""),
+        escapeCSV(diningStyleLabel(order.dining_style)),
         escapeCSV(order.source === "walk_in" ? "店頭販売" : "予約"),
         escapeCSV(order.order_number),
         escapeCSV(formatDateTimeJP(order.created_at)),
@@ -111,12 +117,29 @@ export async function GET() {
         escapeCSV(order.customer_phone),
       ];
 
+      /**
+       * 税額は注文ごとに1回だけ割り出します。商品1点ずつ丸めて足すと、
+       * 合計が実際に決済した額と1〜2円ずれて、Square の明細と突き合わせた
+       * ときに合わなくなるためです。明細が複数行に分かれても、ここに出る
+       * 税抜・消費税は注文全体の額で、行ごとの内訳ではありません。
+       */
+      const tax = taxBreakdown(order.total_amount, order.dining_style);
+
       const tail = [
         String(order.total_amount),
+        `${tax.percent}%`,
+        String(tax.net),
+        String(tax.tax),
         escapeCSV(order.payment_method === "cash" ? "現地払い" : "クレジットカード"),
         escapeCSV(paymentStatusMap[order.payment_status] ?? order.payment_status),
         escapeCSV(orderStatusMap[order.order_status] ?? order.order_status),
         escapeCSV(pickupStatusMap[order.pickup_status] ?? order.pickup_status),
+        escapeCSV(
+          order.dining_style_changed_at
+            ? formatDateTimeJP(order.dining_style_changed_at)
+            : ""
+        ),
+        escapeCSV(order.square_payment_id ?? ""),
       ];
 
       const items = itemsByOrder.get(order.id) ?? [];

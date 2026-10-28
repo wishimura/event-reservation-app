@@ -15,10 +15,10 @@ import {
   isSquareEnabled,
   SquarePaymentError,
 } from "@/lib/square";
+import type { DiningStyle } from "@/lib/types";
 import {
   generateOrderNumber,
   isPastReservationDeadline,
-  parsePickupTimeSlots,
 } from "@/lib/utils";
 import { isUuid, readJsonObject } from "@/lib/http";
 
@@ -45,8 +45,8 @@ interface OrderRequestBody {
   customer_name: string;
   customer_email: string;
   customer_phone: string;
-  /** One of the event's configured pickup times, when it offers any. */
-  pickup_time_slot?: string;
+  /** 店内で食べるか持ち帰るか。売値は同じで、変わるのは消費税率だけ。 */
+  dining_style?: DiningStyle;
   payment_method: "cash" | "credit_card";
   /** Set by the Square Web Payments SDK when card payment is switched on. */
   payment_source_id?: string;
@@ -113,6 +113,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const diningStyle = body.dining_style;
+
   const clientRequestId =
     typeof body.client_request_id === "string" && body.client_request_id.trim()
       ? body.client_request_id.trim().slice(0, 100)
@@ -167,18 +169,12 @@ export async function POST(request: NextRequest) {
         }
 
         /**
-         * Checked against the event rather than trusted from the browser: the
-         * shop may have rewritten its times while this page sat open, and a
-         * slot nobody is staffing is worse than asking again.
+         * 店内か持ち帰りか。お客様の払う額は同じですが、消費税率が変わる
+         * ので、既定で済ませずに必ず選んでいただきます。
          */
-        const timeSlots = parsePickupTimeSlots(event.pickup_time_slots);
-        const pickupTimeSlot = body.pickup_time_slot?.trim() ?? "";
-
-        if (timeSlots.length > 0 && !timeSlots.includes(pickupTimeSlot)) {
+        if (diningStyle !== "eat_in" && diningStyle !== "takeout") {
           throw new OrderValidationError(
-            pickupTimeSlot
-              ? "選択された受取時間は現在ご利用いただけません。お手数ですが選び直してください"
-              : "受取時間を選んでください"
+            "店内でお召し上がりか、お持ち帰りかを選んでください"
           );
         }
 
@@ -192,7 +188,7 @@ export async function POST(request: NextRequest) {
           customer_name: body.customer_name,
           customer_email: body.customer_email,
           customer_phone: body.customer_phone,
-          pickup_time_slot: pickupTimeSlot || null,
+          dining_style: diningStyle,
           // Stock is held before the card is charged, so a card order starts
           // provisional and is confirmed once Square accepts the payment.
           // Without Square configured the reservation is simply confirmed and
@@ -272,7 +268,7 @@ export async function POST(request: NextRequest) {
           customer_phone: order.customer_phone,
           total_amount: order.total_amount,
           pickup_date: event_date.pickup_date,
-          pickup_time_slot: order.pickup_time_slot,
+          dining_style: order.dining_style,
           event_name: event.name,
           pickup_location: event.pickup_location,
           reservation_note: event.reservation_note,

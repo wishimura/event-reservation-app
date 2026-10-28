@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CartItem, Event } from "@/lib/types";
 import { fetchJson } from "@/lib/api-client";
-import { formatDate, formatPrice, parsePickupTimeSlots } from "@/lib/utils";
+import { formatDate, formatPrice } from "@/lib/utils";
+import { pickupDateLabel } from "@/lib/tax";
+import type { DiningStyle } from "@/lib/types";
 import { SiteFooter } from "@/components/SiteFooter";
 import { Icon } from "@/components/Icon";
 
@@ -124,7 +126,7 @@ export default function ConfirmPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [pickupTimeSlot, setPickupTimeSlot] = useState("");
+  const [diningStyle, setDiningStyle] = useState<DiningStyle | "">("");
   const [submitting, setSubmitting] = useState(false);
   /**
    * True only while the order is with the server — taking the money and
@@ -250,8 +252,7 @@ export default function ConfirmPage() {
     return () => window.removeEventListener("beforeunload", warn);
   }, [placing]);
 
-  const timeSlots = parsePickupTimeSlots(event?.pickup_time_slots);
-
+  
   const totalAmount = cart.reduce(
     (sum, item) => sum + item.product.price * item.quantity,
     0
@@ -358,8 +359,8 @@ export default function ConfirmPage() {
     } else if (!/^[0-9\-+() ]{10,}$/.test(phone)) {
       errs.phone = "正しい電話番号を入力してください";
     }
-    if (timeSlots.length > 0 && !pickupTimeSlot) {
-      errs.pickup_time_slot = "受取時間を選んでください";
+    if (!diningStyle) {
+      errs.dining_style = "店内でお召し上がりか、お持ち帰りかを選んでください";
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -385,7 +386,7 @@ export default function ConfirmPage() {
         customer_name: name.trim(),
         customer_email: email.trim(),
         customer_phone: phone.trim(),
-        pickup_time_slot: pickupTimeSlot || undefined,
+        dining_style: diningStyle,
         payment_method: payByCard ? "credit_card" : "cash",
         payment_source_id: paymentSourceId,
         verification_token: verificationToken,
@@ -626,42 +627,46 @@ export default function ConfirmPage() {
           </p>
         </div>
 
-        {/* Pickup time — only when the shop offers a choice. */}
-        {timeSlots.length > 0 && (
-          <div className="bg-white rounded-2xl border border-zinc-200 p-4">
-            <h2 className="font-bold text-zinc-700 text-sm mb-1">
-              受取時間 <span className="text-red-400">*</span>
-            </h2>
-            <p className="text-xs text-zinc-400 mb-3">
-              ご来店の時間帯をお選びください。
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {timeSlots.map((slot) => {
-                const selected = pickupTimeSlot === slot;
-                return (
-                  <button
-                    key={slot}
-                    type="button"
-                    onClick={() => setPickupTimeSlot(slot)}
-                    aria-pressed={selected}
-                    className={`rounded-xl border-2 px-3 py-3 text-sm font-medium transition-colors ${
-                      selected
-                        ? "border-brand-500 bg-brand-50 text-brand-800"
-                        : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300"
-                    }`}
-                  >
-                    {slot}
-                  </button>
-                );
-              })}
-            </div>
-            {errors.pickup_time_slot && (
-              <p className="text-red-500 text-xs mt-2">
-                {errors.pickup_time_slot}
-              </p>
-            )}
+        {/* 店内かお持ち帰りか。既定を置かず、必ず選んでいただく。 */}
+        <div className="bg-white rounded-2xl border border-zinc-200 p-4">
+          <h2 className="font-bold text-zinc-700 text-sm mb-1">
+            お召し上がり方法 <span className="text-red-400">*</span>
+          </h2>
+          <p className="text-xs text-zinc-400 mb-3">
+            どちらをお選びでも、お支払い金額は変わりません。
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                { value: "eat_in", label: "店内で食べる", note: "イートイン" },
+                { value: "takeout", label: "持ち帰る", note: "テイクアウト" },
+              ] as const
+            ).map((option) => {
+              const selected = diningStyle === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setDiningStyle(option.value)}
+                  aria-pressed={selected}
+                  className={`rounded-xl border-2 px-3 py-3 text-sm font-medium transition-colors ${
+                    selected
+                      ? "border-brand-500 bg-brand-50 text-brand-800"
+                      : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300"
+                  }`}
+                >
+                  {option.label}
+                  <span className="mt-0.5 block text-xs font-normal text-zinc-400">
+                    {option.note}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-        )}
+          {errors.dining_style && (
+            <p className="text-red-500 text-xs mt-2">{errors.dining_style}</p>
+          )}
+        </div>
 
         {/* Product List */}
         <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden">

@@ -70,7 +70,6 @@ async function loadEvent() {
   const { body } = await api("/api/events");
   return body as {
     id: string;
-    pickup_time_slots: string;
     event_dates: Array<{ id: string; pickup_date: string; reservation_status: string }>;
   };
 }
@@ -94,11 +93,7 @@ async function saveInventory(rows: Array<Partial<InventoryRow> & { id: string }>
   });
 }
 
-function firstSlot(event: { pickup_time_slots: string }) {
-  return event.pickup_time_slots.split("\n").map((s) => s.trim()).filter(Boolean)[0];
-}
-
-function orderBody(eventId: string, dateId: string, productId: string, qty: number, slot?: string) {
+function orderBody(eventId: string, dateId: string, productId: string, qty: number) {
   return JSON.stringify({
     event_id: eventId,
     event_date_id: dateId,
@@ -106,7 +101,7 @@ function orderBody(eventId: string, dateId: string, productId: string, qty: numb
     customer_email: "qa@example.com",
     customer_phone: "090-1111-1111",
     payment_method: "cash",
-    pickup_time_slot: slot,
+    dining_style: "takeout",
     items: [{ product_id: productId, quantity: qty }],
   });
 }
@@ -124,6 +119,7 @@ test("受付上限を予約数より下げようとすると、商品名つき�
     const { status } = await api("/api/admin/orders", {
       method: "POST",
       body: JSON.stringify({
+        dining_style: "takeout",
         event_date_id: date.id,
         items: [{ product_id: row.product_id, quantity: 1 }],
       }),
@@ -182,7 +178,6 @@ test("上限を上げると売切が解け、受取日も受付中に戻る", as
 test("残り1個に同時に2件来ても、1件しか通らない", async () => {
   const event = await loadEvent();
   const date = futureDate(event);
-  const slot = firstSlot(event);
   const rows = await inventoryFor(date.id);
   const row = rows[0];
 
@@ -192,8 +187,8 @@ test("残り1個に同時に2件来ても、1件しか通らない", async () =>
   ]);
 
   const [a, b] = await Promise.all([
-    api("/api/orders", { method: "POST", body: orderBody(event.id, date.id, row.product_id, 1, slot) }),
-    api("/api/orders", { method: "POST", body: orderBody(event.id, date.id, row.product_id, 1, slot) }),
+    api("/api/orders", { method: "POST", body: orderBody(event.id, date.id, row.product_id, 1) }),
+    api("/api/orders", { method: "POST", body: orderBody(event.id, date.id, row.product_id, 1) }),
   ]);
 
   const created = [a, b].filter((r) => r.status === 201);
@@ -214,7 +209,6 @@ test("残り1個に同時に2件来ても、1件しか通らない", async () =>
 test("キャンセルで在庫が戻り、二重キャンセルは断られる", async () => {
   const event = await loadEvent();
   const date = futureDate(event);
-  const slot = firstSlot(event);
   const rows = await inventoryFor(date.id);
   const row = rows.find((r) => r.production_quantity > r.reserved_quantity)
     ?? (await saveInventory([{ ...rows[0], production_quantity: rows[0].reserved_quantity + 3, is_sold_out: false }]),
@@ -222,7 +216,7 @@ test("キャンセルで在庫が戻り、二重キャンセルは断られる",
 
   const { status, body } = await api("/api/orders", {
     method: "POST",
-    body: orderBody(event.id, date.id, row.product_id, 1, slot),
+    body: orderBody(event.id, date.id, row.product_id, 1),
   });
   assert.equal(status, 201);
   const order = body as { id: string };
@@ -269,10 +263,9 @@ test("締切を過ぎた受取日は予約できず、一覧にも受付終了�
       "指定した初期値で受付枠が作られていない"
     );
 
-    const slot = firstSlot(event);
     const { status: ordered, body: err } = await api("/api/orders", {
       method: "POST",
-      body: orderBody(event.id, dateId, rows[0].product_id, 1, slot),
+      body: orderBody(event.id, dateId, rows[0].product_id, 1),
     });
     assert.equal(ordered, 400, "締切を過ぎた日に予約できてしまう");
     assert.match((err as { error: string }).error, /終了|締/);
@@ -293,7 +286,6 @@ test("受付停止にした受取日は、お客様の一覧から消え予約�
   const future = event.event_dates.filter((d) => d.pickup_date >= TODAY);
   const date = future[future.length - 1];
   const rows = await inventoryFor(date.id);
-  const slot = firstSlot(event);
 
   await api(`/api/admin/event/dates/${date.id}`, {
     method: "PATCH",
@@ -309,7 +301,7 @@ test("受付停止にした受取日は、お客様の一覧から消え予約�
 
     const { status } = await api("/api/orders", {
       method: "POST",
-      body: orderBody(event.id, date.id, rows[0].product_id, 1, slot),
+      body: orderBody(event.id, date.id, rows[0].product_id, 1),
     });
     assert.equal(status, 400, "受付停止した日に予約できてしまう");
   } finally {
@@ -335,7 +327,7 @@ test("同じ受取日をもう一度足すと、理由が分かる形で断ら�
 
 /* ============================================ 帳票 */
 
-test("CSVに受取時間の列があり、文字化けしない", async () => {
+test("CSVに提供区分の列があり、文字化けしない", async () => {
   const res = await fetch(`${BASE}/api/admin/orders/csv`, { headers: { Cookie: cookie } });
   assert.equal(res.status, 200);
   assert.match(res.headers.get("content-type") ?? "", /csv/);
@@ -349,7 +341,7 @@ test("CSVに受取時間の列があり、文字化けしない", async () => {
   );
 
   const header = new TextDecoder().decode(bytes).split("\n")[0];
-  for (const column of ["受取日", "受取時間", "注文番号", "お客様名", "商品名", "注文合計"]) {
+  for (const column of ["受取日", "提供区分", "注文番号", "お客様名", "商品名", "注文合計"]) {
     assert.ok(header.includes(column), `CSVに「${column}」列が無い`);
   }
 });
@@ -456,7 +448,8 @@ test("店頭販売を登録すると受付枠が減り、店頭として記録�
   const { status, body } = await api("/api/admin/orders", {
     method: "POST",
     body: JSON.stringify({
-      event_date_id: date.id,
+      dining_style: "takeout",
+        event_date_id: date.id,
       customer_name: "店頭 花子",
       payment_method: "cash",
       handed_over: true,
@@ -499,7 +492,8 @@ test("店頭販売でも受付枠を超えられない", async () => {
   const { status, body } = await api("/api/admin/orders", {
     method: "POST",
     body: JSON.stringify({
-      event_date_id: date.id,
+      dining_style: "takeout",
+        event_date_id: date.id,
       items: [{ product_id: row.product_id, quantity: 5 }],
     }),
   });
@@ -517,7 +511,8 @@ test("店頭販売：お名前を省くと既定の名前で入る", async () =>
   const { status, body } = await api("/api/admin/orders", {
     method: "POST",
     body: JSON.stringify({
-      event_date_id: date.id,
+      dining_style: "takeout",
+        event_date_id: date.id,
       handed_over: false,
       items: [{ product_id: row.product_id, quantity: 1 }],
     }),
@@ -565,7 +560,8 @@ test("店頭販売は未ログインでは登録できない", async () => {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      event_date_id: date.id,
+      dining_style: "takeout",
+        event_date_id: date.id,
       items: [{ product_id: rows[0].product_id, quantity: 1 }],
     }),
   });
@@ -581,7 +577,8 @@ test("店頭販売もキャンセルでき、受付枠が戻る", async () => {
   const { body } = await api("/api/admin/orders", {
     method: "POST",
     body: JSON.stringify({
-      event_date_id: date.id,
+      dining_style: "takeout",
+        event_date_id: date.id,
       items: [{ product_id: row.product_id, quantity: 1 }],
     }),
   });

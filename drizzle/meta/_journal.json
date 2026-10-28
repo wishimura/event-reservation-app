@@ -57,6 +57,20 @@
       "when": 1790689294108,
       "tag": "0007_add_order_client_request_id",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793170816206,
+      "tag": "0008_add_dining_style",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793170816207,
+      "tag": "0009_drop_pickup_time_slots",
+      "breakpoints": true
     }
   ]
 }

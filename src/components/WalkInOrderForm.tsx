@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, fetchJson } from "@/lib/api-client";
 import { Icon } from "@/components/Icon";
-import {
-  formatDate,
-  formatPrice,
-  parsePickupTimeSlots,
-  todayInJST,
-} from "@/lib/utils";
-import type { DailyProductInventory, Event, EventDate } from "@/lib/types";
+import { formatDate, formatPrice, todayInJST } from "@/lib/utils";
+import type {
+  DailyProductInventory,
+  DiningStyle,
+  Event,
+  EventDate,
+} from "@/lib/types";
 
 type InventoryRow = DailyProductInventory & { product: NonNullable<DailyProductInventory["product"]> };
 
@@ -43,7 +43,7 @@ export function WalkInOrderForm({
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [slot, setSlot] = useState("");
+  const [diningStyle, setDiningStyle] = useState<DiningStyle>("takeout");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "credit_card">("cash");
   const [handedOver, setHandedOver] = useState(true);
 
@@ -87,7 +87,6 @@ export function WalkInOrderForm({
     };
   }, [open, dateId]);
 
-  const timeSlots = parsePickupTimeSlots(event?.pickup_time_slots);
 
   const lines = inventory
     .map((inv) => ({ inv, quantity: quantities[inv.product_id] ?? 0 }))
@@ -106,7 +105,7 @@ export function WalkInOrderForm({
     setName("");
     setPhone("");
     setEmail("");
-    setSlot("");
+    setDiningStyle("takeout");
     setPaymentMethod("cash");
     setHandedOver(true);
     setError("");
@@ -130,7 +129,7 @@ export function WalkInOrderForm({
             customer_name: name,
             customer_email: email,
             customer_phone: phone,
-            pickup_time_slot: slot || undefined,
+            dining_style: diningStyle,
             payment_method: paymentMethod,
             handed_over: handedOver,
             items: lines.map((l) => ({
@@ -212,19 +211,17 @@ export function WalkInOrderForm({
               ))}
             </select>
           </div>
-          {timeSlots.length > 0 && (
-            <div>
-              <label className={label}>受取時間（任意）</label>
-              <select className={field} value={slot} onChange={(e) => setSlot(e.target.value)}>
-                <option value="">指定なし</option>
-                {timeSlots.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          <div>
+            <label className={label}>お召し上がり方法</label>
+            <select
+              className={field}
+              value={diningStyle}
+              onChange={(e) => setDiningStyle(e.target.value as DiningStyle)}
+            >
+              <option value="takeout">テイクアウト（持ち帰り・消費税8%）</option>
+              <option value="eat_in">イートイン（店内・消費税10%）</option>
+            </select>
+          </div>
         </div>
 
         {/* 商品 */}

@@ -44,7 +44,6 @@ async function bookable() {
   const { body } = await api("/api/events");
   const event = body as {
     id: string;
-    pickup_time_slots: string;
     event_dates: Array<{ id: string; reservation_status: string }>;
   };
   const date = event.event_dates.find((d) => d.reservation_status !== "closed");
@@ -56,12 +55,8 @@ async function bookable() {
   );
   assert.ok(row, "在庫のある商品が無い");
 
-  const slot = event.pickup_time_slots
-    .split("\n")
-    .map((s) => s.trim())
-    .filter(Boolean)[0];
 
-  return { event, date, row, slot };
+  return { event, date, row };
 }
 
 async function reserved(dateId: string, productId: string) {
@@ -87,6 +82,7 @@ function order(
     customer_email: "pay@example.com",
     customer_phone: "090-0000-0000",
     payment_method: "credit_card",
+    dining_style: "takeout",
     items: [{ product_id, quantity }],
     ...extra,
   });
@@ -104,12 +100,12 @@ test("カード決済が有効になっていること（このファイルの�
 });
 
 test("カード情報が無い注文は断られ、受付枠も押さえられない", async () => {
-  const { event, date, row, slot } = await bookable();
+  const { event, date, row } = await bookable();
   const before = await reserved(date.id, row.product_id);
 
   const { status, body } = await api("/api/orders", {
     method: "POST",
-    body: order(event.id, date.id, row.product_id, 1, { pickup_time_slot: slot }),
+    body: order(event.id, date.id, row.product_id, 1, { dining_style: "takeout" }),
   });
 
   assert.equal(status, 400);
@@ -126,14 +122,14 @@ test("カード情報が無い注文は断られ、受付枠も押さえられ�
 });
 
 test("決済に失敗したら、受付枠は戻り、注文は取り消され、やり直せる", async () => {
-  const { event, date, row, slot } = await bookable();
+  const { event, date, row } = await bookable();
   const before = await reserved(date.id, row.product_id);
   const requestId = `pay-fail-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   const { status, body } = await api("/api/orders", {
     method: "POST",
     body: order(event.id, date.id, row.product_id, 2, {
-      pickup_time_slot: slot,
+      dining_style: "takeout",
       payment_source_id: "cnon:this-is-not-a-real-card-token",
       client_request_id: requestId,
     }),
@@ -155,7 +151,7 @@ test("決済に失敗したら、受付枠は戻り、注文は取り消され�
   const retry = await api("/api/orders", {
     method: "POST",
     body: order(event.id, date.id, row.product_id, 1, {
-      pickup_time_slot: slot,
+      dining_style: "takeout",
       payment_source_id: "cnon:another-not-real-token",
       client_request_id: requestId,
     }),
@@ -175,14 +171,14 @@ test("決済に失敗したら、受付枠は戻り、注文は取り消され�
 test("決済が何度失敗しても、受付枠が少しずつ溶けていかない", async () => {
   // 決済業者が落ちている状況を想定。失敗のたびに枠が戻らないと、
   // 誰も買っていないのにその日が売り切れる。
-  const { event, date, row, slot } = await bookable();
+  const { event, date, row } = await bookable();
   const before = await reserved(date.id, row.product_id);
 
   for (let i = 0; i < 5; i++) {
     const { status } = await api("/api/orders", {
       method: "POST",
       body: order(event.id, date.id, row.product_id, 1, {
-        pickup_time_slot: slot,
+        dining_style: "takeout",
         payment_source_id: `cnon:fake-${i}`,
       }),
     });
@@ -200,7 +196,6 @@ test("決済が有効でも、締切を過ぎた受取日はカードを切る�
   const { body } = await api("/api/events");
   const event = body as {
     id: string;
-    pickup_time_slots: string;
     event_dates: Array<{ id: string; reservation_status: string; reservation_close_at: string | null }>;
   };
 
@@ -219,7 +214,6 @@ test("決済が有効でも、締切を過ぎた受取日はカードを切る�
   const { status } = await api("/api/orders", {
     method: "POST",
     body: order(event.id, closed.id, row.product_id, 1, {
-      pickup_time_slot: event.pickup_time_slots.split("\n")[0]?.trim(),
       payment_source_id: "cnon:fake",
     }),
   });

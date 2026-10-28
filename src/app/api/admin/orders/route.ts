@@ -5,7 +5,7 @@ import { eventDates, events, orderItems, orders } from "@/db/schema";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { holdStockAndCreateOrder, OrderValidationError } from "@/lib/orders";
 import { getActiveEvent, getAllEventDates } from "@/lib/queries";
-import { parsePickupTimeSlots } from "@/lib/utils";
+import type { DiningStyle } from "@/lib/types";
 import { isUuid, readJsonObject } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
@@ -80,7 +80,7 @@ interface WalkInBody {
   customer_name?: string;
   customer_email?: string;
   customer_phone?: string;
-  pickup_time_slot?: string;
+  dining_style?: DiningStyle;
   payment_method?: "cash" | "credit_card";
   /** Sold and handed over at the same time, which is the usual counter sale. */
   handed_over?: boolean;
@@ -154,12 +154,12 @@ export async function POST(request: NextRequest) {
           throw new OrderValidationError("イベントが見つかりません");
         }
 
-        // Offered as a convenience, not required: a counter sale is handed
-        // over on the spot and has no pickup time to speak of.
-        const slots = parsePickupTimeSlots(event.pickup_time_slots);
-        const requested = body.pickup_time_slot?.trim() ?? "";
-        if (requested && !slots.includes(requested)) {
-          throw new OrderValidationError("選択できない受取時間です");
+        // 店頭でも消費税率は分かれるので、ここでも必ず選びます。
+        const diningStyle = body.dining_style;
+        if (diningStyle !== "eat_in" && diningStyle !== "takeout") {
+          throw new OrderValidationError(
+            "店内でお召し上がりか、お持ち帰りかを選んでください"
+          );
         }
 
         const handedOver = body.handed_over !== false;
@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
           customer_name: body.customer_name?.trim() || "店頭のお客様",
           customer_email: body.customer_email?.trim() ?? "",
           customer_phone: body.customer_phone?.trim() ?? "",
-          pickup_time_slot: requested || null,
+          dining_style: diningStyle,
           payment_status: "paid",
           payment_method: paymentMethod,
           order_status: "confirmed",

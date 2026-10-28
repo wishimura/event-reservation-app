@@ -7,6 +7,7 @@ import { Toast } from "@/components/Toast";
 import { WalkInOrderForm } from "@/components/WalkInOrderForm";
 import { formatDate, formatPrice } from "@/lib/utils";
 import type { Order, OrderItem, EventDate } from "@/lib/types";
+import { diningStyleLabel } from "@/lib/tax";
 
 interface OrderWithItems extends Order {
   order_items: OrderItem[];
@@ -317,11 +318,15 @@ export default function OrdersPage() {
                         {order.event_date
                           ? formatDate(order.event_date.pickup_date)
                           : "-"}
-                        {order.pickup_time_slot && (
-                          <span className="block text-xs text-slate-500">
-                            {order.pickup_time_slot}
-                          </span>
-                        )}
+                        <span
+                          className={`mt-0.5 inline-block rounded px-1.5 py-0.5 text-xs font-medium ${
+                            order.dining_style === "eat_in"
+                              ? "bg-rose-100 text-rose-700"
+                              : "bg-sky-100 text-sky-700"
+                          }`}
+                        >
+                          {diningStyleLabel(order.dining_style)}
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-slate-600">
                         {order.order_items?.map((item) => (

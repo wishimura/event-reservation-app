@@ -6,6 +6,7 @@ import Link from "next/link";
 import type { Order, OrderItem } from "@/lib/types";
 import { formatDate, formatPrice } from "@/lib/utils";
 import { Icon } from "@/components/Icon";
+import { diningStyleLabel, pickupDateLabel } from "@/lib/tax";
 
 interface OrderWithItems extends Order {
   items?: OrderItem[];
@@ -101,16 +102,14 @@ export default function CompletePage() {
         {pickupDate && (
           <div className="bg-brand-50 border border-brand-200 rounded-2xl p-5 mb-5 text-center">
             <p className="text-xs text-brand-500 font-medium mb-1">
-              受取日
+              {pickupDateLabel(order.dining_style)}
             </p>
             <p className="text-2xl font-bold text-brand-800">
               {formatDate(pickupDate)}
             </p>
-            {order.pickup_time_slot && (
-              <p className="mt-1 text-lg font-bold text-brand-800">
-                {order.pickup_time_slot}
-              </p>
-            )}
+            <p className="mt-1 text-lg font-bold text-brand-800">
+              {diningStyleLabel(order.dining_style)}
+            </p>
           </div>
         )}
 

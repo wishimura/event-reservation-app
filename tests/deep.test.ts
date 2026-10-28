@@ -61,7 +61,6 @@ async function bookableDate() {
   const { body } = await api("/api/events");
   const event = body as {
     id: string;
-    pickup_time_slots: string;
     event_dates: Array<{ id: string; pickup_date: string; reservation_status: string }>;
   };
   const date = event.event_dates.find((d) => d.reservation_status !== "closed");
@@ -74,12 +73,7 @@ async function bookableDate() {
   );
   assert.ok(rows.length >= 2, "在庫のある商品が2つ以上必要");
 
-  const slots = event.pickup_time_slots
-    .split("\n")
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  return { event, date, rows, slot: slots[0] };
+  return { event, date, rows, slot: {} as Record<string, never> };
 }
 
 function order(
@@ -112,7 +106,7 @@ async function reserved(dateId: string, productId: string) {
 /* ============================================== 注文の原子性・整合性 */
 
 test("複数商品のうち1つでも在庫が足りなければ、どの商品の在庫も減らない", async () => {
-  const { event, date, rows, slot } = await bookableDate();
+  const { event, date, rows } = await bookableDate();
   const plenty = rows[0];
   const scarce = rows[1];
 
@@ -133,7 +127,7 @@ test("複数商品のうち1つでも在庫が足りなければ、どの商品�
         { product_id: plenty.product_id, quantity: 1 },
         { product_id: scarce.product_id, quantity: tooMany },
       ],
-      { pickup_time_slot: slot }
+      { dining_style: "takeout" }
     ),
   });
 
@@ -152,7 +146,7 @@ test("複数商品のうち1つでも在庫が足りなければ、どの商品�
 });
 
 test("同じ商品を2行に分けて頼むと、合算して1つの引当になる", async () => {
-  const { event, date, rows, slot } = await bookableDate();
+  const { event, date, rows } = await bookableDate();
   const row = rows[0];
   const before = await reserved(date.id, row.product_id);
 
@@ -165,7 +159,7 @@ test("同じ商品を2行に分けて頼むと、合算して1つの引当にな
         { product_id: row.product_id, quantity: 1 },
         { product_id: row.product_id, quantity: 2 },
       ],
-      { pickup_time_slot: slot }
+      { dining_style: "takeout" }
     ),
   });
 
@@ -174,7 +168,7 @@ test("同じ商品を2行に分けて頼むと、合算して1つの引当にな
 });
 
 test("存在しない商品IDを混ぜると、注文ごと断られる", async () => {
-  const { event, date, rows, slot } = await bookableDate();
+  const { event, date, rows } = await bookableDate();
   const before = await reserved(date.id, rows[0].product_id);
 
   const { status } = await api("/api/orders", {
@@ -186,7 +180,7 @@ test("存在しない商品IDを混ぜると、注文ごと断られる", async 
         { product_id: rows[0].product_id, quantity: 1 },
         { product_id: "00000000-0000-4000-8000-000000000000", quantity: 1 },
       ],
-      { pickup_time_slot: slot }
+      { dining_style: "takeout" }
     ),
   });
 
@@ -197,12 +191,12 @@ test("存在しない商品IDを混ぜると、注文ごと断られる", async 
 /* ======================================== API のかたちと画面の期待の一致 */
 
 test("予約完了画面が読む項目が、注文APIの返り値に揃っている", async () => {
-  const { event, date, rows, slot } = await bookableDate();
+  const { event, date, rows } = await bookableDate();
 
   const { status, body } = await api("/api/orders", {
     method: "POST",
     body: order(event.id, date.id, [{ product_id: rows[0].product_id, quantity: 1 }], {
-      pickup_time_slot: slot,
+      dining_style: "takeout",
     }),
   });
   assert.equal(status, 201);
@@ -213,7 +207,7 @@ test("予約完了画面が読む項目が、注文APIの返り値に揃って�
     "order_number",
     "total_amount",
     "payment_method",
-    "pickup_time_slot",
+    "dining_style",
     "items",
     "event_date",
     "pickup_location",
@@ -275,7 +269,7 @@ test("ダッシュボードが読む集計の形が、APIの返り値と一致�
 
 test("ダッシュボードの日別集計が、注文を1件足すと1件ぶん増える", async () => {
   await login();
-  const { event, date, rows, slot } = await bookableDate();
+  const { event, date, rows } = await bookableDate();
 
   const read = async () => {
     const { body } = await api("/api/admin/dashboard", asAdmin());
@@ -289,7 +283,7 @@ test("ダッシュボードの日別集計が、注文を1件足すと1件ぶん
   const { status, body } = await api("/api/orders", {
     method: "POST",
     body: order(event.id, date.id, [{ product_id: rows[0].product_id, quantity: 1 }], {
-      pickup_time_slot: slot,
+      dining_style: "takeout",
     }),
   });
   assert.equal(status, 201);
@@ -359,11 +353,11 @@ test("取り下げた商品・非公開にした在庫は、お客様側に出�
     );
 
     // URL を直接叩いても買えないこと
-    const { event, slot } = await bookableDate();
+    const { event } = await bookableDate();
     const { status } = await api("/api/orders", {
       method: "POST",
       body: order(event.id, date.id, [{ product_id: target.product_id, quantity: 1 }], {
-        pickup_time_slot: slot,
+        dining_style: "takeout",
       }),
     });
     assert.equal(status, 400, "非公開の商品が買えてしまう");
@@ -437,7 +431,7 @@ test("CSVの行数と中身が、注文一覧と食い違わない", async () =>
 
 test("在庫の保存と注文が同時に来ても、どちらかが壊れた形で終わらない", async () => {
   await login();
-  const { event, date, rows, slot } = await bookableDate();
+  const { event, date, rows } = await bookableDate();
   const row = rows[0];
   const before = await reserved(date.id, row.product_id);
 
@@ -462,7 +456,7 @@ test("在庫の保存と注文が同時に来ても、どちらかが壊れた�
     api("/api/orders", {
       method: "POST",
       body: order(event.id, date.id, [{ product_id: row.product_id, quantity: 1 }], {
-        pickup_time_slot: slot,
+        dining_style: "takeout",
       }),
     }),
   ]);
@@ -485,13 +479,13 @@ test("在庫の保存と注文が同時に来ても、どちらかが壊れた�
 
 test("取り消された注文の送信IDは解放され、同じIDでもう一度注文できる", async () => {
   await login();
-  const { event, date, rows, slot } = await bookableDate();
+  const { event, date, rows } = await bookableDate();
   const requestId = `test-release-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   const first = await api("/api/orders", {
     method: "POST",
     body: order(event.id, date.id, [{ product_id: rows[0].product_id, quantity: 1 }], {
-      pickup_time_slot: slot,
+      dining_style: "takeout",
       client_request_id: requestId,
     }),
   });
@@ -507,7 +501,7 @@ test("取り消された注文の送信IDは解放され、同じIDでもう一�
   const retry = await api("/api/orders", {
     method: "POST",
     body: order(event.id, date.id, [{ product_id: rows[0].product_id, quantity: 1 }], {
-      pickup_time_slot: slot,
+      dining_style: "takeout",
       client_request_id: requestId,
     }),
   });
@@ -520,18 +514,18 @@ test("取り消された注文の送信IDは解放され、同じIDでもう一�
 });
 
 test("送信IDが無くても普通に注文できる（古いブラウザ・直接呼び出し）", async () => {
-  const { event, date, rows, slot } = await bookableDate();
+  const { event, date, rows } = await bookableDate();
 
   const a = await api("/api/orders", {
     method: "POST",
     body: order(event.id, date.id, [{ product_id: rows[0].product_id, quantity: 1 }], {
-      pickup_time_slot: slot,
+      dining_style: "takeout",
     }),
   });
   const b = await api("/api/orders", {
     method: "POST",
     body: order(event.id, date.id, [{ product_id: rows[0].product_id, quantity: 1 }], {
-      pickup_time_slot: slot,
+      dining_style: "takeout",
     }),
   });
 
@@ -617,4 +611,196 @@ test("商品画像は長期キャッシュされ、型が正しく返る", async
     /max-age=\d{6,}/,
     "画像が長期キャッシュされていない"
   );
+});
+
+/* ============================== 店内／持ち帰りと、消費税 */
+
+test("提供区分が注文に残り、どちらでも金額は変わらない", async () => {
+  const { event, date, rows, slot } = await bookableDate();
+
+  const place = async (style: "eat_in" | "takeout") => {
+    const { status, body } = await api("/api/orders", {
+      method: "POST",
+      body: order(event.id, date.id, [{ product_id: rows[0].product_id, quantity: 1 }], {
+        ...slot,
+        dining_style: style,
+      }),
+    });
+    assert.equal(status, 201);
+    return body as { dining_style: string; total_amount: number; id: string };
+  };
+
+  const eatIn = await place("eat_in");
+  const takeout = await place("takeout");
+
+  assert.equal(eatIn.dining_style, "eat_in");
+  assert.equal(takeout.dining_style, "takeout");
+  assert.equal(
+    eatIn.total_amount,
+    takeout.total_amount,
+    "店内と持ち帰りで売値が変わってしまっている"
+  );
+});
+
+test("CSVに提供区分と税額が出て、税抜＋消費税が決済額ちょうどになる", async () => {
+  await login();
+  const res = await fetch(`${BASE}/api/admin/orders/csv`, {
+    headers: { Cookie: adminCookie },
+  });
+  assert.equal(res.status, 200);
+  const csv = new TextDecoder().decode(new Uint8Array(await res.arrayBuffer()));
+
+  const [header, ...lines] = csv.replace(/^﻿/, "").trim().split("\n");
+  const columns = header.split(",");
+  for (const name of ["提供区分", "税率", "税抜額", "消費税額", "Square決済ID"]) {
+    assert.ok(columns.includes(name), `CSVに「${name}」列が無い`);
+  }
+
+  const at = (row: string[], name: string) => row[columns.indexOf(name)];
+  let checked = 0;
+
+  for (const line of lines.slice(0, 30)) {
+    const row = line.split(",");
+    const total = Number(at(row, "注文合計"));
+    const net = Number(at(row, "税抜額"));
+    const tax = Number(at(row, "消費税額"));
+    if (!Number.isFinite(total) || total === 0) continue;
+
+    assert.equal(net + tax, total, `税抜＋消費税が決済額と合わない（${line}）`);
+    assert.match(at(row, "税率"), /^(8|10)%$/);
+    assert.ok(["イートイン", "テイクアウト"].includes(at(row, "提供区分")));
+    checked++;
+  }
+
+  assert.ok(checked > 0, "確かめられる注文がCSVに無い");
+});
+
+test("当日カウンターで提供区分を切り替えられ、金額は動かない", async () => {
+  await login();
+  const { event, date, rows, slot } = await bookableDate();
+
+  const { status, body } = await api("/api/orders", {
+    method: "POST",
+    body: order(event.id, date.id, [{ product_id: rows[0].product_id, quantity: 1 }], {
+      ...slot,
+      dining_style: "eat_in",
+    }),
+  });
+  assert.equal(status, 201);
+  const created = body as { id: string; total_amount: number };
+
+  const changed = await api(
+    `/api/admin/orders/${created.id}/dining-style`,
+    asAdmin({ method: "PATCH", body: JSON.stringify({ dining_style: "takeout" }) })
+  );
+  assert.equal(changed.status, 200);
+
+  const after = changed.body as {
+    dining_style: string;
+    dining_style_changed_at: string | null;
+    total_amount: number;
+  };
+  assert.equal(after.dining_style, "takeout");
+  assert.ok(after.dining_style_changed_at, "変更した時刻が残っていない");
+  assert.equal(
+    after.total_amount,
+    created.total_amount,
+    "提供区分を変えたら金額が動いてしまった"
+  );
+});
+
+test("同じ提供区分へ変えても、当日変更の記録はつかない", async () => {
+  await login();
+  const { event, date, rows, slot } = await bookableDate();
+
+  const { body } = await api("/api/orders", {
+    method: "POST",
+    body: order(event.id, date.id, [{ product_id: rows[0].product_id, quantity: 1 }], {
+      ...slot,
+      dining_style: "takeout",
+    }),
+  });
+  const created = body as { id: string };
+
+  const same = await api(
+    `/api/admin/orders/${created.id}/dining-style`,
+    asAdmin({ method: "PATCH", body: JSON.stringify({ dining_style: "takeout" }) })
+  );
+  assert.equal(same.status, 200);
+  assert.equal(
+    (same.body as { dining_style_changed_at: string | null }).dining_style_changed_at,
+    null,
+    "押し間違いでも「当日変えた」記録がついてしまう"
+  );
+});
+
+test("受け渡し済みのあとでも提供区分は変えられる", async () => {
+  await login();
+  const { event, date, rows, slot } = await bookableDate();
+
+  const { body } = await api("/api/orders", {
+    method: "POST",
+    body: order(event.id, date.id, [{ product_id: rows[0].product_id, quantity: 1 }], {
+      ...slot,
+      dining_style: "takeout",
+    }),
+  });
+  const created = body as { id: string };
+
+  await api(
+    `/api/admin/orders/${created.id}/pickup`,
+    asAdmin({ method: "PATCH", body: JSON.stringify({ pickup_status: "picked_up" }) })
+  );
+
+  const { status } = await api(
+    `/api/admin/orders/${created.id}/dining-style`,
+    asAdmin({ method: "PATCH", body: JSON.stringify({ dining_style: "eat_in" }) })
+  );
+  assert.equal(status, 200, "渡したあとに直せないと、税額が実態と合わなくなる");
+});
+
+test("取り消された注文の提供区分は変えられない", async () => {
+  await login();
+  const { event, date, rows, slot } = await bookableDate();
+
+  const { body } = await api("/api/orders", {
+    method: "POST",
+    body: order(event.id, date.id, [{ product_id: rows[0].product_id, quantity: 1 }], {
+      ...slot,
+      dining_style: "takeout",
+    }),
+  });
+  const created = body as { id: string };
+
+  await api(`/api/admin/orders/${created.id}/cancel`, asAdmin({ method: "PATCH" }));
+
+  const { status } = await api(
+    `/api/admin/orders/${created.id}/dining-style`,
+    asAdmin({ method: "PATCH", body: JSON.stringify({ dining_style: "eat_in" }) })
+  );
+  assert.equal(status, 400);
+});
+
+test("提供区分の変更APIは、おかしな値とおかしなIDを断る", async () => {
+  await login();
+
+  const bad = await api(
+    "/api/admin/orders/00000000-0000-4000-8000-000000000000/dining-style",
+    asAdmin({ method: "PATCH", body: JSON.stringify({ dining_style: "delivery" }) })
+  );
+  assert.equal(bad.status, 400);
+
+  const missing = await api(
+    "/api/admin/orders/not-a-uuid/dining-style",
+    asAdmin({ method: "PATCH", body: JSON.stringify({ dining_style: "eat_in" }) })
+  );
+  assert.ok(missing.status < 500, `${missing.status} が返った`);
+});
+
+test("提供区分の変更は、ログインしていないとできない", async () => {
+  const { status } = await api(
+    "/api/admin/orders/00000000-0000-4000-8000-000000000000/dining-style",
+    { method: "PATCH", body: JSON.stringify({ dining_style: "eat_in" }) }
+  );
+  assert.equal(status, 401);
 });

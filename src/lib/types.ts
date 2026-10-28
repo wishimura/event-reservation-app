@@ -1,3 +1,6 @@
+/** 店内で食べるか、持ち帰るか。売値は同じで、変わるのは消費税率だけ。 */
+export type DiningStyle = "eat_in" | "takeout";
+
 export interface Event {
   id: string;
   name: string;
@@ -8,7 +11,6 @@ export interface Event {
   reservation_note: string;
   contact_phone: string;
   /** Newline-separated pickup times; empty when the shop does not use them. */
-  pickup_time_slots: string;
   is_active: boolean;
 }
 
@@ -53,7 +55,8 @@ export interface Order {
   customer_name: string;
   customer_email: string;
   customer_phone: string;
-  pickup_time_slot: string | null;
+  dining_style: DiningStyle;
+  dining_style_changed_at: string | null;
   total_amount: number;
   payment_status: "pending" | "paid" | "failed" | "refunded";
   payment_method: "cash" | "credit_card";

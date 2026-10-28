@@ -1,4 +1,6 @@
 import { Resend } from "resend";
+import { diningStyleLabel, pickupDateLabel } from "./tax";
+import type { DiningStyle } from "./types";
 import { formatDate, formatPrice } from "./utils";
 
 /**
@@ -23,7 +25,7 @@ export interface OrderMailPayload {
   customer_phone: string;
   total_amount: number;
   pickup_date: string;
-  pickup_time_slot: string | null;
+  dining_style: DiningStyle;
   event_name: string;
   pickup_location: string;
   reservation_note: string;
@@ -101,15 +103,21 @@ function detailBlock(payload: OrderMailPayload): string {
         </td>
       </tr>
       <tr>
-        <td style="padding:4px 0;color:#a8a29e;font-size:12px;">受取日</td>
+        <td style="padding:4px 0;color:#a8a29e;font-size:12px;">${escapeHtml(
+          pickupDateLabel(payload.dining_style)
+        )}</td>
       </tr>
       <tr>
         <td style="padding-bottom:12px;color:#292524;font-weight:bold;">
-          ${escapeHtml(formatDate(payload.pickup_date))}${
-            payload.pickup_time_slot
-              ? `　${escapeHtml(payload.pickup_time_slot)}`
-              : ""
-          }
+          ${escapeHtml(formatDate(payload.pickup_date))}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:4px 0;color:#a8a29e;font-size:12px;">お召し上がり方法</td>
+      </tr>
+      <tr>
+        <td style="padding-bottom:12px;color:#292524;font-weight:bold;">
+          ${escapeHtml(diningStyleLabel(payload.dining_style))}
         </td>
       </tr>
       ${
@@ -137,8 +145,8 @@ function detailBlock(payload: OrderMailPayload): string {
 function textDetail(payload: OrderMailPayload): string {
   return [
     `注文番号: ${payload.order_number}`,
-    `受取日: ${formatDate(payload.pickup_date)}`,
-    payload.pickup_time_slot ? `受取時間: ${payload.pickup_time_slot}` : null,
+    `${pickupDateLabel(payload.dining_style)}: ${formatDate(payload.pickup_date)}`,
+    `お召し上がり方法: ${diningStyleLabel(payload.dining_style)}`,
     payload.pickup_location ? `受取場所: ${payload.pickup_location}` : null,
     "",
     "ご注文内容",
@@ -169,7 +177,9 @@ export function buildCustomerEmail(payload: OrderMailPayload) {
       : "");
 
   return {
-    subject: `【ご予約確認】${payload.event_name}（${formatDate(payload.pickup_date)}お受け取り）`,
+    subject: `【ご予約確認】${payload.event_name}（${formatDate(
+      payload.pickup_date
+    )}${payload.dining_style === "eat_in" ? "ご来店" : "お受け取り"}）`,
     html: layout(
       "ご予約ありがとうございます",
       `${escapeHtml(payload.customer_name)} 様<br>下記の内容でご予約を承りました。`,
@@ -205,9 +215,9 @@ export function buildShopEmail(payload: OrderMailPayload) {
     </table>`;
 
   return {
-    subject: `【新規予約】${formatDate(payload.pickup_date)}${
-      payload.pickup_time_slot ? ` ${payload.pickup_time_slot}` : ""
-    } ${payload.customer_name} 様（${payload.order_number}）`,
+    subject: `【新規予約】${formatDate(payload.pickup_date)} ${diningStyleLabel(
+      payload.dining_style
+    )} ${payload.customer_name} 様（${payload.order_number}）`,
     html: layout("新しい予約が入りました", "内容は下記のとおりです。", body),
     text: [
       "新しい予約が入りました。",

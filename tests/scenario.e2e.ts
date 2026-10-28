@@ -17,7 +17,7 @@ import assert from "node:assert/strict";
 const BASE = process.env.BASE_URL ?? "http://localhost:3981";
 const PASSWORD = process.env.ADMIN_PASSWORD ?? "qa-password";
 const CHROME =
-  process.env.CHROME_PATH ?? "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
+  process.env.CHROME_PATH ?? "/opt/pw-browsers/chromium-1243/chrome-linux64/chrome";
 
 const results: Array<{ name: string; ok: boolean; detail?: string }> = [];
 
@@ -34,7 +34,15 @@ async function step(name: string, fn: () => Promise<void>) {
 }
 
 /** 予約を1件通し、注文番号を返す。 */
-async function reserve(page: Page, label: string) {
+async function reserve(
+  page: Page,
+  label: string,
+  {
+    diningStyle = "takeout",
+    email = "scenario@example.com",
+    phone = "090-2222-3333",
+  }: { diningStyle?: "eat_in" | "takeout"; email?: string; phone?: string } = {}
+) {
   await page.goto(BASE, { waitUntil: "networkidle" });
 
   const firstDate = page.locator('a[href^="/reserve/"]').first();
@@ -49,23 +57,22 @@ async function reserve(page: Page, label: string) {
   await proceed.click();
   await page.waitForURL(/\/reserve\/confirm/, { timeout: 15000 });
 
-  // 受取時間を選ばずに確定しようとすると止まること
+  // 店内か持ち帰りかを選ばずに確定しようとすると止まること
   await page.getByPlaceholder("山田 太郎").fill(`シナリオ ${label}`);
-  await page.getByPlaceholder("taro@example.com").fill("scenario@example.com");
-  await page.getByPlaceholder("090-1234-5678").fill("090-2222-3333");
+  await page.getByPlaceholder("taro@example.com").fill(email);
+  await page.getByPlaceholder("090-1234-5678").fill(phone);
   await page.getByRole("button", { name: "注文を確定する" }).click();
   // 最初の1回はサーバーが温まっておらず、固定待ちだと描画が間に合わない
   await page
-    .getByText("受取時間を選んでください")
+    .getByText("店内でお召し上がりか、お持ち帰りかを選んでください")
     .first()
     .waitFor({ timeout: 10000 })
     .catch(() => {
-      throw new Error("受取時間が未選択でも先へ進めてしまう");
+      throw new Error("お召し上がり方法が未選択でも先へ進めてしまう");
     });
 
-  const slot = page.locator("button", { hasText: /^\d{2}:\d{2}〜\d{2}:\d{2}$/ }).first();
-  const slotText = await slot.innerText();
-  await slot.click();
+  const styleLabel = diningStyle === "eat_in" ? "店内で食べる" : "持ち帰る";
+  await page.getByRole("button", { name: new RegExp(styleLabel) }).click();
 
   await page.getByRole("button", { name: "注文を確定する" }).click();
   await page.waitForURL(/\/reserve\/complete/, { timeout: 20000 });
@@ -79,9 +86,15 @@ async function reserve(page: Page, label: string) {
   const body = await page.locator("body").innerText();
   const orderNumber = body.match(/ORD-\d{6}-[A-Z0-9]{6}/)?.[0];
   assert.ok(orderNumber, "完了画面に注文番号が出ていない");
-  assert.ok(body.includes(slotText), "完了画面に受取時間が出ていない");
 
-  return { orderNumber, slotText, dateLabel };
+  const expected = diningStyle === "eat_in" ? "イートイン" : "テイクアウト";
+  assert.ok(body.includes(expected), `完了画面に${expected}が出ていない`);
+  assert.ok(
+    body.includes(diningStyle === "eat_in" ? "来店日" : "受取日"),
+    "完了画面の日付の呼び方が提供区分と合っていない"
+  );
+
+  return { orderNumber, dateLabel, email, phone };
 }
 
 async function main() {
@@ -104,7 +117,8 @@ async function main() {
     const joined = dates.join(" ");
     assert.ok(joined.includes("11/18"), "受取日が表示されていない");
     assert.ok(!joined.includes("11/24"), "店休日が受取日の一覧に出ている");
-    assert.equal(dates.length, 12, `受取日が ${dates.length} 件（12件のはず）`);
+    // 件数そのものは本番データ次第なので、店休日が出ていないことだけを見る
+    assert.ok(dates.length > 0, "受取日が1件も出ていない");
   });
 
   await step("特定商取引法のページが開ける", async () => {
@@ -159,7 +173,10 @@ async function main() {
     const text = await adminPage.locator("body").innerText();
     assert.ok(placed?.orderNumber, "先の予約が取れていない");
     assert.ok(text.includes(placed.orderNumber), "注文一覧に予約が出ていない");
-    assert.ok(text.includes(placed.slotText), "注文一覧に受取時間が出ていない");
+    assert.ok(
+      text.includes("テイクアウト") || text.includes("イートイン"),
+      "注文一覧に提供区分が出ていない"
+    );
   });
 
   await step("製造計画に予約数が反映されている", async () => {
@@ -224,9 +241,13 @@ async function main() {
     const toggle = adminPage.getByRole("button", { name: /^(販売中|売切)$/ }).first();
     await toggle.waitFor({ timeout: 15000 });
     const wasOnSale = (await toggle.innerText()).trim() === "販売中";
-    if (wasOnSale) await toggle.click();
-    await adminPage.getByRole("button", { name: /保存/ }).first().click();
-    await adminPage.waitForTimeout(2000);
+
+    // すでに売切なら触らない。変更が無いと保存ボタンが押せないため。
+    if (wasOnSale) {
+      await toggle.click();
+      await adminPage.getByRole("button", { name: /保存/ }).first().click();
+      await adminPage.waitForTimeout(2000);
+    }
 
     try {
       await pcPage.goto(BASE, { waitUntil: "networkidle" });
@@ -340,8 +361,11 @@ async function main() {
     await adminPage.waitForTimeout(2000);
 
     // 最初の商品を1つ足して登録
-    const plus = adminPage.locator('button[aria-label$="を1つ増やす"]').first();
-    await plus.waitFor({ timeout: 10000 });
+    // 売り切れた商品の「＋」は押せないので、押せるものを選ぶ
+    const plus = adminPage
+      .locator('button[aria-label$="を1つ増やす"]:not([disabled])')
+      .first();
+    await plus.waitFor({ timeout: 15000 });
     await plus.click();
     await adminPage.waitForTimeout(300);
     await adminPage.getByRole("button", { name: "この内容で登録" }).click();
@@ -357,6 +381,56 @@ async function main() {
     await adminPage.waitForSelector("table", { timeout: 15000 });
     const after = await adminPage.locator("table").innerText();
     assert.notEqual(after, before, "店頭販売が製造計画に反映されていない");
+  });
+
+  /* ------------------------------- 同じ方の名寄せ（受取管理） */
+  console.log("\n同じ方の名寄せ");
+
+  await step("同じ方の複数の予約が、受取管理で1つにまとまる", async () => {
+    // 同じ連絡先で2件、別の連絡先で同姓同名を1件
+    const shared = { email: "gachi@example.com", phone: "090-7777-8888" };
+    await reserve(mobilePage, "ガチ勢", { ...shared, diningStyle: "eat_in" });
+    await reserve(mobilePage, "ガチ勢", { ...shared, diningStyle: "takeout" });
+
+    await adminPage.goto(`${BASE}/admin/orders`, { waitUntil: "networkidle" });
+    await adminPage.waitForTimeout(1200);
+
+    await adminPage.goto(`${BASE}/admin/pickup`, { waitUntil: "networkidle" });
+    await adminPage.waitForTimeout(1500);
+
+    const text = await adminPage.locator("body").innerText();
+    if (!text.includes("シナリオ ガチ勢")) return; // 当日の受取日でなければ確かめられない
+
+    // 件数は前のテストの残りで増えることがあるので、まとまったことだけを見る
+    assert.match(text, /\d+件まとめ/, "同じ方の予約がまとまっていない");
+    assert.ok(
+      text.includes("メールアドレス") || text.includes("電話番号"),
+      "まとめた理由が画面に出ていない"
+    );
+    assert.ok(
+      text.includes("イートイン") && text.includes("テイクアウト"),
+      "まとまりの中で提供区分の違いが見えない"
+    );
+  });
+
+  await step("カウンターで提供区分を切り替えられる", async () => {
+    await adminPage.goto(`${BASE}/admin/pickup`, { waitUntil: "networkidle" });
+    await adminPage.waitForTimeout(1500);
+
+    const toggle = adminPage
+      .getByRole("button", { name: /に変更$/ })
+      .first();
+    if ((await toggle.count()) === 0) return; // 当日の注文が無ければ確かめられない
+
+    const before = await toggle.innerText();
+    await toggle.click();
+    await adminPage.waitForTimeout(1800);
+
+    const after = await adminPage
+      .getByRole("button", { name: /に変更$/ })
+      .first()
+      .innerText();
+    assert.notEqual(after, before, "切り替えても表示が変わっていない");
   });
 
   await browser.close();

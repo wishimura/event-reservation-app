@@ -43,7 +43,6 @@ async function pickBookableDate() {
   const { body } = await api("/api/events");
   const event = body as {
     id: string;
-    pickup_time_slots: string;
     event_dates: Array<{ id: string; pickup_date: string; reservation_status: string }>;
   };
   const date = event.event_dates.find((d) => d.reservation_status !== "closed");
@@ -59,12 +58,7 @@ async function pickBookableDate() {
   }>).find((i) => !i.is_sold_out && i.production_quantity > i.reserved_quantity);
   assert.ok(row, "在庫のある商品が1つもない");
 
-  const slots = event.pickup_time_slots
-    .split("\n")
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  return { event, date, row, slot: slots[0] };
+  return { event, date, row };
 }
 
 function orderBody(
@@ -72,7 +66,7 @@ function orderBody(
   event_date_id: string,
   product_id: string,
   quantity: number,
-  slot?: string
+  diningStyle: "eat_in" | "takeout" = "takeout"
 ) {
   return JSON.stringify({
     event_id,
@@ -81,7 +75,7 @@ function orderBody(
     customer_email: "qa@example.com",
     customer_phone: "090-0000-0000",
     payment_method: "cash",
-    pickup_time_slot: slot,
+    dining_style: diningStyle,
     items: [{ product_id, quantity }],
   });
 }
@@ -145,19 +139,19 @@ test("細工したセッションCookieは通らない", async () => {
 /* ================================================================= 予約 */
 
 test("予約が作られ、在庫がその分だけ減る", async () => {
-  const { event, date, row, slot } = await pickBookableDate();
+  const { event, date, row } = await pickBookableDate();
   const before = row.reserved_quantity;
 
   const { status, body } = await api("/api/orders", {
     method: "POST",
-    body: orderBody(event.id, date.id, row.product_id, 2, slot),
+    body: orderBody(event.id, date.id, row.product_id, 2),
   });
 
   assert.equal(status, 201);
-  const order = body as { order_number: string; pickup_time_slot: string | null; order_status: string; total_amount: number };
+  const order = body as { order_number: string; dining_style: string; order_status: string; total_amount: number };
   assert.match(order.order_number, /^ORD-\d{6}-[A-Z0-9]{6}$/);
   assert.equal(order.order_status, "confirmed");
-  assert.equal(order.pickup_time_slot, slot);
+  assert.equal(order.dining_style, "takeout");
   assert.ok(order.total_amount > 0, "合計金額が0になっている");
 
   const { body: detail } = await api(`/api/reserve/${date.id}`);
@@ -166,29 +160,28 @@ test("予約が作られ、在庫がその分だけ減る", async () => {
   assert.equal(after?.reserved_quantity, before + 2);
 });
 
-test("受取時間が未選択だと断られる", async () => {
+test("店内かお持ち帰りかを選ばないと断られる", async () => {
   const { event, date, row } = await pickBookableDate();
-  const { status, body } = await api("/api/orders", {
-    method: "POST",
-    body: orderBody(event.id, date.id, row.product_id, 1),
-  });
-  assert.equal(status, 400);
-  assert.match((body as { error: string }).error, /受取時間/);
+  const body = JSON.parse(orderBody(event.id, date.id, row.product_id, 1));
+  delete body.dining_style;
+
+  const res = await api("/api/orders", { method: "POST", body: JSON.stringify(body) });
+  assert.equal(res.status, 400);
+  assert.match((res.body as { error: string }).error, /お召し上がり|お持ち帰り/);
 });
 
-test("用意されていない受取時間は断られる", async () => {
+test("知らない提供区分は断られる", async () => {
   const { event, date, row } = await pickBookableDate();
-  const { status, body } = await api("/api/orders", {
-    method: "POST",
-    body: orderBody(event.id, date.id, row.product_id, 1, "26:00〜27:00"),
-  });
-  assert.equal(status, 400);
-  assert.match((body as { error: string }).error, /受取時間/);
+  const body = JSON.parse(orderBody(event.id, date.id, row.product_id, 1));
+  body.dining_style = "delivery";
+
+  const res = await api("/api/orders", { method: "POST", body: JSON.stringify(body) });
+  assert.equal(res.status, 400);
 });
 
 test("必須項目が欠けていると断られる", async () => {
-  const { event, date, row, slot } = await pickBookableDate();
-  const full = JSON.parse(orderBody(event.id, date.id, row.product_id, 1, slot));
+  const { event, date, row } = await pickBookableDate();
+  const full = JSON.parse(orderBody(event.id, date.id, row.product_id, 1));
 
   for (const field of ["customer_name", "customer_email", "customer_phone", "event_date_id"]) {
     const broken = { ...full, [field]: "" };
@@ -204,21 +197,21 @@ test("必須項目が欠けていると断られる", async () => {
 });
 
 test("数量が0や負や小数だと断られる", async () => {
-  const { event, date, row, slot } = await pickBookableDate();
+  const { event, date, row } = await pickBookableDate();
   for (const quantity of [0, -1, 1.5]) {
     const { status } = await api("/api/orders", {
       method: "POST",
-      body: orderBody(event.id, date.id, row.product_id, quantity as number, slot),
+      body: orderBody(event.id, date.id, row.product_id, quantity as number),
     });
     assert.equal(status, 400, `数量 ${quantity} が通ってしまう`);
   }
 });
 
 test("在庫を超える数量は断られ、残数が知らされる", async () => {
-  const { event, date, row, slot } = await pickBookableDate();
+  const { event, date, row } = await pickBookableDate();
   const { status, body } = await api("/api/orders", {
     method: "POST",
-    body: orderBody(event.id, date.id, row.product_id, row.production_quantity + 50, slot),
+    body: orderBody(event.id, date.id, row.product_id, row.production_quantity + 50),
   });
   assert.equal(status, 400);
   const err = body as { error: string; details?: string[] };
@@ -227,10 +220,10 @@ test("在庫を超える数量は断られ、残数が知らされる", async ()
 });
 
 test("他人のイベントIDを混ぜても通らない", async () => {
-  const { date, row, slot } = await pickBookableDate();
+  const { date, row } = await pickBookableDate();
   const { status } = await api("/api/orders", {
     method: "POST",
-    body: orderBody("11111111-1111-4111-8111-111111111111", date.id, row.product_id, 1, slot),
+    body: orderBody("11111111-1111-4111-8111-111111111111", date.id, row.product_id, 1),
   });
   assert.equal(status, 400);
 });
@@ -248,7 +241,7 @@ test("壊れたJSONでも500にならない", async () => {
 
 /** 同じ注文を2回送っても1件にしかならないこと。 */
 test("同じ client_request_id を送り直しても注文は増えない", async () => {
-  const { event, date, row, slot } = await pickBookableDate();
+  const { event, date, row } = await pickBookableDate();
 
   const before = await api(`/api/reserve/${date.id}`);
   const stockBefore = (
@@ -264,7 +257,7 @@ test("同じ client_request_id を送り直しても注文は増えない", asyn
     customer_email: "qa-repeat@example.com",
     customer_phone: "090-0000-0000",
     payment_method: "cash",
-    pickup_time_slot: slot,
+    dining_style: "takeout",
     items: [{ product_id: row.product_id, quantity: 1 }],
   });
 
@@ -289,7 +282,7 @@ test("同じ client_request_id を送り直しても注文は増えない", asyn
 
 /** 通信が切れて同時に送り直した場合も、注文は1件だけ。 */
 test("同じ client_request_id を同時に5回送っても注文は1件", async () => {
-  const { event, date, row, slot } = await pickBookableDate();
+  const { event, date, row } = await pickBookableDate();
 
   const before = await api(`/api/reserve/${date.id}`);
   const stockBefore = (
@@ -305,7 +298,7 @@ test("同じ client_request_id を同時に5回送っても注文は1件", async
     customer_email: "qa-race@example.com",
     customer_phone: "090-0000-0000",
     payment_method: "cash",
-    pickup_time_slot: slot,
+    dining_style: "takeout",
     items: [{ product_id: row.product_id, quantity: 1 }],
   });
 
@@ -333,7 +326,7 @@ test("同じ client_request_id を同時に5回送っても注文は1件", async
 
 /** 同時に殺到しても、受付上限を超えて売れないこと。 */
 test("在庫の最後の1個に同時に殺到しても1件しか通らない", async () => {
-  const { event, date, row, slot } = await pickBookableDate();
+  const { event, date, row } = await pickBookableDate();
 
   const detail = await api(`/api/reserve/${date.id}`);
   const current = (
@@ -361,7 +354,7 @@ test("在庫の最後の1個に同時に殺到しても1件しか通らない", 
           customer_email: "qa-rush@example.com",
           customer_phone: "090-0000-0000",
           payment_method: "cash",
-          pickup_time_slot: slot,
+          dining_style: "takeout",
           items: [{ product_id: row.product_id, quantity: remaining }],
         }),
       })

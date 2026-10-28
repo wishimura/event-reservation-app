@@ -59,6 +59,18 @@ export const pickupStatusEnum = pgEnum("pickup_status", [
 export const orderSourceEnum = pgEnum("order_source", ["online", "walk_in"]);
 
 /**
+ * 店内で食べるか、持ち帰るか。
+ *
+ * 売値はどちらも同じなので、お客様から見た金額は変わりません。変わるのは
+ * 消費税率で、持ち帰りは軽減税率8%、店内飲食は10%です。同じ840円でも
+ * お店が納める税額が違うため、どちらだったかを必ず残します。
+ *
+ * 税率が決まるのは「提供した時点」の意思なので、当日カウンターで変わった
+ * ときは、その場で直したものが正になります。
+ */
+export const diningStyleEnum = pgEnum("dining_style", ["eat_in", "takeout"]);
+
+/**
  * Product photos uploaded from the console.
  *
  * Kept in their own table rather than on `products`, because every product
@@ -89,17 +101,6 @@ export const events = pgTable("events", {
   reservation_note: text("reservation_note").notNull().default(""),
   /** Shown to customers as the line to call for changes or cancellations. */
   contact_phone: text("contact_phone").notNull().default(""),
-  /**
-   * The pickup times a customer can choose from, one per line.
-   *
-   * Free text rather than a start/end pair, because the shop decides how to
-   * divide the day and the wording is theirs: "11:00〜12:00" and "午前中" are
-   * both fine. Empty means the customer is not asked — the reservation works
-   * exactly as it did before.
-   *
-   * There is no per-slot capacity. The day's stock is the only limit.
-   */
-  pickup_time_slots: text("pickup_time_slots").notNull().default(""),
   is_active: boolean("is_active").notNull().default(false),
   created_at: timestamp("created_at", { withTimezone: true })
     .notNull()
@@ -196,13 +197,6 @@ export const orders = pgTable(
     customer_name: text("customer_name").notNull(),
     customer_email: text("customer_email").notNull(),
     customer_phone: text("customer_phone").notNull(),
-    /**
-     * The time the customer chose, copied in rather than referenced: the
-     * shop may rewrite its slots later, and an order has to keep saying what
-     * was actually agreed. Null for orders taken before slots existed, or
-     * while the event has none.
-     */
-    pickup_time_slot: text("pickup_time_slot"),
     total_amount: integer("total_amount").notNull(),
     payment_status: paymentStatusEnum("payment_status")
       .notNull()
@@ -215,6 +209,20 @@ export const orders = pgTable(
       .notNull()
       .default("not_picked_up"),
     source: orderSourceEnum("source").notNull().default("online"),
+    /**
+     * 既定が持ち帰りなのは、この列が足される前の注文がすべて持ち帰り前提
+     * だったからです。新しい注文では、お客様に必ず選んでいただきます。
+     */
+    dining_style: diningStyleEnum("dining_style").notNull().default("takeout"),
+    /**
+     * 当日カウンターで切り替えられたときの時刻。
+     *
+     * 入っていれば「ご予約時の選択から変わった」ということで、税額の根拠を
+     * あとから説明するときに効きます。ご予約どおりなら null のままです。
+     */
+    dining_style_changed_at: timestamp("dining_style_changed_at", {
+      withTimezone: true,
+    }),
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

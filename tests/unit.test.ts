@@ -16,26 +16,11 @@ import {
   getRemainingQuantity,
   getStatusLabel,
   isPastReservationDeadline,
-  parsePickupTimeSlots,
   todayInJST,
 } from "../src/lib/utils";
 import { resolveSoldOut } from "../src/lib/inventory";
 
-/* ------------------------------------------------------------------ 受取時間 */
 
-test("受取時間：空白行・前後の空白・重複を落とす", () => {
-  assert.deepEqual(
-    parsePickupTimeSlots("11:00〜12:00\n\n  12:00〜13:00  \n11:00〜12:00\n"),
-    ["11:00〜12:00", "12:00〜13:00"]
-  );
-});
-
-test("受取時間：未設定は空配列（選択欄を出さない）", () => {
-  assert.deepEqual(parsePickupTimeSlots(""), []);
-  assert.deepEqual(parsePickupTimeSlots(null), []);
-  assert.deepEqual(parsePickupTimeSlots(undefined), []);
-  assert.deepEqual(parsePickupTimeSlots("   \n  \n"), []);
-});
 
 /* ------------------------------------------------------------------ 締切 */
 
@@ -194,6 +179,13 @@ test("注文番号：形式が一定で、連続生成しても衝突しにく�
 /* ------------------------------------------------------- DBエラーの判定 */
 
 import { isUniqueViolation, isUniqueViolationOn } from "../src/lib/db-errors";
+import { diningStyleLabel, pickupDateLabel, taxBreakdown } from "../src/lib/tax";
+import {
+  groupByCustomer,
+  matchedByLabel,
+  normalizeEmail,
+  normalizePhone,
+} from "../src/lib/customer-grouping";
 
 test("一意制約エラー：Drizzle が包んだ内側のコードまで見る", () => {
   // Drizzle は実エラーを cause にぶら下げる。表層だけ見ると常に false になる。
@@ -250,20 +242,7 @@ test("締切：サーバーのタイムゾーンが変わっても同じ瞬間�
   assert.equal(seen.size, 1, "タイムゾーンで締切の瞬間がずれている");
 });
 
-test("受取時間：Windows からの貼り付け（CRLF）でも正しく分かれる", () => {
-  // 表計算ソフトからコピーすると行末に \r が残る
-  assert.deepEqual(parsePickupTimeSlots("11:00〜12:00\r\n12:00〜13:00\r\n"), [
-    "11:00〜12:00",
-    "12:00〜13:00",
-  ]);
-});
 
-test("受取時間：全角空白だけの行は落ちる", () => {
-  assert.deepEqual(parsePickupTimeSlots("11:00〜12:00\n　\n12:00〜13:00"), [
-    "11:00〜12:00",
-    "12:00〜13:00",
-  ]);
-});
 
 test("日付の加算：月末・年末・うるう年をまたいでも正しい", () => {
   assert.equal(addDaysToDateString("2026-01-31", 1), "2026-02-01");
@@ -316,4 +295,171 @@ test("一意制約エラー：制約名が無いドライバでも誤判定し�
   const noConstraint = Object.assign(new Error("duplicate key"), { code: "23505" });
   assert.equal(isUniqueViolation(noConstraint), true);
   assert.equal(isUniqueViolationOn(noConstraint, "orders_client_request_id_key"), false);
+});
+
+/* ====================================================== 消費税 */
+
+test("消費税：売値は同じでも、税率と税額が提供区分で変わる", () => {
+  const takeout = taxBreakdown(840, "takeout");
+  const eatIn = taxBreakdown(840, "eat_in");
+
+  // お客様が払う額は1円も変わらない
+  assert.equal(takeout.total, 840);
+  assert.equal(eatIn.total, 840);
+
+  assert.equal(takeout.percent, 8);
+  assert.equal(eatIn.percent, 10);
+
+  assert.equal(takeout.net, 777);
+  assert.equal(takeout.tax, 63);
+  assert.equal(eatIn.net, 763);
+  assert.equal(eatIn.tax, 77);
+});
+
+test("消費税：税抜と税額の合計が、必ず決済額ぴったりになる", () => {
+  // ここがずれると Square の明細と帳簿が合わなくなる
+  for (const total of [80, 380, 480, 650, 750, 800, 840, 1234, 2160, 9999, 123456]) {
+    for (const style of ["takeout", "eat_in"] as const) {
+      const t = taxBreakdown(total, style);
+      assert.equal(t.net + t.tax, total, `${total}円 / ${style} で合わない`);
+    }
+  }
+});
+
+test("消費税：0円や異常な値でも壊れない", () => {
+  assert.deepEqual(
+    { net: taxBreakdown(0, "takeout").net, tax: taxBreakdown(0, "takeout").tax },
+    { net: 0, tax: 0 }
+  );
+  assert.equal(taxBreakdown(-100, "eat_in").total, 0);
+});
+
+test("表示名：イートインの受取日は「来店日」と呼ぶ", () => {
+  assert.equal(diningStyleLabel("eat_in"), "イートイン");
+  assert.equal(diningStyleLabel("takeout"), "テイクアウト");
+  assert.equal(pickupDateLabel("eat_in"), "来店日");
+  assert.equal(pickupDateLabel("takeout"), "受取日");
+  assert.equal(pickupDateLabel(null), "受取日");
+});
+
+/* ============================================== 同じ方の名寄せ */
+
+const order = (
+  id: string,
+  customer_name: string,
+  customer_email: string,
+  customer_phone: string
+) => ({ id, customer_name, customer_email, customer_phone });
+
+test("名寄せ：電話番号の書き方が違っても同じ番号とみなす", () => {
+  assert.equal(normalizePhone("090-1234-5678"), "09012345678");
+  assert.equal(normalizePhone("09012345678"), "09012345678");
+  assert.equal(normalizePhone("090 1234 5678"), "09012345678");
+  assert.equal(normalizePhone("(090) 1234-5678"), "09012345678");
+  assert.equal(normalizePhone("+81 90 1234 5678"), "09012345678");
+  assert.equal(normalizePhone(""), "");
+});
+
+test("名寄せ：メールの大文字小文字と前後の空白は無視する", () => {
+  assert.equal(normalizeEmail("  Taro@Example.COM "), "taro@example.com");
+  assert.equal(normalizeEmail(null), "");
+});
+
+test("名寄せ：メールアドレスが同じならまとまる", () => {
+  const groups = groupByCustomer([
+    order("1", "山田 太郎", "taro@example.com", "090-1111-1111"),
+    order("2", "山田 太郎", "taro@example.com", "090-2222-2222"),
+  ]);
+
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].orders.length, 2);
+  assert.equal(groups[0].matchedBy, "email");
+});
+
+test("名寄せ：電話番号が同じならまとまる（メールが違っても）", () => {
+  const groups = groupByCustomer([
+    order("1", "山田 太郎", "taro@example.com", "090-1234-5678"),
+    order("2", "山田 花子", "hanako@example.com", "09012345678"),
+  ]);
+
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].matchedBy, "phone");
+});
+
+test("名寄せ：メールも電話も同じなら、その旨が分かる", () => {
+  const groups = groupByCustomer([
+    order("1", "山田 太郎", "taro@example.com", "090-1234-5678"),
+    order("2", "山田 太郎", "TARO@example.com", "090-1234-5678"),
+  ]);
+
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].matchedBy, "both");
+});
+
+test("名寄せ：同姓同名でも連絡先が違えば別人として扱う", () => {
+  // ここが崩れると、別の方のぶんを一緒にお渡ししてしまう
+  const groups = groupByCustomer([
+    order("1", "山田 太郎", "taro1@example.com", "090-1111-1111"),
+    order("2", "山田 太郎", "taro2@example.com", "090-2222-2222"),
+  ]);
+
+  assert.equal(groups.length, 2, "氏名だけでまとめてしまっている");
+  assert.ok(groups[0].hasNameCollision, "同姓同名の警告が出ていない");
+  assert.ok(groups[1].hasNameCollision, "同姓同名の警告が出ていない");
+});
+
+test("名寄せ：別人どうしには同姓同名の警告を出さない", () => {
+  const groups = groupByCustomer([
+    order("1", "山田 太郎", "taro@example.com", "090-1111-1111"),
+    order("2", "鈴木 花子", "hanako@example.com", "090-2222-2222"),
+  ]);
+
+  assert.equal(groups.length, 2);
+  assert.ok(!groups[0].hasNameCollision);
+  assert.ok(!groups[1].hasNameCollision);
+});
+
+test("名寄せ：連絡先が連鎖してつながる場合もひとまとまりになる", () => {
+  // 1と2はメールが同じ、2と3は電話が同じ → 3件で1組
+  const groups = groupByCustomer([
+    order("1", "山田 太郎", "taro@example.com", "090-1111-1111"),
+    order("2", "山田 太郎", "taro@example.com", "090-9999-9999"),
+    order("3", "山田 太郎", "other@example.com", "090-9999-9999"),
+  ]);
+
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].orders.length, 3);
+});
+
+test("名寄せ：1件だけなら、まとめた理由は出さない", () => {
+  const groups = groupByCustomer([
+    order("1", "山田 太郎", "taro@example.com", "090-1111-1111"),
+  ]);
+
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].matchedBy, null);
+  assert.equal(matchedByLabel(null), "");
+});
+
+test("名寄せ：短すぎる電話番号では他人とまとめない", () => {
+  // 店頭販売は電話番号が空のことがある
+  const groups = groupByCustomer([
+    order("1", "店頭のお客様", "", ""),
+    order("2", "店頭のお客様", "", ""),
+    order("3", "誰か", "", "123"),
+  ]);
+
+  assert.equal(groups.length, 3, "連絡先の無い注文がまとまってしまっている");
+});
+
+test("名寄せ：渡した順番が保たれる", () => {
+  const groups = groupByCustomer([
+    order("1", "A", "a@example.com", "090-1111-1111"),
+    order("2", "B", "b@example.com", "090-2222-2222"),
+    order("3", "A", "a@example.com", "090-1111-1111"),
+  ]);
+
+  assert.equal(groups.length, 2);
+  assert.deepEqual(groups[0].orders.map((o) => o.id), ["1", "3"]);
+  assert.deepEqual(groups[1].orders.map((o) => o.id), ["2"]);
 });

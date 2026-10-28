@@ -7,6 +7,7 @@ import {
   products,
 } from "@/db/schema";
 import { refreshDateReservationStatus } from "@/lib/inventory";
+import type { DiningStyle } from "@/lib/types";
 import { generateOrderNumber } from "@/lib/utils";
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -123,7 +124,7 @@ export async function holdStockAndCreateOrder(
     customer_name: string;
     customer_email: string;
     customer_phone: string;
-    pickup_time_slot: string | null;
+    dining_style: DiningStyle;
     payment_status: "pending" | "paid";
     payment_method: "cash" | "credit_card";
     order_status: "temporary" | "confirmed";
@@ -193,7 +194,7 @@ export async function holdStockAndCreateOrder(
       customer_name: params.customer_name,
       customer_email: params.customer_email,
       customer_phone: params.customer_phone,
-      pickup_time_slot: params.pickup_time_slot,
+      dining_style: params.dining_style,
       total_amount: totalAmount,
       payment_status: params.payment_status,
       payment_method: params.payment_method,
