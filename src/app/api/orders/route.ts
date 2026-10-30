@@ -21,6 +21,7 @@ import {
   isPastReservationDeadline,
 } from "@/lib/utils";
 import { isUuid, readJsonObject } from "@/lib/http";
+import { recordPaymentEvent } from "@/lib/payment-log";
 
 export const dynamic = "force-dynamic";
 
@@ -236,10 +237,27 @@ export async function POST(request: NextRequest) {
             );
           }
 
-          const message =
-            paymentError instanceof SquarePaymentError
-              ? paymentError.customerMessage
-              : "決済処理に失敗しました。もう一度お試しください。";
+          const declined = paymentError instanceof SquarePaymentError;
+          const message = declined
+            ? paymentError.customerMessage
+            : "決済処理に失敗しました。もう一度お試しください。";
+
+          await recordPaymentEvent({
+            source: "server",
+            stage: "charge",
+            outcome: declined ? "declined" : "error",
+            order_number: order.order_number,
+            amount: order.total_amount,
+            customer_email: order.customer_email,
+            message,
+            detail: {
+              reason:
+                paymentError instanceof Error
+                  ? paymentError.message
+                  : String(paymentError),
+            },
+            user_agent: request.headers.get("user-agent"),
+          });
 
           return NextResponse.json({ error: message }, { status: 402 });
         }
@@ -256,6 +274,18 @@ export async function POST(request: NextRequest) {
          * with the payment id needed to match the two up by hand.
          */
         order = await recordPayment(order, charge);
+
+        await recordPaymentEvent({
+          source: "server",
+          stage: "charge",
+          outcome: "ok",
+          order_number: order.order_number,
+          amount: order.total_amount,
+          customer_email: order.customer_email,
+          message: "決済が完了しました",
+          detail: { square_payment_id: charge.paymentId },
+          user_agent: request.headers.get("user-agent"),
+        });
       }
 
       // Sent after the response so the customer is not kept waiting on the
@@ -371,6 +401,17 @@ async function recordPayment(order: Order, charge: ChargeResult): Promise<Order>
     `order_id=${order.id}`,
     `square_payment_id=${charge.paymentId}`
   );
+
+  await recordPaymentEvent({
+    source: "server",
+    stage: "record",
+    outcome: "error",
+    order_number: order.order_number,
+    amount: order.total_amount,
+    customer_email: order.customer_email,
+    message: "決済は通ったが、記録できなかった。手作業で突き合わせること。",
+    detail: { square_payment_id: charge.paymentId, order_id: order.id },
+  });
 
   // The customer paid, so they see what they paid for. The row stays
   // unconfirmed until someone fixes it, which is the state the shop can act on.

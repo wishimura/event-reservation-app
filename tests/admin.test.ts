@@ -838,3 +838,85 @@ test("受取日を追加すると、受付枠は0で作られる", async () => {
     await api(`/api/admin/event/dates/${date.id}`, { method: "DELETE" });
   }
 });
+
+/* ===================================================== 決済ログ */
+
+test("決済ログ：ブラウザからの申告を受け取り、管理画面で読める", async () => {
+  /*
+    拾いたいのは「サーバーに注文が届かなかった失敗」です。注文もキャンセルも
+    残らないので、これが無いとあとから何も分かりません（2026-10-30）。
+  */
+  const marker = `e2e-${Date.now()}`;
+
+  const sent = await api("/api/payment-log", {
+    method: "POST",
+    body: JSON.stringify({
+      stage: "card_form",
+      outcome: "error",
+      message: `決済フォームの読み込みに失敗しました ${marker}`,
+      customer_email: "trouble@example.com",
+      amount: 3950,
+      detail: { reason: "already attached" },
+    }),
+  });
+  assert.equal(sent.status, 200, "ログインしていない画面からも送れること");
+
+  const { status, body } = await api("/api/admin/payment-logs");
+  assert.equal(status, 200);
+
+  const logs = (body as { logs: Array<Record<string, unknown>> }).logs;
+  const found = logs.find((l) => String(l.message).includes(marker));
+  assert.ok(found, "送った記録が管理画面から読めない");
+  assert.equal(found.source, "browser");
+  assert.equal(found.stage, "card_form");
+  assert.equal(found.outcome, "error");
+  assert.equal(found.amount, 3950);
+});
+
+test("決済ログ：知らない値は断る", async () => {
+  for (const bad of [
+    {},
+    { stage: "card_form" },
+    { outcome: "error" },
+    { stage: "drop table", outcome: "error" },
+    { stage: "card_form", outcome: "exploded" },
+  ]) {
+    const { status } = await api("/api/payment-log", {
+      method: "POST",
+      body: JSON.stringify(bad),
+    });
+    assert.equal(status, 400, `${JSON.stringify(bad)} が通っている`);
+  }
+});
+
+test("決済ログ：長すぎるものは切って保存する", async () => {
+  const marker = `long-${Date.now()}`;
+  const { status } = await api("/api/payment-log", {
+    method: "POST",
+    body: JSON.stringify({
+      stage: "tokenize",
+      outcome: "error",
+      message: `${marker}${"あ".repeat(2000)}`,
+      detail: { padding: "x".repeat(5000) },
+    }),
+  });
+  assert.equal(status, 200);
+
+  const { body } = await api("/api/admin/payment-logs");
+  const logs = (body as { logs: Array<Record<string, unknown>> }).logs;
+  const found = logs.find((l) => String(l.message).includes(marker));
+  assert.ok(found, "保存されていない");
+  assert.ok(
+    String(found.message).length <= 500,
+    `切られていない: ${String(found.message).length}`
+  );
+  assert.ok(
+    JSON.stringify(found.detail).length <= 2100,
+    "詳細が切られていない"
+  );
+});
+
+test("決済ログ：一覧はログインしないと読めない", async () => {
+  const res = await fetch(`${BASE}/api/admin/payment-logs`);
+  assert.equal(res.status, 401, "未ログインで決済ログが読めてしまう");
+});

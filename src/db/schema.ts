@@ -6,6 +6,7 @@ import {
   date,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -338,3 +339,70 @@ export const orderItemsRelations = relations(orderItems, ({ one }) => ({
     references: [products.id],
   }),
 }));
+
+
+/**
+ * 決済まわりで起きたことの記録。
+ *
+ * ## なぜ要るか
+ *
+ * 2026-10-30 に「2回目の決済ができなかった」というお申し出がありました。調べて
+ * みると、注文も、失敗して取り消された注文も、1件も残っていませんでした。
+ * 決済がサーバーまで届いていなかったからです。失敗はブラウザの中で起きていて、
+ * こちらには何も伝わっていませんでした。Vercel の実行ログも1時間ほどで消えます。
+ *
+ * つまり**何が起きたのか確かめる手段が無かった**。そのための表です。
+ *
+ * ## 書かないもの
+ *
+ * カード番号も、Square のトークンも、ここには入れません。入れてよいのは
+ * 「どの段階で」「どう転んだか」と、突き合わせに要る最小限（注文番号・金額・
+ * 連絡先）だけです。
+ */
+export const paymentLogStageEnum = pgEnum("payment_log_stage", [
+  /** カード入力欄を出すところ。ここで転ぶと、お客様は払う手段そのものを失う。 */
+  "card_form",
+  /** カード情報をトークンにするところ。 */
+  "tokenize",
+  /** カード会社の本人認証（3Dセキュア）。 */
+  "verify",
+  /** 注文をサーバーに送るところ。 */
+  "submit",
+  /** Square に請求するところ。 */
+  "charge",
+  /** 請求の結果を書き留めるところ。 */
+  "record",
+]);
+
+export const paymentLogOutcomeEnum = pgEnum("payment_log_outcome", [
+  "ok",
+  /** カード会社に断られた。お客様の側の理由であることが多い。 */
+  "declined",
+  /** こちらか Square の不具合。 */
+  "error",
+  /** お客様が途中でやめた。財布のシートを閉じた場合など。 */
+  "abandoned",
+]);
+
+export const paymentLogs = pgTable(
+  "payment_logs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    created_at: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    /** "server" か "browser"。ブラウザ発はお客様の端末からの申告。 */
+    source: text("source").notNull(),
+    stage: paymentLogStageEnum("stage").notNull(),
+    outcome: paymentLogOutcomeEnum("outcome").notNull(),
+    order_number: text("order_number"),
+    amount: integer("amount"),
+    customer_email: text("customer_email"),
+    /** 画面に出した文言か、こちらで掴んだ理由。 */
+    message: text("message").notNull().default(""),
+    /** Square のエラーコードなど。カード情報は入れない。 */
+    detail: jsonb("detail"),
+    user_agent: text("user_agent"),
+  },
+  (t) => [index("payment_logs_created_at_idx").on(t.created_at)]
+);

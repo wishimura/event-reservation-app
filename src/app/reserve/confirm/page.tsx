@@ -241,6 +241,24 @@ export default function ConfirmPage() {
           setCardError(
             "決済フォームの読み込みに失敗しました。ページを再読み込みしてください。"
           );
+          /*
+            ここはまだ画面が立ち上がったばかりで、金額もご連絡先も決まって
+            いません。下の report() は使わず、分かっていることだけ送ります。
+            この失敗はサーバーに何も残らないので、送らなければ誰も気づけません。
+          */
+          void fetch("/api/payment-log", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            keepalive: true,
+            body: JSON.stringify({
+              stage: "card_form",
+              outcome: "error",
+              message: "決済フォームの読み込みに失敗しました",
+              detail: {
+                reason: err instanceof Error ? err.message : String(err),
+              },
+            }),
+          }).catch(() => {});
         }
       }
     }
@@ -388,6 +406,40 @@ export default function ConfirmPage() {
    * point — whether it came from the card form or from a wallet — so all
    * that is left is to hand it to the server.
    */
+  /**
+   * 決済にたどり着けなかったことを、お店に知らせる。
+   *
+   * ここで拾う失敗は**サーバーに何も届きません**。注文も、取り消された注文も
+   * 残らないので、あとから「何が起きたのか」を調べる手段がありませんでした
+   * （2026-10-30 のお申し出がこれです）。
+   *
+   * お客様には何も見せません。送れなくても黙って続けます。
+   */
+  function report(
+    stage: "card_form" | "tokenize" | "verify" | "submit",
+    outcome: "declined" | "error" | "abandoned",
+    message: string,
+    detail?: unknown
+  ) {
+    try {
+      void fetch("/api/payment-log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        keepalive: true,
+        body: JSON.stringify({
+          stage,
+          outcome,
+          message,
+          detail,
+          amount: totalAmount,
+          customer_email: email.trim() || null,
+        }),
+      }).catch(() => {});
+    } catch {
+      /* 記録はおまけ。ここで止めない。 */
+    }
+  }
+
   async function placeOrder(
     paymentSourceId?: string,
     verificationToken?: string
@@ -434,8 +486,11 @@ export default function ConfirmPage() {
       // The overlay stays up through the transition, so the paid customer is
       // never looking at a live form they could submit a second time.
       router.push("/reserve/complete");
-    } catch {
+    } catch (err) {
       setPlacing(false);
+      report("submit", "error", "注文の送信中に通信が途切れました", {
+        reason: err instanceof Error ? err.message : String(err),
+      });
       alert(
         "通信が途切れました。もう一度「注文を確定する」を押してください。\n" +
           "同じご注文が二重になることはありません。"
@@ -466,10 +521,11 @@ export default function ConfirmPage() {
       try {
         const result = await cardRef.current.tokenize();
         if (result.status !== "OK") {
-          setCardError(
+          const reason =
             result.errors?.[0]?.message ??
-              "カード情報をご確認のうえ、もう一度お試しください。"
-          );
+            "カード情報をご確認のうえ、もう一度お試しください。";
+          setCardError(reason);
+          report("tokenize", "declined", reason, { status: result.status });
           setSubmitting(false);
           return;
         }
@@ -477,6 +533,9 @@ export default function ConfirmPage() {
       } catch (err) {
         console.error("Tokenize error:", err);
         setCardError("カード情報の確認に失敗しました。もう一度お試しください。");
+        report("tokenize", "error", "カード情報の確認に失敗しました", {
+          reason: err instanceof Error ? err.message : String(err),
+        });
         setSubmitting(false);
         return;
       }
@@ -510,6 +569,9 @@ export default function ConfirmPage() {
         setCardError(
           "カード会社の本人認証が完了しませんでした。もう一度お試しください。"
         );
+        report("verify", "error", "カード会社の本人認証が完了しませんでした", {
+          reason: err instanceof Error ? err.message : String(err),
+        });
         setSubmitting(false);
         return;
       }
@@ -540,6 +602,9 @@ export default function ConfirmPage() {
       const result = await wallet.tokenize();
       if (result.status !== "OK") {
         // Closing the sheet lands here too, which is not worth an error.
+        report("tokenize", "abandoned", "財布の支払いが完了しませんでした", {
+          status: result.status,
+        });
         setSubmitting(false);
         return;
       }
@@ -547,6 +612,9 @@ export default function ConfirmPage() {
     } catch (err) {
       console.error("Wallet tokenize error:", err);
       setCardError("お支払いを完了できませんでした。もう一度お試しください。");
+      report("tokenize", "error", "財布の支払いでエラーになりました", {
+        reason: err instanceof Error ? err.message : String(err),
+      });
       setSubmitting(false);
       return;
     }

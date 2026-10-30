@@ -28,6 +28,7 @@ const CONSOLE_PAGES = [
   "/admin/production",
   "/admin/products",
   "/admin/settings",
+  "/admin/payment-logs",
 ];
 
 test.describe("S-04 管理画面", () => {
@@ -91,6 +92,41 @@ test.describe("S-04 管理画面", () => {
     await expect(page.locator("main")).toContainText(
       new RegExp(`3\\s*/\\s*(上限\\s*)?${FIXTURE.plenty.capacity}`)
     );
+  });
+
+  test("決済までたどり着けなかった失敗が、決済ログに残る", async ({ page }) => {
+    /*
+      拾いたいのは**サーバーに注文が届かなかった失敗**です。注文もキャンセルも
+      残らないので、これが無いとお申し出があっても何も分かりません
+      （2026-10-30 に実際にそうなりました）。
+
+      ここではブラウザからの申告を直接送って、管理画面に出るところまでを見ます。
+      カード入力欄そのものは Square の鍵が無いと描かれないためです。
+    */
+    const marker = `e2e-${Date.now()}`;
+    const res = await page.request.post("/api/payment-log", {
+      data: {
+        stage: "card_form",
+        outcome: "error",
+        message: `決済フォームの読み込みに失敗しました ${marker}`,
+        amount: 3950,
+        customer_email: "trouble@example.com",
+      },
+    });
+    expect(res.status()).toBe(200);
+
+    await loginAsAdmin(page);
+    await page.goto("/admin/payment-logs");
+
+    const row = rowContaining(page, marker);
+    await expect(row).toBeVisible();
+    await expect(row).toContainText("カード入力欄");
+    await expect(row).toContainText("お客様の端末");
+    await expect(row).toContainText("エラー");
+
+    // うまくいかなかったものだけに絞っても残る。
+    await page.getByText("うまくいかなかったものだけ").click();
+    await expect(rowContaining(page, marker)).toBeVisible();
   });
 
   test("CSV に、納める消費税の根拠が入っている", async ({ page }) => {

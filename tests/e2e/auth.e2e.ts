@@ -17,6 +17,7 @@ const CONSOLE_PAGES = [
   "/admin/production",
   "/admin/products",
   "/admin/settings",
+  "/admin/payment-logs",
 ];
 
 test.describe("S-07 管理画面のログイン", () => {
