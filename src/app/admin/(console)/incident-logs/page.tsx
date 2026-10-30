@@ -4,8 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { ApiError, fetchJson } from "@/lib/api-client";
 import { LoadErrorNotice } from "@/components/LoadErrorNotice";
 
-interface PaymentLog {
+interface IncidentLog {
   id: string;
+  area: string;
+  path: string | null;
   created_at: string;
   source: string;
   stage: string;
@@ -26,6 +28,31 @@ const STAGE_LABELS: Record<string, string> = {
   submit: "注文の送信",
   charge: "カードへの請求",
   record: "結果の記録",
+  customer_mail: "お客様への確認メール",
+  shop_mail: "店舗への通知メール",
+  mail_config: "メールの設定",
+  render: "画面の表示",
+  uncaught: "画面の処理",
+  load: "データの読み込み",
+  request: "サーバーの処理",
+};
+
+/** 何についての記録か。絞り込みの見出しにも使う。 */
+const AREAS: Array<{ value: string; label: string }> = [
+  { value: "all", label: "すべて" },
+  { value: "payment", label: "決済" },
+  { value: "email", label: "メール" },
+  { value: "screen", label: "画面" },
+  { value: "data", label: "データ" },
+  { value: "server", label: "サーバー" },
+];
+
+const AREA_LABELS: Record<string, string> = {
+  payment: "決済",
+  email: "メール",
+  screen: "画面",
+  data: "データ",
+  server: "サーバー",
 };
 
 const OUTCOME_LABELS: Record<string, { label: string; cls: string }> = {
@@ -35,18 +62,19 @@ const OUTCOME_LABELS: Record<string, { label: string; cls: string }> = {
   abandoned: { label: "途中でやめた", cls: "bg-slate-200 text-slate-600" },
 };
 
-export default function PaymentLogsPage() {
-  const [logs, setLogs] = useState<PaymentLog[]>([]);
+export default function IncidentLogsPage() {
+  const [logs, setLogs] = useState<IncidentLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [onlyTrouble, setOnlyTrouble] = useState(false);
+  const [area, setArea] = useState("all");
 
   const load = useCallback(async () => {
     setLoadError("");
     setLoading(true);
     try {
-      const data = await fetchJson<{ logs: PaymentLog[] }>(
-        "/api/admin/payment-logs"
+      const data = await fetchJson<{ logs: IncidentLog[] }>(
+        "/api/admin/incident-logs"
       );
       setLogs(data.logs);
     } catch (err) {
@@ -63,7 +91,9 @@ export default function PaymentLogsPage() {
     load();
   }, [load]);
 
-  const shown = onlyTrouble ? logs.filter((l) => l.outcome !== "ok") : logs;
+  const shown = logs
+    .filter((l) => area === "all" || l.area === area)
+    .filter((l) => !onlyTrouble || l.outcome !== "ok");
 
   function formatTime(value: string): string {
     return new Date(value).toLocaleString("ja-JP", {
@@ -80,17 +110,30 @@ export default function PaymentLogsPage() {
     <div>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">決済ログ</h2>
+          <h2 className="text-2xl font-bold text-slate-800">調査ログ</h2>
           <p className="mt-1 text-xs leading-relaxed text-slate-500">
-            決済までにどこで転んだかの記録です。
+            画面の中で起きたことの記録です。
             <strong className="text-slate-700">
-              カード入力欄が出なかった、情報の確認で止まった
+              カード入力欄が出なかった、確認メールが送れなかった、画面が落ちた
             </strong>
-            といった、サーバーに注文が届かない失敗もここに残ります。
+            といった、<strong className="text-slate-700">画面を見ているだけでは
+            分からない失敗</strong>がここに残ります。
             お申し出があったときは、その時刻のあたりを見てください。
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-3">
+          <select
+            value={area}
+            onChange={(e) => setArea(e.target.value)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
+            aria-label="種別で絞り込む"
+          >
+            {AREAS.map((a) => (
+              <option key={a.value} value={a.value}>
+                {a.label}
+              </option>
+            ))}
+          </select>
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input
               type="checkbox"
@@ -150,10 +193,14 @@ export default function PaymentLogsPage() {
                       {formatTime(log.created_at)}
                     </td>
                     <td className="px-4 py-3 text-slate-800">
-                      {STAGE_LABELS[log.stage] ?? log.stage}
-                      <span className="ml-2 text-xs text-slate-400">
-                        {log.source === "browser" ? "お客様の端末" : "サーバー"}
+                      <span className="mr-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">
+                        {AREA_LABELS[log.area] ?? log.area}
                       </span>
+                      {STAGE_LABELS[log.stage] ?? log.stage}
+                      <div className="text-xs text-slate-400">
+                        {log.source === "browser" ? "お客様の端末" : "サーバー"}
+                        {log.path ? ` ・ ${log.path}` : ""}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <span

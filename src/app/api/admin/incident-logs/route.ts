@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { desc } from "drizzle-orm";
 import { db } from "@/db";
-import { paymentLogs } from "@/db/schema";
+import { incidentLogs } from "@/db/schema";
 
 export const dynamic = "force-dynamic";
 
@@ -24,15 +24,15 @@ export async function GET(request: NextRequest) {
 
     const logs = await db
       .select()
-      .from(paymentLogs)
-      .orderBy(desc(paymentLogs.created_at))
+      .from(incidentLogs)
+      .orderBy(desc(incidentLogs.created_at))
       .limit(limit);
 
     return NextResponse.json({ logs });
   } catch (error) {
     console.error("Payment log load error:", error);
     return NextResponse.json(
-      { error: "決済ログの取得に失敗しました" },
+      { error: "ログの取得に失敗しました" },
       { status: 500 }
     );
   }

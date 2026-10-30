@@ -342,59 +342,55 @@ export const orderItemsRelations = relations(orderItems, ({ one }) => ({
 
 
 /**
- * 決済まわりで起きたことの記録。
+ * 調べるための記録。
  *
  * ## なぜ要るか
  *
  * 2026-10-30 に「2回目の決済ができなかった」というお申し出がありました。調べて
  * みると、注文も、失敗して取り消された注文も、1件も残っていませんでした。
- * 決済がサーバーまで届いていなかったからです。失敗はブラウザの中で起きていて、
- * こちらには何も伝わっていませんでした。Vercel の実行ログも1時間ほどで消えます。
+ * 失敗はブラウザの中で起きていて、サーバーには何も届いていませんでした。
+ * Vercel の実行ログも1時間ほどで消えます。
  *
  * つまり**何が起きたのか確かめる手段が無かった**。そのための表です。
+ *
+ * 決済だけでなく、確認メールの送信、画面の例外、サーバーの想定外の失敗も
+ * ここに集めます。**画面で分かる不具合は困らない。困るのは中で起きたこと**
+ * なので、中で起きたことを1か所に残します。
  *
  * ## 書かないもの
  *
  * カード番号も、Square のトークンも、ここには入れません。入れてよいのは
- * 「どの段階で」「どう転んだか」と、突き合わせに要る最小限（注文番号・金額・
+ * 「どこで」「どう転んだか」と、突き合わせに要る最小限（注文番号・金額・
  * 連絡先）だけです。
+ *
+ * ## 種別（area）
+ *
+ * - `payment` 決済にたどり着くまでと、決済そのもの
+ * - `email`   確認メール・店舗通知の送信
+ * - `screen`  お客様の画面で起きた例外
+ * - `data`    画面が必要なデータを取れなかった
+ * - `server`  サーバーの想定外の失敗
  */
-export const paymentLogStageEnum = pgEnum("payment_log_stage", [
-  /** カード入力欄を出すところ。ここで転ぶと、お客様は払う手段そのものを失う。 */
-  "card_form",
-  /** カード情報をトークンにするところ。 */
-  "tokenize",
-  /** カード会社の本人認証（3Dセキュア）。 */
-  "verify",
-  /** 注文をサーバーに送るところ。 */
-  "submit",
-  /** Square に請求するところ。 */
-  "charge",
-  /** 請求の結果を書き留めるところ。 */
-  "record",
-]);
-
-export const paymentLogOutcomeEnum = pgEnum("payment_log_outcome", [
-  "ok",
-  /** カード会社に断られた。お客様の側の理由であることが多い。 */
-  "declined",
-  /** こちらか Square の不具合。 */
-  "error",
-  /** お客様が途中でやめた。財布のシートを閉じた場合など。 */
-  "abandoned",
-]);
-
-export const paymentLogs = pgTable(
-  "payment_logs",
+export const incidentLogs = pgTable(
+  "incident_logs",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     created_at: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    /** payment / email / screen / data / server。 */
+    area: text("area").notNull().default("payment"),
     /** "server" か "browser"。ブラウザ発はお客様の端末からの申告。 */
     source: text("source").notNull(),
-    stage: paymentLogStageEnum("stage").notNull(),
-    outcome: paymentLogOutcomeEnum("outcome").notNull(),
+    /**
+     * どこで転んだか。種別ごとに意味が決まります（`src/lib/incident-log.ts`）。
+     *
+     * 列挙型ではなく文字列です。記録を1つ増やすたびにデータベースの型を
+     * 変えなければならないのでは、残すべきものを残さなくなります。
+     */
+    stage: text("stage").notNull(),
+    /** ok / declined / error / abandoned。 */
+    outcome: text("outcome").notNull(),
     order_number: text("order_number"),
     amount: integer("amount"),
     customer_email: text("customer_email"),
@@ -402,7 +398,12 @@ export const paymentLogs = pgTable(
     message: text("message").notNull().default(""),
     /** Square のエラーコードなど。カード情報は入れない。 */
     detail: jsonb("detail"),
+    /** どの画面・どの経路で起きたか。 */
+    path: text("path"),
     user_agent: text("user_agent"),
   },
-  (t) => [index("payment_logs_created_at_idx").on(t.created_at)]
+  (t) => [
+    index("incident_logs_created_at_idx").on(t.created_at),
+    index("incident_logs_area_idx").on(t.area),
+  ]
 );

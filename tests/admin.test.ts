@@ -848,7 +848,7 @@ test("決済ログ：ブラウザからの申告を受け取り、管理画面�
   */
   const marker = `e2e-${Date.now()}`;
 
-  const sent = await api("/api/payment-log", {
+  const sent = await api("/api/incident", {
     method: "POST",
     body: JSON.stringify({
       stage: "card_form",
@@ -861,7 +861,7 @@ test("決済ログ：ブラウザからの申告を受け取り、管理画面�
   });
   assert.equal(sent.status, 200, "ログインしていない画面からも送れること");
 
-  const { status, body } = await api("/api/admin/payment-logs");
+  const { status, body } = await api("/api/admin/incident-logs");
   assert.equal(status, 200);
 
   const logs = (body as { logs: Array<Record<string, unknown>> }).logs;
@@ -881,7 +881,7 @@ test("決済ログ：知らない値は断る", async () => {
     { stage: "drop table", outcome: "error" },
     { stage: "card_form", outcome: "exploded" },
   ]) {
-    const { status } = await api("/api/payment-log", {
+    const { status } = await api("/api/incident", {
       method: "POST",
       body: JSON.stringify(bad),
     });
@@ -891,7 +891,7 @@ test("決済ログ：知らない値は断る", async () => {
 
 test("決済ログ：長すぎるものは切って保存する", async () => {
   const marker = `long-${Date.now()}`;
-  const { status } = await api("/api/payment-log", {
+  const { status } = await api("/api/incident", {
     method: "POST",
     body: JSON.stringify({
       stage: "tokenize",
@@ -902,7 +902,7 @@ test("決済ログ：長すぎるものは切って保存する", async () => {
   });
   assert.equal(status, 200);
 
-  const { body } = await api("/api/admin/payment-logs");
+  const { body } = await api("/api/admin/incident-logs");
   const logs = (body as { logs: Array<Record<string, unknown>> }).logs;
   const found = logs.find((l) => String(l.message).includes(marker));
   assert.ok(found, "保存されていない");
@@ -917,6 +917,71 @@ test("決済ログ：長すぎるものは切って保存する", async () => {
 });
 
 test("決済ログ：一覧はログインしないと読めない", async () => {
-  const res = await fetch(`${BASE}/api/admin/payment-logs`);
+  const res = await fetch(`${BASE}/api/admin/incident-logs`);
   assert.equal(res.status, 401, "未ログインで決済ログが読めてしまう");
+});
+
+test("調査ログ：決済以外の種別も受け取り、絞り込める", async () => {
+  /*
+    困るのは画面で分かる不具合ではなく、**中で起きて誰も気づけないこと**です。
+    メール・画面・データ・サーバーも同じ場所に残します。
+  */
+  const marker = `area-${Date.now()}`;
+
+  for (const [area, stage] of [
+    ["screen", "uncaught"],
+    ["data", "load"],
+  ] as const) {
+    const { status } = await api("/api/incident", {
+      method: "POST",
+      body: JSON.stringify({
+        area,
+        stage,
+        outcome: "error",
+        message: `${marker} ${area}`,
+        path: "/reserve/confirm",
+      }),
+    });
+    assert.equal(status, 200, `${area} が受け取られない`);
+  }
+
+  const { body } = await api("/api/admin/incident-logs");
+  const logs = (body as { logs: Array<Record<string, unknown>> }).logs;
+
+  const screen = logs.find((l) => String(l.message) === `${marker} screen`);
+  assert.ok(screen, "画面の記録が無い");
+  assert.equal(screen.area, "screen");
+  assert.equal(screen.path, "/reserve/confirm");
+
+  const data = logs.find((l) => String(l.message) === `${marker} data`);
+  assert.ok(data, "データの記録が無い");
+  assert.equal(data.area, "data");
+});
+
+test("調査ログ：知らない種別は断る", async () => {
+  const { status } = await api("/api/incident", {
+    method: "POST",
+    body: JSON.stringify({ area: "whatever", stage: "load", outcome: "error" }),
+  });
+  assert.equal(status, 400);
+});
+
+test("調査ログ：古い入口も受け口として残っている", async () => {
+  // お客様が開いたままの画面は古い入口に送ってくる。落とすと申告が消える。
+  const marker = `legacy-${Date.now()}`;
+  const { status } = await api("/api/payment-log", {
+    method: "POST",
+    body: JSON.stringify({
+      stage: "card_form",
+      outcome: "error",
+      message: marker,
+    }),
+  });
+  assert.equal(status, 200);
+
+  const { body } = await api("/api/admin/incident-logs");
+  const logs = (body as { logs: Array<Record<string, unknown>> }).logs;
+  const found = logs.find((l) => String(l.message) === marker);
+  assert.ok(found, "古い入口からの申告が残っていない");
+  assert.equal(found.area, "payment", "種別を省いたら決済として扱うこと");
 });

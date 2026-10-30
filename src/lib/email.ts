@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { diningStyleLabel, handoverWording } from "./tax";
+import { recordIncident } from "./incident-log";
 import type { DiningStyle } from "./types";
 import { formatDate, formatPrice } from "./utils";
 
@@ -280,9 +281,24 @@ export function buildShopEmail(payload: OrderMailPayload) {
  */
 export async function sendOrderEmails(payload: OrderMailPayload): Promise<void> {
   if (!resend || !mailFrom) {
+    /*
+      設定が無いので一通も出ません。これは「送信に失敗した」より重い話で、
+      その日の予約全部にメールが届かないということです。コンソールに出すだけ
+      では1時間で消えるので、残します。
+    */
     console.warn(
       "Order email skipped: RESEND_API_KEY or MAIL_FROM is not configured."
     );
+    await recordIncident({
+      area: "email",
+      source: "server",
+      stage: "mail_config",
+      outcome: "error",
+      order_number: payload.order_number,
+      customer_email: payload.customer_email,
+      message:
+        "メールの設定（RESEND_API_KEY / MAIL_FROM）が無いため、確認メールを送っていません",
+    });
     return;
   }
 
@@ -305,12 +321,61 @@ export async function sendOrderEmails(payload: OrderMailPayload): Promise<void> 
     )
   );
 
-  results.forEach((result, i) => {
-    const to = messages[i].to;
-    if (result.status === "rejected") {
-      console.error(`Order email to ${to} failed:`, result.reason);
-    } else if (result.value.error) {
-      console.error(`Order email to ${to} rejected:`, result.value.error);
-    }
-  });
+  /*
+    送れたかどうかを残します。
+
+    ここまでずっとコンソールに出すだけでした。配信事業者がドメイン未認証や
+    上限超過で弾くと、お客様に確認メールが届かず、店舗にも通知が飛ばず、
+    **誰も気づけません**。「予約したのにメールが来ない」と言われたときに
+    調べる先がここになります。
+  */
+  await Promise.all(
+    results.map((result, i) => {
+      const to = messages[i].to;
+      const stage = i === 0 ? "customer_mail" : "shop_mail";
+
+      if (result.status === "rejected") {
+        console.error(`Order email to ${to} failed:`, result.reason);
+        return recordIncident({
+          area: "email",
+          source: "server",
+          stage,
+          outcome: "error",
+          order_number: payload.order_number,
+          customer_email: to,
+          message: "メールを送信できませんでした",
+          detail: {
+            reason:
+              result.reason instanceof Error
+                ? result.reason.message
+                : String(result.reason),
+          },
+        });
+      }
+
+      if (result.value.error) {
+        console.error(`Order email to ${to} rejected:`, result.value.error);
+        return recordIncident({
+          area: "email",
+          source: "server",
+          stage,
+          outcome: "error",
+          order_number: payload.order_number,
+          customer_email: to,
+          message: "メールが配信事業者に断られました",
+          detail: { error: result.value.error },
+        });
+      }
+
+      return recordIncident({
+        area: "email",
+        source: "server",
+        stage,
+        outcome: "ok",
+        order_number: payload.order_number,
+        customer_email: to,
+        message: "メールを送信しました",
+      });
+    })
+  );
 }

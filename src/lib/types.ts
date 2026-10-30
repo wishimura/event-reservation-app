@@ -60,6 +60,8 @@ export interface Order {
   total_amount: number;
   payment_status: "pending" | "paid" | "failed" | "refunded";
   payment_method: "cash" | "credit_card";
+  /** 確認メールを送れなかった注文。管理画面で印を付けるために使う。 */
+  confirmation_mail_failed?: boolean;
   order_status: "temporary" | "confirmed" | "cancelled";
   pickup_status: "not_picked_up" | "picked_up";
   /** online: お客様がサイトから予約 / walk_in: 店頭で販売したものを記録 */

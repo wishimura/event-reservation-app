@@ -318,7 +318,21 @@ export default function OrdersPage() {
                           </span>
                         )}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-slate-800 font-medium">{order.customer_name}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-slate-800 font-medium">
+                        {order.customer_name}
+                        {/*
+                          確認メールが届いていないお客様。気づかないままだと、
+                          当日「予約した覚えがあるのにメールが無い」になります。
+                        */}
+                        {order.confirmation_mail_failed && (
+                          <span
+                            title="確認メールを送信できませんでした。お電話などでご連絡ください"
+                            className="ml-2 whitespace-nowrap rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700"
+                          >
+                            メール未送信
+                          </span>
+                        )}
+                      </td>
                       <td className="whitespace-nowrap px-4 py-3 text-slate-600">
                         {order.event_date
                           ? formatDate(order.event_date.pickup_date)

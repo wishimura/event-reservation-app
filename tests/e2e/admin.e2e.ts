@@ -28,7 +28,7 @@ const CONSOLE_PAGES = [
   "/admin/production",
   "/admin/products",
   "/admin/settings",
-  "/admin/payment-logs",
+  "/admin/incident-logs",
 ];
 
 test.describe("S-04 管理画面", () => {
@@ -138,7 +138,7 @@ test.describe("S-04 管理画面", () => {
       カード入力欄そのものは Square の鍵が無いと描かれないためです。
     */
     const marker = `e2e-${Date.now()}`;
-    const res = await page.request.post("/api/payment-log", {
+    const res = await page.request.post("/api/incident", {
       data: {
         stage: "card_form",
         outcome: "error",
@@ -150,7 +150,7 @@ test.describe("S-04 管理画面", () => {
     expect(res.status()).toBe(200);
 
     await loginAsAdmin(page);
-    await page.goto("/admin/payment-logs");
+    await page.goto("/admin/incident-logs");
 
     const row = rowContaining(page, marker);
     await expect(row).toBeVisible();

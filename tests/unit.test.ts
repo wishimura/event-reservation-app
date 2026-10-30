@@ -677,3 +677,35 @@ test("店舗への通知：当日お金をいただくのかどうかが分か�
   const pending = buildShopEmail(mail("credit_card", "pending"));
   assert.ok(pending.text.includes("クレジットカード / 未決済"), pending.text);
 });
+
+/* ============================================= 確認メールの送信記録 */
+
+test("確認メール：設定が無くても、注文を壊さずに戻る", () => {
+  /*
+    メールの送信は注文を返したあとに走ります。ここで投げると、決済まで
+    済んだお客様の画面が壊れます。設定が無いときに記録を残すようにしたので、
+    その経路でも投げないことを確かめておきます。
+
+    記録の中身は結合テスト（tests/admin.test.ts）で見ます。ここはデータベースに
+    繋がないので、確かめられるのは「落ちないこと」までです。
+  */
+  return assert.doesNotReject(async () => {
+    const { sendOrderEmails } = await import("../src/lib/email");
+    await sendOrderEmails({
+      order_number: "ORD-261030-ABC123",
+      customer_name: "水木 しげる",
+      customer_email: "gegege@example.com",
+      customer_phone: "070-0000-0000",
+      total_amount: 1000,
+      pickup_date: "2026-11-18",
+      dining_style: "takeout",
+      payment_method: "cash",
+      payment_status: "paid",
+      event_name: "ゲゲゲ忌メニュー",
+      pickup_location: "となりのと（レジ）",
+      reservation_note: "",
+      contact_phone: "",
+      items: [],
+    });
+  });
+});

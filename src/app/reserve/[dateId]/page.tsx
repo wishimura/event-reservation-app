@@ -12,6 +12,57 @@ import {
 } from "@/lib/utils";
 import { Icon } from "@/components/Icon";
 
+/**
+ * 確認画面から戻ってきたときに、選んでいた商品を取り戻す。
+ *
+ * これが無いあいだ、戻ると**カゴが空になっていました**。「やっぱりこれも」で
+ * 戻ったお客様は、選び直しからやることになります。
+ *
+ * 取り戻すのは同じ受取日のときだけです。別の日に移ったなら、前の日の選択を
+ * 持ち込むほうがおかしい。
+ *
+ * 数は**いまの残りまでに切り詰めます**。戻っているあいだに売れていることが
+ * あり、保存した数をそのまま戻すと、買えない数がカゴに入ります。
+ */
+function restoreCart(
+  dateId: string,
+  inventory: DailyProductInventory[]
+): Map<string, number> {
+  const restored = new Map<string, number>();
+
+  try {
+    const savedDate = localStorage.getItem("selectedDate");
+    if (!savedDate) return restored;
+    if ((JSON.parse(savedDate) as { id?: string }).id !== dateId) return restored;
+
+    const savedCart = localStorage.getItem("cart");
+    if (!savedCart) return restored;
+
+    const items = JSON.parse(savedCart) as Array<{
+      product?: { id?: string };
+      quantity?: number;
+    }>;
+    if (!Array.isArray(items)) return restored;
+
+    for (const item of items) {
+      const productId = item.product?.id;
+      const wanted = item.quantity;
+      if (typeof productId !== "string" || typeof wanted !== "number") continue;
+
+      const inv = inventory.find((i) => i.product_id === productId);
+      if (!inv || inv.is_sold_out || inv.is_hidden) continue;
+
+      const remaining = Math.max(0, inv.production_quantity - inv.reserved_quantity);
+      const quantity = Math.min(Math.max(0, Math.trunc(wanted)), remaining);
+      if (quantity > 0) restored.set(productId, quantity);
+    }
+  } catch {
+    // 読めない中身は無かったことにする。選び直していただくほうが安全。
+  }
+
+  return restored;
+}
+
 export default function ProductSelectionPage() {
   const params = useParams();
   const router = useRouter();
@@ -41,6 +92,7 @@ export default function ProductSelectionPage() {
         }>(`/api/reserve/${dateId}`);
         setEventDate(data.event_date);
         setInventories(data.inventory);
+        setCart(restoreCart(dateId, data.inventory));
       } catch (err) {
         console.error("Reserve data load error:", err);
         setLoadError("商品情報の取得に失敗しました");

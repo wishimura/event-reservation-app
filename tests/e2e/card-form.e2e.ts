@@ -86,7 +86,7 @@ test.describe("S-09 カード払いの画面", () => {
       .poll(
         async () => {
           const { rows } = await e2eDb().query<{ count: string }>(
-            `select count(*) as count from payment_logs
+            `select count(*) as count from incident_logs
               where source = 'browser' and stage = 'card_form'`
           );
           return Number(rows[0].count);
@@ -99,7 +99,7 @@ test.describe("S-09 カード払いの画面", () => {
       .toBeGreaterThan(0);
 
     const { rows } = await e2eDb().query<{ message: string; detail: unknown }>(
-      `select message, detail from payment_logs
+      `select message, detail from incident_logs
         where source = 'browser' and stage = 'card_form'
         order by created_at desc limit 1`
     );

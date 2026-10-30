@@ -12,7 +12,7 @@ const navItems: Array<{ href: string; label: string; icon: IconName }> = [
   { href: "/admin/pickup", label: "受取管理", icon: "bag" },
   { href: "/admin/products", label: "商品マスタ", icon: "tag" },
   { href: "/admin/settings", label: "イベント設定", icon: "gear" },
-  { href: "/admin/payment-logs", label: "決済ログ", icon: "card" },
+  { href: "/admin/incident-logs", label: "調査ログ", icon: "card" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

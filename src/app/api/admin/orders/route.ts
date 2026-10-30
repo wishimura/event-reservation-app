@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { eventDates, events, orderItems, orders } from "@/db/schema";
+import { eventDates, events, incidentLogs, orderItems, orders } from "@/db/schema";
 import { isUniqueViolation } from "@/lib/db-errors";
 import { holdStockAndCreateOrder, OrderValidationError } from "@/lib/orders";
 import { getActiveEvent, getAllEventDates } from "@/lib/queries";
@@ -57,6 +57,34 @@ export async function GET() {
       itemsByOrder.set(item.order_id, list);
     }
 
+    /*
+      確認メールを送れなかった注文。
+
+      送信の失敗はこれまでコンソールに出るだけで、お客様にメールが届いて
+      いないことに誰も気づけませんでした。一覧で見えるようにしておけば、
+      電話でご連絡するなり、注文番号をお伝えするなりできます。
+    */
+    const mailFailures = orderRows.length
+      ? await db
+          .selectDistinct({ order_number: incidentLogs.order_number })
+          .from(incidentLogs)
+          .where(
+            and(
+              eq(incidentLogs.area, "email"),
+              eq(incidentLogs.outcome, "error"),
+              eq(incidentLogs.stage, "customer_mail"),
+              inArray(
+                incidentLogs.order_number,
+                orderRows.map((r) => r.order.order_number)
+              )
+            )
+          )
+      : [];
+
+    const mailFailed = new Set(
+      mailFailures.map((r) => r.order_number).filter((n): n is string => !!n)
+    );
+
     return NextResponse.json({
       event,
       dates,
@@ -64,6 +92,7 @@ export async function GET() {
         ...r.order,
         event_date: r.event_date,
         order_items: itemsByOrder.get(r.order.id) ?? [],
+        confirmation_mail_failed: mailFailed.has(r.order.order_number),
       })),
     });
   } catch (error) {

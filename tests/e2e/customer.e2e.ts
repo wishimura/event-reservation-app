@@ -107,6 +107,73 @@ test.describe("S-01 お客様の予約", () => {
     await expect(card.getByRole("button", { name: "1つ増やす" })).toHaveCount(0);
   });
 
+  test("確認画面から戻って商品を足せる。選んでいたものは消えない", async ({ page }) => {
+    /*
+      「やっぱりこれも」で戻る方はいます。以前は戻るとカゴが空になっていて、
+      選び直しからやることになっていました。戻れないのと同じです。
+    */
+    await page.goto(`/reserve/${data.today.id}`);
+    await productCard(page, FIXTURE.plenty.name)
+      .getByRole("button", { name: "1つ増やす" })
+      .click();
+    await page.getByRole("button", { name: /確認へ進む/ }).click();
+    await page.waitForURL(/\/reserve\/confirm/);
+    await expect(page.locator("main")).toContainText(FIXTURE.plenty.name);
+
+    await page.getByRole("button", { name: "商品を追加・変更する" }).click();
+    await page.waitForURL(new RegExp(`/reserve/${data.today.id}$`));
+
+    // 選んでいた1つが残っていること。
+    const kept = productCard(page, FIXTURE.plenty.name);
+    await expect(kept.locator("span.tabular-nums")).toHaveText("1");
+
+    // もう1品足して、確認画面に両方出ること。
+    await productCard(page, FIXTURE.scarce.name)
+      .getByRole("button", { name: "1つ増やす" })
+      .click();
+    await page.getByRole("button", { name: /確認へ進む/ }).click();
+    await page.waitForURL(/\/reserve\/confirm/);
+
+    await expect(page.locator("main")).toContainText(FIXTURE.plenty.name);
+    await expect(page.locator("main")).toContainText(FIXTURE.scarce.name);
+  });
+
+  test("入力が足りないまま押すと、足りない場所まで画面が動く", async ({ page }) => {
+    /*
+      「注文を確定する」は画面のいちばん下、足りない項目はずっと上にあります。
+      押しても画面が動かないと**何も起きなかったように見えます**。
+      押した場所に要約を出し、最初の不足まで連れていきます。
+    */
+    await page.goto(`/reserve/${data.today.id}`);
+    await productCard(page, FIXTURE.plenty.name)
+      .getByRole("button", { name: "1つ増やす" })
+      .click();
+    await page.getByRole("button", { name: /確認へ進む/ }).click();
+    await page.waitForURL(/\/reserve\/confirm/);
+
+    // 何も入れずに押す。
+    const submit = page.getByRole("button", { name: "注文を確定する" });
+    await submit.scrollIntoViewIfNeeded();
+    await submit.click();
+
+    // 押した場所で反応が返ること。
+    await expect(
+      page.getByText(/入力が\d+つ足りません|入力が1つ足りません/)
+    ).toBeVisible();
+
+    // 最初の不足（お召し上がり方法）が画面の中に入っていること。
+    const picker = page.locator("#field-dining_style");
+    await expect(picker).toBeInViewport({ timeout: 10_000 });
+
+    // 直せば、要約は消えて先へ進める。
+    await page.getByRole("button", { name: /店内で食べる/ }).click();
+    await page.getByPlaceholder("山田 太郎").fill("足りない 太郎");
+    await page.getByPlaceholder("taro@example.com").fill("enough@example.com");
+    await page.getByPlaceholder("090-1234-5678").fill("090-1111-2222");
+    await submit.click();
+    await page.waitForURL(/\/reserve\/complete/);
+  });
+
   test("横にはみ出さない（お客様が触る画面）", async ({ page }) => {
     for (const path of ["/", `/reserve/${data.today.id}`, "/legal/tokushoho"]) {
       await page.goto(path);

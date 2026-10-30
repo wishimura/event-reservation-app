@@ -1,39 +1,59 @@
 import { db } from "@/db";
-import { paymentLogs } from "@/db/schema";
+import { incidentLogs } from "@/db/schema";
 
 /**
- * 決済まわりで起きたことを書き留める。
+ * 調べるための記録を書き留める。
  *
  * ## 守ること
  *
- * **この関数は決して投げません。** 記録に失敗したせいで決済が止まるのは本末
- * 転倒です。書けなければコンソールに残して、そのまま進みます。
+ * **この関数は決して投げません。** 記録に失敗したせいで注文や決済が止まるのは
+ * 本末転倒です。書けなければコンソールに残して、そのまま進みます。
  *
  * **カード情報は受け取りません。** 番号も、Square のトークンも、ここを通しては
- * いけません。入れてよいのは「どの段階で」「どう転んだか」と、突き合わせに
+ * いけません。入れてよいのは「どこで」「どう転んだか」と、突き合わせに
  * 要る最小限だけです。
  */
 
-export type PaymentLogStage =
-  | "card_form"
-  | "tokenize"
-  | "verify"
-  | "submit"
-  | "charge"
-  | "record";
+/** 何についての記録か。 */
+export type IncidentArea = "payment" | "email" | "screen" | "data" | "server";
 
-export type PaymentLogOutcome = "ok" | "declined" | "error" | "abandoned";
+export const INCIDENT_AREAS: IncidentArea[] = [
+  "payment",
+  "email",
+  "screen",
+  "data",
+  "server",
+];
 
-export const PAYMENT_LOG_STAGES: PaymentLogStage[] = [
+/**
+ * どこで転んだか。
+ *
+ * 決済（payment）はお客様が進む順に並べてあります。ほかの種別は1語です。
+ */
+export const INCIDENT_STAGES = [
+  // payment
   "card_form",
   "tokenize",
   "verify",
   "submit",
   "charge",
   "record",
-];
+  // email
+  "customer_mail",
+  "shop_mail",
+  "mail_config",
+  // screen / data / server
+  "render",
+  "uncaught",
+  "load",
+  "request",
+] as const;
 
-export const PAYMENT_LOG_OUTCOMES: PaymentLogOutcome[] = [
+export type IncidentStage = (typeof INCIDENT_STAGES)[number];
+
+export type IncidentOutcome = "ok" | "declined" | "error" | "abandoned";
+
+export const INCIDENT_OUTCOMES: IncidentOutcome[] = [
   "ok",
   "declined",
   "error",
@@ -45,17 +65,20 @@ const MAX_MESSAGE = 500;
 const MAX_EMAIL = 200;
 const MAX_ORDER_NUMBER = 40;
 const MAX_USER_AGENT = 300;
+const MAX_PATH = 200;
 const MAX_DETAIL_BYTES = 2000;
 
-export interface PaymentLogEntry {
+export interface IncidentEntry {
+  area: IncidentArea;
   source: "server" | "browser";
-  stage: PaymentLogStage;
-  outcome: PaymentLogOutcome;
+  stage: IncidentStage;
+  outcome: IncidentOutcome;
   order_number?: string | null;
   amount?: number | null;
   customer_email?: string | null;
   message?: string | null;
   detail?: unknown;
+  path?: string | null;
   user_agent?: string | null;
 }
 
@@ -82,9 +105,10 @@ function clipDetail(detail: unknown): unknown {
   }
 }
 
-export async function recordPaymentEvent(entry: PaymentLogEntry): Promise<void> {
+export async function recordIncident(entry: IncidentEntry): Promise<void> {
   try {
-    await db.insert(paymentLogs).values({
+    await db.insert(incidentLogs).values({
+      area: entry.area,
       source: entry.source,
       stage: entry.stage,
       outcome: entry.outcome,
@@ -96,10 +120,24 @@ export async function recordPaymentEvent(entry: PaymentLogEntry): Promise<void> 
       customer_email: clip(entry.customer_email, MAX_EMAIL),
       message: clip(entry.message, MAX_MESSAGE) ?? "",
       detail: clipDetail(entry.detail),
+      path: clip(entry.path, MAX_PATH),
       user_agent: clip(entry.user_agent, MAX_USER_AGENT),
     });
   } catch (error) {
-    // 記録できなくても決済は続ける。残せるところには残す。
-    console.error("Failed to record a payment event:", entry.stage, entry.outcome, error);
+    // 記録できなくても本筋は続ける。残せるところには残す。
+    console.error(
+      "Failed to record an incident:",
+      entry.area,
+      entry.stage,
+      entry.outcome,
+      error
+    );
   }
+}
+
+/** 決済まわりの記録。種別を書き忘れないための入口。 */
+export function recordPaymentEvent(
+  entry: Omit<IncidentEntry, "area">
+): Promise<void> {
+  return recordIncident({ ...entry, area: "payment" });
 }

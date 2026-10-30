@@ -21,7 +21,7 @@ import {
   isPastReservationDeadline,
 } from "@/lib/utils";
 import { isUuid, readJsonObject } from "@/lib/http";
-import { recordPaymentEvent } from "@/lib/payment-log";
+import { recordIncident, recordPaymentEvent } from "@/lib/incident-log";
 
 export const dynamic = "force-dynamic";
 
@@ -230,11 +230,31 @@ export async function POST(request: NextRequest) {
           try {
             await cancelOrderAndReleaseStock(order.id);
           } catch (releaseError) {
+            /*
+              受付枠が戻らないまま残ります。誰も買っていないのにその日が
+              売り切れていく、という形で出るので、気づけないと売り逃します。
+            */
             console.error(
               "Failed to release stock after a declined payment:",
               order.order_number,
               releaseError
             );
+            await recordPaymentEvent({
+              source: "server",
+              stage: "record",
+              outcome: "error",
+              order_number: order.order_number,
+              amount: order.total_amount,
+              customer_email: order.customer_email,
+              message:
+                "決済が通らなかったのに受付枠を戻せませんでした。手作業で戻すこと。",
+              detail: {
+                reason:
+                  releaseError instanceof Error
+                    ? releaseError.message
+                    : String(releaseError),
+              },
+            });
           }
 
           const declined = paymentError instanceof SquarePaymentError;
@@ -340,6 +360,22 @@ export async function POST(request: NextRequest) {
       }
 
       console.error("Order creation error:", error);
+      /*
+        ここに来るのは想定していない失敗だけです。お客様には「失敗しました」
+        としか出せないので、理由はこちらに残さないと誰にも分かりません。
+      */
+      await recordIncident({
+        area: "server",
+        source: "server",
+        stage: "request",
+        outcome: "error",
+        message: "注文の登録中に想定外の失敗が起きました",
+        path: "/api/orders",
+        detail: {
+          reason: error instanceof Error ? error.message : String(error),
+        },
+        user_agent: request.headers.get("user-agent"),
+      });
       return NextResponse.json(
         { error: "注文処理中にエラーが発生しました" },
         { status: 500 }

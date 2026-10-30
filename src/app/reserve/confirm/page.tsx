@@ -142,6 +142,10 @@ export default function ConfirmPage() {
   const [payByCard, setPayByCard] = useState<boolean | null>(null);
   const [cardReady, setCardReady] = useState(false);
   const [cardError, setCardError] = useState("");
+  /** ボタンのすぐ上に出す要約。押した場所で反応を返すため。 */
+  const [formError, setFormError] = useState("");
+  /** 催しの情報を取れずに諦めたか。待てば直る、と言わないために見る。 */
+  const [loadFailed, setLoadFailed] = useState(false);
   const [paymentsReady, setPaymentsReady] = useState(false);
   const [applePayStatus, setApplePayStatus] = useState<WalletStatus>("pending");
   const [googlePayStatus, setGooglePayStatus] =
@@ -174,11 +178,30 @@ export default function ConfirmPage() {
     setCart(JSON.parse(cartData) as CartItem[]);
     setSelectedDate(JSON.parse(dateData));
 
+    /*
+      催しの情報が取れないと、お客様は**いつまで経っても注文できません**。
+      `ready()` がここを見ていて、取れていないあいだは「読み込み中です」と
+      言い続けるからです。以前は一度失敗したらそれきりで、再試行も記録も
+      ありませんでした。待っても直らないのに「待ってください」と出続ける、
+      いちばん意地の悪い壊れ方です。
+
+      少し間を置いて3回まで試し、それでも駄目なら、待てば直るかのような
+      言い方をやめて、読み直していただくようお願いします。そして残します。
+    */
     async function fetchEvent() {
-      try {
-        setEvent(await fetchJson<Event>("/api/events"));
-      } catch (err) {
-        console.error("Event load error:", err);
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          setEvent(await fetchJson<Event>("/api/events"));
+          return;
+        } catch (err) {
+          console.error(`Event load error (attempt ${attempt}):`, err);
+          if (attempt === 3) {
+            setLoadFailed(true);
+            reportIncident("data", "load", "催しの情報を取得できませんでした", err);
+            return;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
+        }
       }
     }
     fetchEvent();
@@ -191,16 +214,23 @@ export default function ConfirmPage() {
    * 送ります。**この失敗はサーバーに何も残らない**ので、送らなければ誰も
    * 気づけません（2026-10-30 のお申し出がまさにこれでした）。
    */
-  function reportSetupFailure(message: string, err: unknown) {
+  function reportIncident(
+    area: "payment" | "data",
+    stage: "card_form" | "load",
+    message: string,
+    err: unknown
+  ) {
     try {
-      void fetch("/api/payment-log", {
+      void fetch("/api/incident", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         keepalive: true,
         body: JSON.stringify({
-          stage: "card_form",
+          area,
+          stage,
           outcome: "error",
           message,
+          path: "/reserve/confirm",
           detail: {
             reason: err instanceof Error ? err.message : String(err ?? ""),
           },
@@ -209,6 +239,10 @@ export default function ConfirmPage() {
     } catch {
       /* 記録はおまけ。ここで止めない。 */
     }
+  }
+
+  function reportSetupFailure(message: string, err: unknown) {
+    reportIncident("payment", "card_form", message, err);
   }
 
   /*
@@ -438,8 +472,37 @@ export default function ConfirmPage() {
    */
   function ready(): boolean {
     if (event && selectedDate) return true;
-    setCardError("読み込み中です。少し待ってからもう一度お試しください。");
+    setCardError(
+      loadFailed
+        ? "ご予約の情報を読み込めませんでした。ページを再読み込みしてください。"
+        : "読み込み中です。少し待ってからもう一度お試しください。"
+    );
     return false;
+  }
+
+  /**
+   * 入力に不足があったとき、お客様をそこへ連れていく。
+   *
+   * 「注文を確定する」は画面のいちばん下にあり、足りない項目はずっと上に
+   * あります。押しても画面が動かないので、**何も起きなかったように見えます**。
+   * 最初の不足まで送って、そこに入力位置を移します。あわせてボタンのすぐ上に
+   * 要約を出すので、押した場所でも反応が返ります（`formError`）。
+   */
+  function focusFirstError(errs: Record<string, string>) {
+    const order = ["dining_style", "name", "email", "phone"];
+    const first = order.find((key) => errs[key]);
+    if (!first) return;
+
+    const target = document.getElementById(`field-${first}`);
+    if (!target) return;
+
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    // 入力欄なら、そのまま打てる状態にする。選ぶ欄なら押せる状態にする。
+    const focusable = target.matches("input, select, textarea, button")
+      ? target
+      : target.querySelector<HTMLElement>("input, select, textarea, button");
+    // スクロールと競合しないよう、動き終わってから移す。
+    window.setTimeout(() => focusable?.focus({ preventScroll: true }), 350);
   }
 
   function validate(): boolean {
@@ -459,7 +522,20 @@ export default function ConfirmPage() {
       errs.dining_style = "店内でお召し上がりか、お持ち帰りかを選んでください";
     }
     setErrors(errs);
-    return Object.keys(errs).length === 0;
+
+    const ok = Object.keys(errs).length === 0;
+    if (ok) {
+      setFormError("");
+    } else {
+      const count = Object.keys(errs).length;
+      setFormError(
+        count === 1
+          ? "入力が1つ足りません。上の赤い文字をご確認ください。"
+          : `入力が${count}つ足りません。上の赤い文字をご確認ください。`
+      );
+      focusFirstError(errs);
+    }
+    return ok;
   }
 
   /**
@@ -483,11 +559,13 @@ export default function ConfirmPage() {
     detail?: unknown
   ) {
     try {
-      void fetch("/api/payment-log", {
+      void fetch("/api/incident", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         keepalive: true,
         body: JSON.stringify({
+          area: "payment",
+          path: "/reserve/confirm",
           stage,
           outcome,
           message,
@@ -781,7 +859,7 @@ export default function ConfirmPage() {
           <p className="text-xs text-zinc-400 mb-3">
             どちらをお選びでも、お支払い金額は変わりません。
           </p>
-          <div className="grid grid-cols-2 gap-2">
+          <div id="field-dining_style" className="grid grid-cols-2 gap-2">
             {(
               [
                 { value: "eat_in", label: "店内で食べる", note: "イートイン" },
@@ -810,7 +888,7 @@ export default function ConfirmPage() {
             })}
           </div>
           {errors.dining_style && (
-            <p className="text-red-500 text-xs mt-2">{errors.dining_style}</p>
+            <p role="alert" className="text-red-500 text-xs mt-2">{errors.dining_style}</p>
           )}
         </div>
 
@@ -859,6 +937,26 @@ export default function ConfirmPage() {
               {formatPrice(totalAmount)}
             </span>
           </div>
+          {/*
+            「やっぱりこれも」で戻れるように。
+
+            上の隅にも戻る矢印はありますが、この画面は長く、ご注文内容を見て
+            気が変わるのはたいていこの位置です。そこまで戻ってもらうより、
+            見ているところに置くほうが素直です。
+
+            戻ると商品の画面は選んでいた内容を取り戻します（`restoreCart`）。
+            以前はカゴが空になっていたので、戻る道は実質ありませんでした。
+          */}
+          <div className="border-t border-zinc-100 p-3">
+            <button
+              type="button"
+              onClick={() => router.push(`/reserve/${selectedDate.id}`)}
+              disabled={placing}
+              className="w-full rounded-xl border border-zinc-200 bg-white py-3 text-sm font-semibold text-zinc-700 transition-colors hover:bg-paper disabled:opacity-50"
+            >
+              商品を追加・変更する
+            </button>
+          </div>
         </div>
 
         {/* Pickup Info */}
@@ -898,7 +996,7 @@ export default function ConfirmPage() {
             お客様情報
           </h2>
           <div className="space-y-4">
-            <div>
+            <div id="field-name">
               <label className="block text-xs text-zinc-500 mb-1.5 font-medium">
                 お名前 <span className="text-red-400">*</span>
               </label>
@@ -912,10 +1010,10 @@ export default function ConfirmPage() {
                 }`}
               />
               {errors.name && (
-                <p className="text-red-500 text-xs mt-1">{errors.name}</p>
+                <p role="alert" className="text-red-500 text-xs mt-1">{errors.name}</p>
               )}
             </div>
-            <div>
+            <div id="field-email">
               <label className="block text-xs text-zinc-500 mb-1.5 font-medium">
                 メールアドレス <span className="text-red-400">*</span>
               </label>
@@ -929,10 +1027,10 @@ export default function ConfirmPage() {
                 }`}
               />
               {errors.email && (
-                <p className="text-red-500 text-xs mt-1">{errors.email}</p>
+                <p role="alert" className="text-red-500 text-xs mt-1">{errors.email}</p>
               )}
             </div>
-            <div>
+            <div id="field-phone">
               <label className="block text-xs text-zinc-500 mb-1.5 font-medium">
                 電話番号 <span className="text-red-400">*</span>
               </label>
@@ -946,7 +1044,7 @@ export default function ConfirmPage() {
                 }`}
               />
               {errors.phone && (
-                <p className="text-red-500 text-xs mt-1">{errors.phone}</p>
+                <p role="alert" className="text-red-500 text-xs mt-1">{errors.phone}</p>
               )}
             </div>
           </div>
@@ -1072,6 +1170,22 @@ export default function ConfirmPage() {
             </div>
           )}
         </div>
+
+        {/*
+          押した場所で反応を返す。
+
+          足りない項目は画面のずっと上にあるので、ボタンの周りで何も変わらないと
+          「押しても無反応」に見えます。ここに1行出したうえで、`validate()` が
+          最初の不足まで画面を送ります。読み上げソフトにも伝わるよう role="alert"。
+        */}
+        {formError && (
+          <p
+            role="alert"
+            className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
+          >
+            {formError}
+          </p>
+        )}
 
         {/* Submit Button */}
         <button
