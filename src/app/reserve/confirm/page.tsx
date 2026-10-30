@@ -144,6 +144,8 @@ export default function ConfirmPage() {
   const [cardError, setCardError] = useState("");
   /** ボタンのすぐ上に出す要約。押した場所で反応を返すため。 */
   const [formError, setFormError] = useState("");
+  /** 一度でも「注文を確定する」を押したか。押すまでは赤くしない。 */
+  const [attempted, setAttempted] = useState(false);
   /** 催しの情報を取れずに諦めたか。待てば直る、と言わないために見る。 */
   const [loadFailed, setLoadFailed] = useState(false);
   const [paymentsReady, setPaymentsReady] = useState(false);
@@ -332,6 +334,21 @@ export default function ConfirmPage() {
         paymentsRef.current = sq as unknown as SquarePayments;
         setPaymentsReady(true);
 
+        /*
+          カード欄の中を日本語にする。
+
+          欄そのものは Square の iframe の中なので、こちらから文言を差し込む
+          ことはできません（card() に placeholders のような引数はありません）。
+          できるのは言語を指定することだけで、これで「カード番号」「MM/YY」
+          やエラー文が日本語になります。
+
+          端末の言語が日本語なら既定でも日本語になりますが、英語設定の端末で
+          開かれると英語のままになります。ここは日本語の店なので、明示します。
+          対応していない言語を渡したときは何も起きない仕様なので、失敗しても
+          先へ進めます。
+        */
+        await sq.setLocale("ja-JP").catch(() => {});
+
         const card = await sq.card();
         await card.attach("#square-card");
         attachedCard = card;
@@ -505,7 +522,8 @@ export default function ConfirmPage() {
     window.setTimeout(() => focusable?.focus({ preventScroll: true }), 350);
   }
 
-  function validate(): boolean {
+  /** 足りないものを数えるだけ。画面には触らない。 */
+  function findErrors(): Record<string, string> {
     const errs: Record<string, string> = {};
     if (!name.trim()) errs.name = "お名前を入力してください";
     if (!email.trim()) {
@@ -521,22 +539,36 @@ export default function ConfirmPage() {
     if (!diningStyle) {
       errs.dining_style = "店内でお召し上がりか、お持ち帰りかを選んでください";
     }
+    return errs;
+  }
+
+  function validate(): boolean {
+    const errs = findErrors();
     setErrors(errs);
+    setAttempted(true);
 
     const ok = Object.keys(errs).length === 0;
-    if (ok) {
-      setFormError("");
-    } else {
-      const count = Object.keys(errs).length;
-      setFormError(
-        count === 1
-          ? "入力が1つ足りません。上の赤い文字をご確認ください。"
-          : `入力が${count}つ足りません。上の赤い文字をご確認ください。`
-      );
-      focusFirstError(errs);
-    }
+    setFormError(ok ? "" : "未入力の項目があります。");
+    if (!ok) focusFirstError(errs);
     return ok;
   }
+
+  /*
+    一度押したあとは、入力に合わせて赤い文字を引っ込めます。
+
+    押した時点の数をそのまま出しておくと、直したあとも「◯つ足りません」が
+    残り、入れたはずなのにまだ足りないのかと迷わせます。数を出すのをやめて、
+    直せば消える形にしました。押す前は何も出しません（まだ何も間違えていない
+    のに赤くするのは失礼なので）。
+  */
+  useEffect(() => {
+    if (!attempted) return;
+    const errs = findErrors();
+    setErrors(errs);
+    setFormError(Object.keys(errs).length === 0 ? "" : "未入力の項目があります。");
+    // findErrors は今の入力だけを見る純粋な関数。依存は入力そのもので足りる。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attempted, name, email, phone, diningStyle]);
 
   /**
    * Sends the reservation. The payment token is already in hand by this

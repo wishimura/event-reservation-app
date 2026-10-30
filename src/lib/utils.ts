@@ -24,7 +24,14 @@ export function addDaysToDateString(dateStr: string, days: number): string {
 }
 
 export function formatPrice(price: number): string {
-  return `¥${price.toLocaleString()}`;
+  /*
+    桁区切りの言語を指定する。
+
+    指定しないと、サーバーは Node の設定、画面は端末の言語に従います。
+    ドイツ語の端末では「1.234」になり、同じ値がサーバーと画面で食い違って
+    React が警告を出します。日本の店なので、常に日本語で揃えます。
+  */
+  return `¥${price.toLocaleString("ja-JP")}`;
 }
 
 export function generateOrderNumber(): string {

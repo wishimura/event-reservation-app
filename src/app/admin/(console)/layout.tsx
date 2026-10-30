@@ -76,7 +76,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {/* 入る項目が増えても横にはみ出さないよう、折り返す。 */}
         <header className="md:hidden flex flex-wrap items-center justify-between gap-y-2 bg-indigo-900 px-4 py-3 text-white">
           <h1 className="text-base font-bold">管理画面</h1>
-          <nav className="flex gap-1">
+          {/*
+            項目が増えても横にはみ出さないよう、ここも折り返す。
+            調査ログを足したときに、アイコン1つぶんで溢れました。
+          */}
+          <nav className="flex min-w-0 flex-wrap justify-end gap-1">
             {navItems.map((item) => {
               const isActive =
                 item.href === "/admin"

@@ -226,7 +226,7 @@ export default function IncidentLogsPage() {
                       {log.order_number && (
                         <div className="font-mono">{log.order_number}</div>
                       )}
-                      {log.amount != null && <div>¥{log.amount.toLocaleString()}</div>}
+                      {log.amount != null && <div>¥{log.amount.toLocaleString("ja-JP")}</div>}
                       {log.customer_email && <div>{log.customer_email}</div>}
                     </td>
                   </tr>

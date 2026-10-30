@@ -157,19 +157,26 @@ test.describe("S-01 お客様の予約", () => {
     await submit.click();
 
     // 押した場所で反応が返ること。
-    await expect(
-      page.getByText(/入力が\d+つ足りません|入力が1つ足りません/)
-    ).toBeVisible();
+    const summary = page.getByText("未入力の項目があります。");
+    await expect(summary).toBeVisible();
 
     // 最初の不足（お召し上がり方法）が画面の中に入っていること。
     const picker = page.locator("#field-dining_style");
     await expect(picker).toBeInViewport({ timeout: 10_000 });
 
-    // 直せば、要約は消えて先へ進める。
+    /*
+      直したそばから引っ込むこと。
+
+      押した時点の数をそのまま残すと、入れたあとも「◯つ足りません」が出たまま
+      になり、入れたはずなのにまだ足りないのかと迷わせます。
+    */
     await page.getByRole("button", { name: /店内で食べる/ }).click();
     await page.getByPlaceholder("山田 太郎").fill("足りない 太郎");
     await page.getByPlaceholder("taro@example.com").fill("enough@example.com");
+    await expect(summary).toBeVisible(); // 電話番号がまだ
     await page.getByPlaceholder("090-1234-5678").fill("090-1111-2222");
+    await expect(summary).toHaveCount(0);
+
     await submit.click();
     await page.waitForURL(/\/reserve\/complete/);
   });
