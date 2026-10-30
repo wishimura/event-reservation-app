@@ -26,6 +26,15 @@ export interface OrderMailPayload {
   total_amount: number;
   pickup_date: string;
   dining_style: DiningStyle;
+  /**
+   * 当日お支払いいただくのか、もう済んでいるのか。
+   *
+   * これが無いあいだ、カードで払い終えたお客様にも「お支払いは当日店頭で」と
+   * 送っていました。完了画面には「お支払い済み」と出るので、受け取った方は
+   * どちらが本当なのか分からなくなります。
+   */
+  payment_method: "cash" | "credit_card";
+  payment_status: "pending" | "paid" | "failed" | "refunded";
   event_name: string;
   pickup_location: string;
   reservation_note: string;
@@ -162,14 +171,34 @@ function textDetail(payload: OrderMailPayload): string {
     .join("\n");
 }
 
+/** お支払いについて、お客様にお伝えする一文。 */
+function paymentLine(payload: OrderMailPayload): string {
+  if (payload.payment_method === "credit_card" && payload.payment_status === "paid") {
+    return "お支払いはクレジットカードで完了しています。当日のお支払いは不要です。";
+  }
+  return `お支払いは${handoverWording(payload.dining_style).shortAction}の際に店頭でお願いいたします。`;
+}
+
+/** 店舗向け。当日お金をいただくのかどうかが、ここで分かるようにする。 */
+function paymentSummary(payload: OrderMailPayload): string {
+  const method = payload.payment_method === "cash" ? "現地払い" : "クレジットカード";
+  const state =
+    payload.payment_status === "paid"
+      ? "決済済み"
+      : payload.payment_status === "refunded"
+        ? "返金済み"
+        : payload.payment_status === "failed"
+          ? "決済失敗"
+          : "未決済";
+  return `${method} / ${state}`;
+}
+
 export function buildCustomerEmail(payload: OrderMailPayload) {
   const body =
     detailBlock(payload) +
     `
     <div style="margin-top:16px;padding:12px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;font-size:13px;color:#78350f;line-height:1.7;">
-      お支払いは<strong>${escapeHtml(
-        handoverWording(payload.dining_style).shortAction
-      )}の際に店頭</strong>でお願いいたします。
+      ${escapeHtml(paymentLine(payload))}
     </div>` +
     (payload.contact_phone
       ? `<div style="margin-top:12px;padding:12px 14px;border:1px solid #e7e5e4;border-radius:10px;font-size:13px;color:#57534e;line-height:1.7;">
@@ -199,7 +228,7 @@ export function buildCustomerEmail(payload: OrderMailPayload) {
       "",
       textDetail(payload),
       "",
-      `お支払いは${handoverWording(payload.dining_style).shortAction}の際に店頭でお願いいたします。`,
+      paymentLine(payload),
       payload.contact_phone
         ? `\nご予約の変更・キャンセルはお電話でお願いいたします。\n${payload.contact_phone}`
         : null,
@@ -215,6 +244,10 @@ export function buildShopEmail(payload: OrderMailPayload) {
     detailBlock(payload) +
     `
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="font-size:14px;margin-top:8px;">
+      <tr><td colspan="2" style="padding:12px 0 2px;color:#a8a29e;font-size:12px;">お支払い</td></tr>
+      <tr><td style="padding:2px 0 8px;color:#292524;font-weight:bold;">${escapeHtml(
+        paymentSummary(payload)
+      )}</td></tr>
       <tr><td colspan="2" style="padding:12px 0 8px;color:#a8a29e;font-size:12px;">お客様情報</td></tr>
       <tr><td style="padding:2px 0;color:#292524;">${escapeHtml(payload.customer_name)} 様</td></tr>
       <tr><td style="padding:2px 0;color:#57534e;">${escapeHtml(payload.customer_email)}</td></tr>
@@ -230,6 +263,8 @@ export function buildShopEmail(payload: OrderMailPayload) {
       "新しい予約が入りました。",
       "",
       textDetail(payload),
+      "",
+      `お支払い: ${paymentSummary(payload)}`,
       "",
       "お客様情報",
       `${payload.customer_name} 様`,

@@ -588,3 +588,92 @@ test("名寄せ：渡した順番が保たれる", () => {
   assert.deepEqual(groups[0].orders.map((o) => o.id), ["1", "3"]);
   assert.deepEqual(groups[1].orders.map((o) => o.id), ["2"]);
 });
+
+/* ====================================================== 確認メールの文面 */
+
+import { buildCustomerEmail, buildShopEmail } from "../src/lib/email";
+
+function mail(
+  payment_method: "cash" | "credit_card",
+  payment_status: "pending" | "paid" | "failed" | "refunded"
+) {
+  return {
+    order_number: "ORD-261030-ABC123",
+    customer_name: "水木 しげる",
+    customer_email: "gegege@example.com",
+    customer_phone: "070-6669-1010",
+    total_amount: 3950,
+    pickup_date: "2026-11-18",
+    dining_style: "takeout" as const,
+    payment_method,
+    payment_status,
+    event_name: "ゲゲゲ忌メニュー",
+    pickup_location: "となりのと（レジ）",
+    reservation_note: "受取時間は各日 11:00〜16:00 です。",
+    contact_phone: "070-6669-1010",
+    items: [
+      {
+        product_name_snapshot: "一反もめんナン",
+        unit_price: 480,
+        quantity: 1,
+        subtotal: 480,
+      },
+    ],
+  };
+}
+
+test("確認メール：カードで払い終えた方に、店頭で払えとは書かない", () => {
+  /*
+    本番で起きました。完了画面は「クレジットカード（お支払い済み）」なのに、
+    届いたメールには「お支払いはご来店の際に店頭でお願いいたします」と書いて
+    あり、受け取った方は決済できたのか分からなくなります。
+  */
+  const { html, text } = buildCustomerEmail(mail("credit_card", "paid"));
+
+  for (const body of [html, text]) {
+    assert.ok(
+      !body.includes("店頭でお願い"),
+      "払い終えた方に店頭での支払いを求めている"
+    );
+    assert.ok(
+      body.includes("クレジットカードで完了しています"),
+      "支払い済みだと書かれていない"
+    );
+    assert.ok(body.includes("当日のお支払いは不要"), "当日不要だと伝えていない");
+  }
+});
+
+test("確認メール：現地払いの方には、これまでどおり店頭でとお願いする", () => {
+  const { html, text } = buildCustomerEmail(mail("cash", "paid"));
+
+  for (const body of [html, text]) {
+    assert.ok(body.includes("店頭でお願い"), "店頭でのお支払いを案内していない");
+    assert.ok(
+      !body.includes("お支払いは不要"),
+      "まだ払っていない方に不要だと伝えている"
+    );
+  }
+});
+
+test("確認メール：カードでも決済が済んでいなければ、済んだことにしない", () => {
+  for (const status of ["pending", "failed", "refunded"] as const) {
+    const { text } = buildCustomerEmail(mail("credit_card", status));
+    assert.ok(
+      !text.includes("完了しています"),
+      `${status} なのに支払い済みと書いている`
+    );
+  }
+});
+
+test("店舗への通知：当日お金をいただくのかどうかが分かる", () => {
+  // これが無いと、カウンターで請求していいのか毎回注文一覧を見に行くことになる。
+  const paid = buildShopEmail(mail("credit_card", "paid"));
+  assert.ok(paid.text.includes("クレジットカード / 決済済み"), paid.text);
+  assert.ok(paid.html.includes("クレジットカード / 決済済み"));
+
+  const cash = buildShopEmail(mail("cash", "paid"));
+  assert.ok(cash.text.includes("現地払い / 決済済み"), cash.text);
+
+  const pending = buildShopEmail(mail("credit_card", "pending"));
+  assert.ok(pending.text.includes("クレジットカード / 未決済"), pending.text);
+});

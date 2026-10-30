@@ -269,6 +269,8 @@ export async function POST(request: NextRequest) {
           total_amount: order.total_amount,
           pickup_date: event_date.pickup_date,
           dining_style: order.dining_style,
+          payment_method: order.payment_method,
+          payment_status: order.payment_status,
           event_name: event.name,
           pickup_location: event.pickup_location,
           reservation_note: event.reservation_note,
