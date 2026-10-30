@@ -278,14 +278,19 @@ export default function OrdersPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="text-left px-4 py-3 font-medium text-slate-500">注文番号</th>
-                <th className="text-left px-4 py-3 font-medium text-slate-500">お客様名</th>
-                <th className="text-left px-4 py-3 font-medium text-slate-500">受取日</th>
-                <th className="text-left px-4 py-3 font-medium text-slate-500">商品</th>
-                <th className="text-right px-4 py-3 font-medium text-slate-500">金額</th>
-                <th className="text-center px-4 py-3 font-medium text-slate-500">決済</th>
-                <th className="text-center px-4 py-3 font-medium text-slate-500">注文</th>
-                <th className="text-center px-4 py-3 font-medium text-slate-500">受取</th>
+                {/*
+                  折り返してよいのは商品の列だけ。ほかを詰めると、見出しも札も
+                  一文字ずつ縦に割れて読めなくなります。幅が足りないときは、
+                  商品がその分を引き受けて折り返します（w-full がその役）。
+                */}
+                <th className="whitespace-nowrap text-left px-4 py-3 font-medium text-slate-500">注文番号</th>
+                <th className="whitespace-nowrap text-left px-4 py-3 font-medium text-slate-500">お客様名</th>
+                <th className="whitespace-nowrap text-left px-4 py-3 font-medium text-slate-500">受取日</th>
+                <th className="w-full text-left px-4 py-3 font-medium text-slate-500">商品</th>
+                <th className="whitespace-nowrap text-right px-4 py-3 font-medium text-slate-500">金額</th>
+                <th className="whitespace-nowrap text-center px-4 py-3 font-medium text-slate-500">決済</th>
+                <th className="whitespace-nowrap text-center px-4 py-3 font-medium text-slate-500">注文</th>
+                <th className="whitespace-nowrap text-center px-4 py-3 font-medium text-slate-500">受取</th>
               </tr>
             </thead>
             <tbody>
@@ -303,23 +308,23 @@ export default function OrdersPage() {
                       }`}
                       onClick={() => setExpandedId(isExpanded ? null : order.id)}
                     >
-                      <td className="px-4 py-3 font-mono text-xs text-slate-600">
+                      <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-600">
                         {order.order_number}
                         {order.source === "walk_in" && (
                           <span
-                            className={`ml-2 rounded px-1.5 py-0.5 font-sans text-[10px] font-medium ${sourceLabels.walk_in.cls}`}
+                            className={`ml-2 whitespace-nowrap rounded px-1.5 py-0.5 font-sans text-[10px] font-medium ${sourceLabels.walk_in.cls}`}
                           >
                             {sourceLabels.walk_in.label}
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-slate-800 font-medium">{order.customer_name}</td>
-                      <td className="px-4 py-3 text-slate-600">
+                      <td className="whitespace-nowrap px-4 py-3 text-slate-800 font-medium">{order.customer_name}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-slate-600">
                         {order.event_date
                           ? formatDate(order.event_date.pickup_date)
                           : "-"}
                         <span
-                          className={`mt-0.5 inline-block rounded px-1.5 py-0.5 text-xs font-medium ${
+                          className={`mt-0.5 inline-block whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-medium ${
                             order.dining_style === "eat_in"
                               ? "bg-rose-100 text-rose-700"
                               : "bg-sky-100 text-sky-700"
@@ -335,21 +340,21 @@ export default function OrdersPage() {
                           </span>
                         ))}
                       </td>
-                      <td className="px-4 py-3 text-right text-slate-800 font-medium">
+                      <td className="whitespace-nowrap px-4 py-3 text-right text-slate-800 font-medium">
                         {formatPrice(order.total_amount)}
                       </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${payment.cls}`}>
+                      <td className="whitespace-nowrap px-4 py-3 text-center">
+                        <span className={`inline-block whitespace-nowrap px-2 py-0.5 rounded-full text-xs font-medium ${payment.cls}`}>
                           {payment.label}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${orderSt.cls}`}>
+                      <td className="whitespace-nowrap px-4 py-3 text-center">
+                        <span className={`inline-block whitespace-nowrap px-2 py-0.5 rounded-full text-xs font-medium ${orderSt.cls}`}>
                           {orderSt.label}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${pickup.cls}`}>
+                      <td className="whitespace-nowrap px-4 py-3 text-center">
+                        <span className={`inline-block whitespace-nowrap px-2 py-0.5 rounded-full text-xs font-medium ${pickup.cls}`}>
                           {pickup.label}
                         </span>
                       </td>

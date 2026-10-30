@@ -184,20 +184,63 @@ export default function ConfirmPage() {
     fetchEvent();
   }, [router]);
 
+  /**
+   * 決済にたどり着く前に転んだことを、お店に知らせる。
+   *
+   * この時点ではまだ金額もご連絡先も決まっていません。分かっていることだけ
+   * 送ります。**この失敗はサーバーに何も残らない**ので、送らなければ誰も
+   * 気づけません（2026-10-30 のお申し出がまさにこれでした）。
+   */
+  function reportSetupFailure(message: string, err: unknown) {
+    try {
+      void fetch("/api/payment-log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        keepalive: true,
+        body: JSON.stringify({
+          stage: "card_form",
+          outcome: "error",
+          message,
+          detail: {
+            reason: err instanceof Error ? err.message : String(err ?? ""),
+          },
+        }),
+      }).catch(() => {});
+    } catch {
+      /* 記録はおまけ。ここで止めない。 */
+    }
+  }
+
+  /*
+    カード欄は**2段構え**で用意します。
+
+    1. どちらで払えるのかを聞く（/api/payments/config）
+    2. カード欄の置き場所が画面に出てから、Square を立ち上げて差し込む
+
+    1本の useEffect でまとめてやっていたのが、本番で2件目の注文だけ
+    「決済フォームの読み込みに失敗しました」になった原因でした。
+
+    この画面は、買い物かごを localStorage から読むまで「読み込み中...」だけを
+    描きます。その間 #square-card はまだ DOM にありません。1本にまとめた
+    useEffect は画面が立ち上がった直後に走り、設定の取得と SDK の読み込みを
+    待ってから attach します。**初回はその待ち時間のあいだに本体が描かれて
+    いたので間に合っていました。** ところが同じタブでの2件目は、SDK が
+    読み込み済みで設定も温まっているため待ち時間がほとんど無く、まだ存在
+    しない #square-card に attach しようとして落ちていました。
+    再読み込みで直るのは、また「遅い初回」に戻るからです。
+
+    なので、置き場所が実際に DOM に入ったことを見てから立ち上げます。
+  */
+  const [cardHost, setCardHost] = useState<HTMLDivElement | null>(null);
+  const [squareConfig, setSquareConfig] = useState<{
+    applicationId: string;
+    locationId: string;
+  } | null>(null);
+
   useEffect(() => {
     let cancelled = false;
-    /*
-      この画面を離れるときに必ず片付けるための控え。
 
-      片付けずに出ていくと、同じタブで2件目を頼みに戻ってきたときに、前の
-      カード欄が #square-card に残ったままもう一度 attach しようとして失敗し、
-      「決済フォームの読み込みに失敗しました」になります。1件目は通るのに
-      2件目だけ通らない、という形で出ます（本番で実際に起きました）。
-      ページを再読み込みすれば直るのは、残骸ごと消えるからです。
-    */
-    let attachedCard: { destroy?: () => Promise<unknown> } | null = null;
-
-    async function setUpPayment() {
+    (async () => {
       try {
         const config = await fetchJson<{
           enabled: boolean;
@@ -208,14 +251,47 @@ export default function ConfirmPage() {
         if (cancelled) return;
         setPayByCard(config.enabled);
 
-        if (!config.enabled || !config.applicationId || !config.locationId) {
-          return;
+        if (config.enabled && config.applicationId && config.locationId) {
+          setSquareConfig({
+            applicationId: config.applicationId,
+            locationId: config.locationId,
+          });
         }
+      } catch (err) {
+        console.error("Payment config error:", err);
+        if (!cancelled) {
+          setCardError(
+            "決済の準備ができませんでした。ページを再読み込みしてください。"
+          );
+          reportSetupFailure("決済の設定を取得できませんでした", err);
+        }
+      }
+    })();
 
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    // 置き場所が無いうちは何もしない。ここが今回の肝。
+    if (!squareConfig || !cardHost) return;
+
+    let cancelled = false;
+    let attachedCard: { destroy?: () => Promise<unknown> } | null = null;
+
+    async function setUpPayment() {
+      try {
         const { payments } = await import("@square/web-sdk");
-        const sq = await payments(config.applicationId, config.locationId);
+        const sq = await payments(
+          squareConfig!.applicationId,
+          squareConfig!.locationId
+        );
         if (cancelled || !sq) {
-          setCardError("決済フォームを読み込めませんでした");
+          if (!cancelled) {
+            setCardError("決済フォームを読み込めませんでした");
+            reportSetupFailure("Square を初期化できませんでした", null);
+          }
           return;
         }
 
@@ -241,24 +317,7 @@ export default function ConfirmPage() {
           setCardError(
             "決済フォームの読み込みに失敗しました。ページを再読み込みしてください。"
           );
-          /*
-            ここはまだ画面が立ち上がったばかりで、金額もご連絡先も決まって
-            いません。下の report() は使わず、分かっていることだけ送ります。
-            この失敗はサーバーに何も残らないので、送らなければ誰も気づけません。
-          */
-          void fetch("/api/payment-log", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            keepalive: true,
-            body: JSON.stringify({
-              stage: "card_form",
-              outcome: "error",
-              message: "決済フォームの読み込みに失敗しました",
-              detail: {
-                reason: err instanceof Error ? err.message : String(err),
-              },
-            }),
-          }).catch(() => {});
+          reportSetupFailure("決済フォームの読み込みに失敗しました", err);
         }
       }
     }
@@ -271,8 +330,10 @@ export default function ConfirmPage() {
       attachedCard = null;
       cardRef.current = null;
       paymentsRef.current = null;
+      setCardReady(false);
+      setPaymentsReady(false);
     };
-  }, []);
+  }, [squareConfig, cardHost]);
 
   /**
    * Leaving mid-payment would take the money without ever showing the
@@ -981,8 +1042,13 @@ export default function ConfirmPage() {
                 </div>
               )}
 
+              {/*
+                ここが DOM に入ったことを見てから Square を立ち上げます。
+                置き場所の無いうちに差し込もうとすると落ちます。
+              */}
               <div
                 id="square-card"
+                ref={setCardHost}
                 className="rounded-xl border border-zinc-200 bg-white p-3 min-h-[92px]"
               />
 

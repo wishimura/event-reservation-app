@@ -94,6 +94,40 @@ test.describe("S-04 管理画面", () => {
     );
   });
 
+  test("注文一覧の状態の札が、縦書きにならない", async ({ page }) => {
+    /*
+      列が詰まると「決済済み」が一文字ずつ縦に割れて読めなくなります。
+      幅が足りないときに折り返してよいのは商品の列だけです。
+
+      札が横に寝ているかは、幅と高さを比べれば分かります（縦書きなら
+      高さのほうが大きくなる）。
+    */
+    await reserve(page, {
+      product: FIXTURE.plenty.name,
+      name: "縦書き 太郎",
+      diningStyle: "takeout",
+      eventDateId: data.today.id,
+      email: "nowrap@example.com",
+    });
+
+    await loginAsAdmin(page);
+    await page.goto("/admin/orders");
+
+    const row = rowContaining(page, "縦書き 太郎");
+    await expect(row).toBeVisible();
+
+    for (const label of ["決済済み", "確定", "未受取", "テイクアウト"]) {
+      const badge = row.getByText(label, { exact: true }).first();
+      await expect(badge).toBeVisible();
+      const box = await badge.boundingBox();
+      expect(box, `${label} の大きさが取れない`).not.toBeNull();
+      expect(
+        box!.width,
+        `${label} が縦書きになっている (${box!.width}x${box!.height})`
+      ).toBeGreaterThan(box!.height);
+    }
+  });
+
   test("決済までたどり着けなかった失敗が、決済ログに残る", async ({ page }) => {
     /*
       拾いたいのは**サーバーに注文が届かなかった失敗**です。注文もキャンセルも
