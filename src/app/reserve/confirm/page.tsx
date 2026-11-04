@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CartItem, Event } from "@/lib/types";
 import { fetchJson } from "@/lib/api-client";
-import { formatDate, formatPrice } from "@/lib/utils";
+import { formatDate, formatPrice, toE164Japan } from "@/lib/utils";
 import { pickupDateLabel } from "@/lib/tax";
 import type { DiningStyle } from "@/lib/types";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -506,8 +506,19 @@ export default function ConfirmPage() {
     }
     if (!phone.trim()) {
       errs.phone = "電話番号を入力してください";
-    } else if (!/^[0-9\-+() ]{10,}$/.test(phone)) {
-      errs.phone = "正しい電話番号を入力してください";
+    } else if (!toE164Japan(phone)) {
+      /*
+        Square が受ける基準と、同じもので見ます。
+
+        前はここが緩く（数字と記号が10文字以上なら通る）、「0000000000」でも
+        先へ進めました。弾かれるのは決済のあと、Square に顧客を作るところで、
+        そこではもうお客様に何も言えません——お支払いは済んでいて、画面は
+        完了画面に移っています。だから**ここで**止めます。
+
+        お店は変更・キャンセルを電話でのみ受けているので、かけられない番号を
+        通すことは、それ自体が困りごとでもあります。
+      */
+      errs.phone = "電話番号の形式をご確認ください（例：090-1234-5678）";
     }
     if (!diningStyle) {
       errs.dining_style = "店内でお召し上がりか、お持ち帰りかを選んでください";

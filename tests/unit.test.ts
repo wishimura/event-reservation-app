@@ -597,7 +597,7 @@ import {
   hashDeviceToken,
   newDeviceToken,
 } from "../src/lib/saved-card";
-import { toE164Japan } from "../src/lib/square";
+import { toE164Japan } from "../src/lib/utils";
 
 function mail(
   payment_method: "cash" | "credit_card",

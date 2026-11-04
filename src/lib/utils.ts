@@ -159,3 +159,42 @@ export function fromJstInputValue(value: string): Date | null {
   const d = new Date(`${value}:59+09:00`);
   return Number.isNaN(d.getTime()) ? null : d;
 }
+
+/**
+ * 日本の電話番号を、国番号から始まる形（E.164）にする。
+ *
+ * ## どこで使うか
+ *
+ * 2か所で、**同じ基準**で使います。
+ *
+ *   1. ご注文の入力欄。ここで弾いて、その場で直していただく。
+ *   2. Square に顧客を作るとき。
+ *
+ * 揃えていないと、画面は通ったのに Square が弾く、という形になります。
+ * 実際そうなりました（`INVALID_PHONE_NUMBER`）。しかも弾かれるのは
+ * お支払いが済んだあとなので、お客様には何も言えません。
+ *
+ * ## 何を通すか
+ *
+ * 携帯も固定も IP 電話も通します（0 で始まる10〜11桁）。国番号付きで
+ * 書かれたものはそのまま。それ以外は通しません——お店は変更・キャンセルを
+ * **電話でのみ**受けているので、かけられない番号では連絡が取れません。
+ *
+ * 国内の番号は先頭の 0 を落として +81 を付けます。既に + で始まっていれば
+ * そのまま。どちらにも当てはまらなければ渡しません——間違った番号を送って
+ * 保存ごと失敗するより、番号が無いほうがましです。
+ */
+export function toE164Japan(input: string): string | undefined {
+  const trimmed = input.trim();
+  if (!trimmed) return undefined;
+
+  if (trimmed.startsWith("+")) {
+    const digits = trimmed.slice(1).replace(/\D/g, "");
+    return digits.length >= 8 && digits.length <= 15 ? `+${digits}` : undefined;
+  }
+
+  const digits = trimmed.replace(/\D/g, "");
+  // 国内の番号は 0 で始まり、市外局番を含めて 10桁か 11桁。
+  if (!/^0\d{9,10}$/.test(digits)) return undefined;
+  return `+81${digits.slice(1)}`;
+}

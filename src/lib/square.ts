@@ -1,4 +1,5 @@
 import { SquareClient, SquareEnvironment } from "square";
+import { toE164Japan } from "./utils";
 
 /**
  * Square payments.
@@ -332,31 +333,6 @@ export async function disableStoredCard(cardId: string): Promise<void> {
   } catch (error) {
     console.error("Failed to disable a stored card:", cardId, error);
   }
-}
-
-/**
- * 日本の電話番号を、Square の求める形にする。
- *
- * Square は国番号から始まる形（E.164）を求めます。「090-1234-5678」のまま
- * 渡すと `INVALID_PHONE_NUMBER` で弾かれ、カードが保存されません。
- *
- * 国内の番号は先頭の 0 を落として +81 を付けます。既に + で始まっていれば
- * そのまま。どちらにも当てはまらなければ渡しません——間違った番号を送って
- * 保存ごと失敗するより、番号が無いほうがましです。
- */
-export function toE164Japan(input: string): string | undefined {
-  const trimmed = input.trim();
-  if (!trimmed) return undefined;
-
-  if (trimmed.startsWith("+")) {
-    const digits = trimmed.slice(1).replace(/\D/g, "");
-    return digits.length >= 8 && digits.length <= 15 ? `+${digits}` : undefined;
-  }
-
-  const digits = trimmed.replace(/\D/g, "");
-  // 国内の番号は 0 で始まり、市外局番を含めて 10桁か 11桁。
-  if (!/^0\d{9,10}$/.test(digits)) return undefined;
-  return `+81${digits.slice(1)}`;
 }
 
 /** 形だけ見る。確かめるのは送ってみた先の話。 */

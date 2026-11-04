@@ -107,6 +107,47 @@ test.describe("S-01 お客様の予約", () => {
     await expect(page.getByText("1 点")).toBeVisible();
   });
 
+  test("かけられない電話番号は、払う前に止める", async ({ page }) => {
+    /*
+      お店は変更・キャンセルを**電話でのみ**受けています。かけられない番号で
+      通すと、連絡の手立てが無いご予約になります。
+
+      それに加えて、Square が顧客を作るときに同じ番号を見ます。以前ここが
+      緩く（数字と記号が10文字以上なら通る）、弾かれるのは決済のあとでした。
+      その時点ではもうお支払いが済んでいて、お客様には何も言えません。
+    */
+    await page.goto(`/reserve/${data.today.id}`);
+    const card = productCard(page, FIXTURE.plenty.name);
+    await card.getByRole("button", { name: "1つ増やす" }).click();
+    await page.getByRole("button", { name: /確認へ進む/ }).click();
+    await page.waitForURL(/\/reserve\/confirm/);
+
+    await page.getByRole("button", { name: /持ち帰る/ }).click();
+    await page.getByPlaceholder("山田 太郎").fill("電話 太郎");
+    await page.getByPlaceholder("taro@example.com").fill("phone@example.com");
+
+    const phone = page.getByPlaceholder("090-1234-5678");
+    const submit = page.getByRole("button", { name: "注文を確定する" });
+    const complaint = page.getByText("電話番号の形式をご確認ください（例：090-1234-5678）");
+
+    // 10文字以上の記号の並び。前の作りではこれで先へ進めた。
+    await phone.fill("----------");
+    await submit.click();
+    await expect(complaint).toBeVisible();
+    await expect(page).not.toHaveURL(/\/reserve\/complete/);
+
+    // 0 で始まらない番号も通さない。
+    await phone.fill("9012345678");
+    await expect(complaint).toBeVisible();
+
+    // まともな番号を入れれば、その場で引っ込んで先へ進める。
+    await phone.fill("090-1234-5678");
+    await expect(complaint).toHaveCount(0);
+
+    await submit.click();
+    await page.waitForURL(/\/reserve\/complete/);
+  });
+
   test("受取時間の枠を選ばせる操作がどこにも残っていない", async ({ page }) => {
     /*
       時間枠はやめた仕様です。消し残すと、選べない欄をお客様に見せることになります。
