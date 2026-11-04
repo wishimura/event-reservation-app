@@ -158,8 +158,10 @@
    `https://gegege-event-reservation-app.vercel.app/api/payments/config`
    を開き、`applicationId` が `sq0idp-` で始まっていれば本番、
    `sandbox-` で始まっていればテスト環境。
-2. **`SHOW_LOGIN_HINT` を Vercel の環境変数から削除**
-   残っていると、公開されているログイン画面に管理パスワードが表示される。
+2. ~~**`SHOW_LOGIN_HINT` を Vercel の環境変数から削除**~~ — 対応済み。
+   パスワードを出す仕掛けごとコードから消しました（2026-11-05）。環境変数を
+   消すだけでは、値が戻ったときにまた出てしまうためです。Vercel 側に変数が
+   残っていても、もう何も起きません。
 3. **DBのパスワードを変更**（チャットに貼られたため）
 
 ### 仕様として決めておくこと

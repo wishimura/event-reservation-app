@@ -53,9 +53,23 @@ test.describe("S-07 管理画面のログイン", () => {
   });
 
   test("ログイン画面にパスワードが書かれていない", async ({ page }) => {
-    // SHOW_LOGIN_HINT を本番に残すと、誰でも開ける画面にパスワードが出る。
+    /*
+      このページは誰でも開けて、入られれば予約全部の氏名・メール・電話が
+      見えます。
+
+      以前は `SHOW_LOGIN_HINT="true"` のあいだだけパスワードを出す仕掛けが
+      あり、ここではその見出し（「テスト用の表示」）が無いことを見ていました。
+      仕掛けごと消したので、**パスワードそのものが出ていないこと**を見ます。
+      文言は変わりえますが、こちらは変わりません。
+    */
+    const password = process.env.ADMIN_PASSWORD;
+    expect(password, "ADMIN_PASSWORD が無いと、この確認は何も見ていない").toBeTruthy();
+
     await page.context().clearCookies();
     await page.goto("/admin/login");
-    await expect(page.locator("body")).not.toContainText("テスト用の表示");
+
+    const body = page.locator("body");
+    await expect(body).not.toContainText(password!);
+    await expect(body).not.toContainText("テスト用の表示");
   });
 });
