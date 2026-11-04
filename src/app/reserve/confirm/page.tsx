@@ -584,41 +584,6 @@ export default function ConfirmPage() {
     }
   }
 
-  /**
-   * 次回のために、このカードを覚えてもらう。
-   *
-   * ご注文が**通ったあと**に呼びます。ここで何が起きても、支払いも予約も
-   * もう済んでいます。失敗したら次回また入力していただくだけなので、
-   * 黙って諦めます。
-   *
-   * 本人認証（3Dセキュア）はかけません。払い終えたあとで認証画面を出すのは、
-   * お客様から見れば「何かおかしい」以外の何物でもないからです。銀行が
-   * 保存に認証を求める場合はここで断られ、記録だけが残ります。
-   */
-  async function rememberThisCard() {
-    if (!cardRef.current) return;
-
-    try {
-      const result = await cardRef.current.tokenize();
-      if (result.status !== "OK") return;
-
-      await fetch("/api/saved-card", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // 画面はこのあとすぐ切り替わる。置いていかれないように。
-        keepalive: true,
-        body: JSON.stringify({
-          source_id: result.token,
-          customer_name: name.trim(),
-          customer_email: email.trim(),
-          customer_phone: phone.trim(),
-        }),
-      });
-    } catch {
-      /* 覚えられなくても、ご注文は済んでいる。 */
-    }
-  }
-
   async function placeOrder(
     paymentSourceId?: string,
     verificationToken?: string,
@@ -641,6 +606,15 @@ export default function ConfirmPage() {
         verification_token: verificationToken,
         // 旗だけ。どのカードかはサーバーが Cookie から引き直す。
         use_saved_card: payWithSavedCard,
+        /*
+          覚えるのもサーバーに任せます。
+
+          以前はここで決済のあともう一度 `tokenize()` を呼び、その結果を
+          送っていました。本番で保存されず、2回目にカードが出てきません
+          でした。Square は決済 id からもカードを保存できるので、画面には
+          もう触らず、サーバーが決済 id を使って覚えます。
+        */
+        remember_card: payByCard && !payWithSavedCard && rememberCard,
         items: cart.map((item) => ({
           product_id: item.product.id,
           product_name_snapshot: item.product.name,
@@ -660,16 +634,6 @@ export default function ConfirmPage() {
         setPlacing(false);
         setSubmitting(false);
         return;
-      }
-
-      /*
-        覚えるのはここ。注文が通ってから、画面が切り替わる前に。
-
-        待たせません。失敗しても次回また入力していただくだけで、支払いと
-        予約はもう終わっています。
-      */
-      if (payByCard && !payWithSavedCard && rememberCard) {
-        void rememberThisCard();
       }
 
       const order = await res.json();

@@ -453,23 +453,20 @@ test("Cookie が無いのに「保存カードで払う」と言われても、�
   );
 });
 
-test("覚えさせるには、Square の設定が要る", async () => {
+test("カードを覚えさせる窓口は、外に開いていない", async () => {
   /*
-    鍵が無い環境では何も保存せず、それでも 200 で返すこと。ご注文が
-    通ったあとに呼ばれるので、ここで 500 を返しても誰も得をしません。
+    覚えるのはご注文の処理の中だけです（決済が済んだ決済 id から）。
+    外から叩ける書き込み口があると、そこが的になります。
   */
   const res = await api("/api/saved-card", {
     method: "POST",
-    body: JSON.stringify({
-      source_id: "cnon:fake-token",
-      customer_name: "保存 太郎",
-      customer_email: "store@example.com",
-      customer_phone: "090-1111-1111",
-    }),
+    body: JSON.stringify({ source_id: "cnon:fake-token" }),
   });
 
-  assert.equal(res.status, 200);
-  assert.equal((res.body as { saved: boolean }).saved, false);
+  assert.ok(
+    res.status === 404 || res.status === 405,
+    `保存の窓口が外から叩ける（${res.status}）`
+  );
 });
 
 test("忘れさせる操作は、何も覚えていなくても転ばない", async () => {

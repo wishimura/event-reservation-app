@@ -597,6 +597,7 @@ import {
   hashDeviceToken,
   newDeviceToken,
 } from "../src/lib/saved-card";
+import { toE164Japan } from "../src/lib/square";
 
 function mail(
   payment_method: "cash" | "credit_card",
@@ -747,4 +748,47 @@ test("鍵が無ければ、覚えているカードは無い", async () => {
   // Cookie を持たない人に他人のカードが出ないこと。問い合わせ自体が起きない。
   assert.equal(await findSavedCard(undefined), null);
   assert.equal(await findSavedCard(""), null);
+});
+
+/* ==================================================================== *
+ *  Square に渡す電話番号
+ * ==================================================================== */
+
+test("電話番号は、Square の求める国番号付きの形に直す", () => {
+  /*
+    本番で `INVALID_PHONE_NUMBER` が返り、カードが保存されませんでした。
+    お客様が打つのは「090-1234-5678」で、Square が求めるのは
+    「+819012345678」です。
+  */
+  const cases: Array<[string, string | undefined]> = [
+    ["090-1234-5678", "+819012345678"],
+    ["09012345678", "+819012345678"],
+    ["090 1234 5678", "+819012345678"],
+    ["０９０１２３４５６７８", undefined], // 全角は読めない。送らない。
+    ["03-1234-5678", "+81312345678"], // 固定電話（10桁）
+    ["+819012345678", "+819012345678"], // 既に整っている
+    ["", undefined],
+    ["   ", undefined],
+    ["わかりません", undefined],
+    ["1234", undefined], // 短すぎる
+    ["9012345678", undefined], // 0 で始まらない
+  ];
+
+  for (const [input, expected] of cases) {
+    assert.equal(
+      toE164Japan(input),
+      expected,
+      `「${input}」→ ${toE164Japan(input)}（${expected} のはず）`
+    );
+  }
+});
+
+test("整わない電話番号でも、投げずに「渡さない」で済ませる", () => {
+  /*
+    ここで投げると、カードの保存ごと落ちます。保存は「できたら嬉しい」もので、
+    お客様のお支払いはもう済んでいます。番号のために失うものではありません。
+  */
+  for (const input of ["", "???", "+", "++81", "0", "0".repeat(40)]) {
+    assert.doesNotThrow(() => toE164Japan(input));
+  }
 });

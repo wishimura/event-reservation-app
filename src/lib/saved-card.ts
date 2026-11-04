@@ -118,3 +118,111 @@ export async function forgetSavedCard(deviceToken: string): Promise<void> {
     .delete(savedCards)
     .where(eq(savedCards.device_token_hash, hashDeviceToken(deviceToken)));
 }
+
+/**
+ * 決済が済んだカードを、次回のために覚える。
+ *
+ * ## 元にするもの
+ *
+ * Square のカード保存は、入力欄のトークンだけでなく**決済 id** も受け付けます
+ * （`sourceId`: "This can be a card nonce or a payment id"）。こちらを使います。
+ *
+ * 最初は、決済のあとにもう一度 `tokenize()` してその結果を送っていました。
+ * 本番で保存されず、2回目にカードが出てこないという形で出ました。決済 id なら
+ * 画面にもう一度触る必要がなく、本人認証（3Dセキュア）も済んだあとの id なので、
+ * 保存のために改めて認証を求められることもありません。
+ *
+ * ## 投げないこと
+ *
+ * 呼ばれるのは支払いが終わったあとです。ここで転んでも、お客様は何も失って
+ * いません——次回また入力していただくだけです。理由は記録に残します。
+ */
+export async function rememberCardFromPayment(params: {
+  deviceToken: string;
+  squarePaymentId: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+}): Promise<void> {
+  const { recordIncident } = await import("@/lib/incident-log");
+  const { disableStoredCard, storeCardForNextTime } = await import("@/lib/square");
+
+  const hash = hashDeviceToken(params.deviceToken);
+  const previous = await findSavedCard(params.deviceToken);
+
+  let stored;
+  try {
+    stored = await storeCardForNextTime({
+      sourceId: params.squarePaymentId,
+      idempotencyKey: `${hash.slice(0, 12)}-${params.squarePaymentId.slice(0, 20)}`,
+      customerName: params.customerName,
+      customerEmail: params.customerEmail,
+      customerPhone: params.customerPhone,
+    });
+  } catch (error) {
+    await recordIncident({
+      area: "payment",
+      source: "server",
+      stage: "store_card",
+      outcome: "error",
+      customer_email: params.customerEmail,
+      message: "次回のためのカード保存に失敗しました",
+      detail: {
+        reason: error instanceof Error ? error.message : String(error),
+        square_payment_id: params.squarePaymentId,
+      },
+    });
+    return;
+  }
+
+  try {
+    // 1端末に1枚。入れ替えるときは、前のカードを Square 側でも止める。
+    if (previous) {
+      await db.delete(savedCards).where(eq(savedCards.id, previous.id));
+      await disableStoredCard(previous.square_card_id);
+    }
+
+    await db.insert(savedCards).values({
+      device_token_hash: hash,
+      square_customer_id: stored.customerId,
+      square_card_id: stored.cardId,
+      card_brand: stored.brand,
+      last4: stored.last4,
+      exp_month: stored.expMonth,
+      exp_year: stored.expYear,
+      customer_name: params.customerName,
+      customer_email: params.customerEmail,
+      customer_phone: params.customerPhone,
+    });
+  } catch (error) {
+    await recordIncident({
+      area: "payment",
+      source: "server",
+      stage: "store_card",
+      outcome: "error",
+      customer_email: params.customerEmail,
+      message: "保存したカードを書き留められませんでした",
+      detail: { reason: error instanceof Error ? error.message : String(error) },
+    });
+    // こちらが持たないカードを Square に残さない。
+    await disableStoredCard(stored.cardId);
+    return;
+  }
+
+  await recordIncident({
+    area: "payment",
+    source: "server",
+    stage: "store_card",
+    outcome: "ok",
+    customer_email: params.customerEmail,
+    message: `次回のためにカードを覚えました（${stored.brand} ****${stored.last4}）`,
+  });
+}
+
+/** Cookie に載せるときの決まり。保存する側と消す側で食い違わないように。 */
+export const DEVICE_COOKIE_OPTIONS = {
+  httpOnly: true,
+  sameSite: "lax",
+  path: "/",
+  maxAge: DEVICE_COOKIE_MAX_AGE,
+} as const;

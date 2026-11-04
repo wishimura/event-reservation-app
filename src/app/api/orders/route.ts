@@ -22,7 +22,13 @@ import {
 } from "@/lib/utils";
 import { isUuid, readJsonObject } from "@/lib/http";
 import { recordIncident, recordPaymentEvent } from "@/lib/incident-log";
-import { DEVICE_COOKIE, findSavedCard } from "@/lib/saved-card";
+import {
+  DEVICE_COOKIE,
+  DEVICE_COOKIE_OPTIONS,
+  findSavedCard,
+  newDeviceToken,
+  rememberCardFromPayment,
+} from "@/lib/saved-card";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +67,8 @@ interface OrderRequestBody {
    * because anything the body could name, anyone could name.
    */
   use_saved_card?: boolean;
+  /** 今回のカードを、この端末のために覚えておくか。 */
+  remember_card?: boolean;
   /**
    * The browser's id for this attempt, so a request that is sent twice —
    * a dropped connection, a customer who taps again — is recognised as the
@@ -170,6 +178,9 @@ export async function POST(request: NextRequest) {
   const MAX_ATTEMPTS = 3;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    /** 端末の鍵。新しく配るときだけ入り、返事の Cookie に載ります。 */
+    let cookieToSet: string | null = null;
+
     try {
       const created = await db.transaction(async (tx) => {
         /* ----------------------- 1. validate the date ----------------------- */
@@ -326,6 +337,41 @@ export async function POST(request: NextRequest) {
          */
         order = await recordPayment(order, charge);
 
+        /*
+          次回のために覚える。
+
+          支払いが済んでから手を付けます。ここで何が起きても、お客様は
+          既に買えていて、失うものはありません。
+
+          元にするのは決済 id です。画面でもう一度 `tokenize()` を呼ぶ形
+          では本番で保存されず、2回目にカードが出てきませんでした。
+          決済 id なら画面に触る必要がなく、本人認証も済んでいます。
+        */
+        if (body.remember_card === true && !savedCard && charge.paymentId) {
+          const existing = request.cookies.get(DEVICE_COOKIE)?.value;
+          const token = existing ?? newDeviceToken();
+          // 初めての端末にだけ配る。付け替えると前の行が宙に浮く。
+          if (!existing) cookieToSet = token;
+
+          const paymentId = charge.paymentId;
+          const contact = {
+            customerName: order.customer_name,
+            customerEmail: order.customer_email,
+            customerPhone: order.customer_phone,
+          };
+          /*
+            返事を返してから片付けます。Square を2回叩くので、待たせると
+            そのぶん「処理中...」が伸びます。
+          */
+          after(() =>
+            rememberCardFromPayment({
+              deviceToken: token,
+              squarePaymentId: paymentId,
+              ...contact,
+            })
+          );
+        }
+
         await recordPaymentEvent({
           source: "server",
           stage: "charge",
@@ -360,7 +406,7 @@ export async function POST(request: NextRequest) {
         });
       });
 
-      return NextResponse.json(
+      const response = NextResponse.json(
         {
           ...order,
           items,
@@ -370,6 +416,23 @@ export async function POST(request: NextRequest) {
         },
         { status: 201 }
       );
+
+      /*
+        端末の鍵を配る。
+
+        `after()` の中では Cookie を足せません——返事はもう出たあとだからです。
+        だから鍵はここで決めて載せ、Square とのやりとりだけを後回しにします。
+        保存が転んでも、鍵だけが残って行が無い状態になるだけで、次に開いた
+        ときは「覚えが無い」として入力欄が出ます。
+      */
+      if (cookieToSet) {
+        response.cookies.set(DEVICE_COOKIE, cookieToSet, {
+          ...DEVICE_COOKIE_OPTIONS,
+          secure: process.env.NODE_ENV === "production",
+        });
+      }
+
+      return response;
     } catch (error) {
       if (error instanceof OrderValidationError) {
         return NextResponse.json(

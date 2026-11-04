@@ -351,6 +351,31 @@ export default function ProductsPage() {
                 </>
               ) : (
                 <div className="flex flex-wrap items-start justify-between gap-4">
+                  {/*
+                    どの商品の話か、名前だけでなく絵でも分かるように。
+
+                    セット物は名前が似ていて（「カレー1種（バターチキン）」と
+                    「カレー1種（豆カレー）」）、どれを直しているのか読み違え
+                    やすい。写真が入っていない商品もここで分かります。
+                  */}
+                  <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                    {p.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={p.image_url}
+                        alt=""
+                        loading="lazy"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-center text-[10px] leading-tight text-slate-400">
+                        画像
+                        <br />
+                        なし
+                      </div>
+                    )}
+                  </div>
+
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-bold text-slate-800">{p.name}</span>
@@ -362,6 +387,11 @@ export default function ProductsPage() {
                       <span className="text-xs text-slate-400">
                         並び順 {p.sort_order}
                       </span>
+                      {p.extra_image_urls?.length > 0 && (
+                        <span className="text-xs text-slate-400">
+                          写真 {p.extra_image_urls.length + 1} 枚
+                        </span>
+                      )}
                     </div>
                     {p.description && (
                       <p className="mt-1 text-sm text-slate-500">

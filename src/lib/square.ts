@@ -249,13 +249,43 @@ export async function storeCardForNextTime(params: {
     smaller problem than either of those.
   */
   const { given, family } = splitJapaneseName(params.customerName);
-  const customerResponse = await client.customers.create({
-    idempotencyKey: `cust-${params.idempotencyKey}`,
-    givenName: given || undefined,
-    familyName: family || undefined,
-    emailAddress: params.customerEmail || undefined,
-    phoneNumber: params.customerPhone || undefined,
-  });
+
+  /*
+    連絡先は、付けられたら付ける程度のもの。
+
+    本番で `INVALID_PHONE_NUMBER` が返り、カードが保存されませんでした
+    （Square は国番号付きの形を求めます）。番号は整えて渡しますが、整えても
+    弾かれることはあります。そのときに**カードごと預けられなくなる**のは
+    割に合いません——連絡先はこちらの表にも持っていて、Square 側のそれは
+    ダッシュボードで見やすいというだけのものです。
+
+    なので、弾かれたらお名前だけで作り直します。
+  */
+  const contact = {
+    emailAddress: looksLikeEmail(params.customerEmail)
+      ? params.customerEmail
+      : undefined,
+    phoneNumber: toE164Japan(params.customerPhone),
+  };
+
+  const createCustomer = (extra: Record<string, string | undefined>) =>
+    client.customers.create({
+      idempotencyKey: `cust-${params.idempotencyKey}`,
+      givenName: given || undefined,
+      familyName: family || undefined,
+      ...extra,
+    });
+
+  let customerResponse;
+  try {
+    customerResponse = await createCustomer(contact);
+  } catch (error) {
+    console.error(
+      "Square rejected the customer's contact details; retrying with the name alone:",
+      error
+    );
+    customerResponse = await createCustomer({});
+  }
 
   const customerId = customerResponse.customer?.id;
   if (!customerId) {
@@ -302,6 +332,37 @@ export async function disableStoredCard(cardId: string): Promise<void> {
   } catch (error) {
     console.error("Failed to disable a stored card:", cardId, error);
   }
+}
+
+/**
+ * 日本の電話番号を、Square の求める形にする。
+ *
+ * Square は国番号から始まる形（E.164）を求めます。「090-1234-5678」のまま
+ * 渡すと `INVALID_PHONE_NUMBER` で弾かれ、カードが保存されません。
+ *
+ * 国内の番号は先頭の 0 を落として +81 を付けます。既に + で始まっていれば
+ * そのまま。どちらにも当てはまらなければ渡しません——間違った番号を送って
+ * 保存ごと失敗するより、番号が無いほうがましです。
+ */
+export function toE164Japan(input: string): string | undefined {
+  const trimmed = input.trim();
+  if (!trimmed) return undefined;
+
+  if (trimmed.startsWith("+")) {
+    const digits = trimmed.slice(1).replace(/\D/g, "");
+    return digits.length >= 8 && digits.length <= 15 ? `+${digits}` : undefined;
+  }
+
+  const digits = trimmed.replace(/\D/g, "");
+  // 国内の番号は 0 で始まり、市外局番を含めて 10桁か 11桁。
+  if (!/^0\d{9,10}$/.test(digits)) return undefined;
+  return `+81${digits.slice(1)}`;
+}
+
+/** 形だけ見る。確かめるのは送ってみた先の話。 */
+function looksLikeEmail(input: string): boolean {
+  const trimmed = input.trim();
+  return trimmed.length > 0 && trimmed.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
 }
 
 /**
