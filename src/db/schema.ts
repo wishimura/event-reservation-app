@@ -119,6 +119,17 @@ export const products = pgTable(
     description: text("description").notNull().default(""),
     price: integer("price").notNull(),
     image_url: text("image_url"),
+    /**
+     * 2枚目以降の写真。
+     *
+     * 一覧に出るのは `image_url` の1枚だけで、ここの写真は詳細を開いた
+     * ときにだけ並びます。「隅々まで見せたい」ための列なので、一覧の
+     * 見た目は変わりません。
+     */
+    extra_image_urls: text("extra_image_urls")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     sort_order: integer("sort_order").notNull().default(0),
     is_active: boolean("is_active").notNull().default(true),
   },
@@ -405,5 +416,57 @@ export const incidentLogs = pgTable(
   (t) => [
     index("incident_logs_created_at_idx").on(t.created_at),
     index("incident_logs_area_idx").on(t.area),
+  ]
+);
+
+/**
+ * この端末に覚えさせたカード。
+ *
+ * ## なぜ端末で縛るのか
+ *
+ * この予約サイトにログインはありません。メールアドレスを鍵にして保存した
+ * カードを出すと、**他人のメールアドレスを打った人にその人のカードが出て、
+ * そのまま決済できてしまいます**。鍵になるのは本人しか持ちえないものだけで、
+ * ここではブラウザに置いた無記名の長い乱数（Cookie）がそれにあたります。
+ *
+ * ## 持たないもの
+ *
+ * カード番号も有効期限も、ここには入りません。預かっているのは Square で、
+ * こちらが持つのは Square の中を指す id と、お客様に「どのカードか」を
+ * 示すための下4桁とブランドだけです。これだけでは誰も決済できません。
+ *
+ * 行を消せばその端末は次回また入力に戻ります。Square 側のカードも併せて
+ * 無効にします（`disableSavedCard`）。
+ */
+export const savedCards = pgTable(
+  "saved_cards",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /**
+     * 端末に配った乱数の SHA-256。
+     *
+     * 生の値は Cookie にしか無く、ここには残しません。データベースだけを
+     * 覗けた人が、そこから Cookie を作って成りすますことができないように。
+     */
+    device_token_hash: text("device_token_hash").notNull(),
+    square_customer_id: text("square_customer_id").notNull(),
+    square_card_id: text("square_card_id").notNull(),
+    /** 「どのカードか」をお客様に示すためだけのもの。 */
+    card_brand: text("card_brand").notNull().default(""),
+    last4: text("last4").notNull().default(""),
+    exp_month: integer("exp_month"),
+    exp_year: integer("exp_year"),
+    /** 次回の入力を省くための控え。カードとは関係のない、ただの連絡先。 */
+    customer_name: text("customer_name").notNull().default(""),
+    customer_email: text("customer_email").notNull().default(""),
+    customer_phone: text("customer_phone").notNull().default(""),
+    created_at: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    last_used_at: timestamp("last_used_at", { withTimezone: true }),
+  },
+  (t) => [
+    // 1つの端末に1枚。入れ替えたときは古い行を消してから入れます。
+    unique("saved_cards_device_token_hash_key").on(t.device_token_hash),
   ]
 );

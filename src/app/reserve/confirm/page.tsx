@@ -14,12 +14,6 @@ type TokenResult =
   | { status: "OK"; token: string }
   | { status: "Error" | "Invalid"; errors?: Array<{ message?: string }> };
 
-type PaymentRequest = {
-  countryCode: string;
-  currencyCode: string;
-  total: { amount: string; label: string };
-};
-
 /** A label for one attempt at an order, unique enough to tell attempts apart. */
 function newRequestId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -57,15 +51,23 @@ async function postOrder(payload: Record<string, unknown>): Promise<Response> {
   throw lastError;
 }
 
-/** Apple Pay and Google Pay expose the same surface to us. */
-type SquareWallet = {
-  attach: (selector: string) => Promise<void>;
-  tokenize: () => Promise<TokenResult>;
-  destroy?: () => Promise<void>;
+/**
+ * この端末が覚えているカード。
+ *
+ * `/api/saved-card` が返すぶんだけ。カード番号も有効期限の全体も来ません。
+ * `square_card_id` が入っているのは本人認証に要るからで、これだけでは
+ * 決済できません（決済はサーバーが Cookie から引き直します）。
+ */
+type SavedCard = {
+  brand: string;
+  last4: string;
+  exp_month: number | null;
+  exp_year: number | null;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string;
+  square_card_id: string;
 };
-
-/** Whether a wallet button can be shown on this device. */
-type WalletStatus = "pending" | "ready" | "unavailable";
 
 /** The slice of the Square Payments object we use beyond the card form. */
 type SquarePayments = {
@@ -84,27 +86,32 @@ type SquarePayments = {
       };
     }
   ) => Promise<{ token: string } | null>;
-  paymentRequest: (config: PaymentRequest) => PaymentRequest;
-  applePay: (request: PaymentRequest) => Promise<SquareWallet | null>;
-  googlePay: (request: PaymentRequest) => Promise<SquareWallet | null>;
 };
-
-/**
- * Wallet setup can hang — Apple Pay on a device with an empty Wallet never
- * settles. Cap it so a stuck wallet never holds up the card form.
- */
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
-  return Promise.race([
-    promise,
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
-  ]);
-}
 
 /**
  * Square takes the buyer's name in two fields. Japanese names are written
  * 「姓 名」, so the first chunk is the family name. A name with no separator
  * goes in whole as the given name, which is what Square asks for mononyms.
  */
+/**
+ * Square のブランド名を、お客様が自分のカードと見比べられる形に。
+ *
+ * 返ってくるのは `AMERICAN_EXPRESS` のような定数です。知らないものは
+ * そのまま出すより伏せたほうがよいので、空で返して「カード」と出します。
+ */
+function cardBrandLabel(brand: string): string {
+  const labels: Record<string, string> = {
+    VISA: "Visa",
+    MASTERCARD: "Mastercard",
+    AMERICAN_EXPRESS: "American Express",
+    JCB: "JCB",
+    DISCOVER: "Discover",
+    DISCOVER_DINERS: "Diners Club",
+    CHINA_UNIONPAY: "UnionPay",
+  };
+  return labels[brand] ?? "カード";
+}
+
 function splitName(fullName: string): {
   givenName: string;
   familyName?: string;
@@ -149,9 +156,16 @@ export default function ConfirmPage() {
   /** 催しの情報を取れずに諦めたか。待てば直る、と言わないために見る。 */
   const [loadFailed, setLoadFailed] = useState(false);
   const [paymentsReady, setPaymentsReady] = useState(false);
-  const [applePayStatus, setApplePayStatus] = useState<WalletStatus>("pending");
-  const [googlePayStatus, setGooglePayStatus] =
-    useState<WalletStatus>("pending");
+
+  /* ---------------- 覚えてあるカード ---------------- */
+
+  /** この端末が覚えているカード。無ければ null。 */
+  const [savedCard, setSavedCard] = useState<SavedCard | null>(null);
+  /** 覚えてあるカードで払うか。別のカードを選ぶと false になる。 */
+  const [useSavedCard, setUseSavedCard] = useState(false);
+  /** 今回のカードを次回のために覚えるか。 */
+  const [rememberCard, setRememberCard] = useState(true);
+  const [forgettingCard, setForgettingCard] = useState(false);
   /**
    * One id for this customer's attempt to buy this basket.
    *
@@ -165,8 +179,6 @@ export default function ConfirmPage() {
 
   const cardRef = useRef<{ tokenize: () => Promise<TokenResult> } | null>(null);
   const paymentsRef = useRef<SquarePayments | null>(null);
-  const applePayRef = useRef<SquareWallet | null>(null);
-  const googlePayRef = useRef<SquareWallet | null>(null);
 
   useEffect(() => {
     const cartData = localStorage.getItem("cart");
@@ -309,6 +321,41 @@ export default function ConfirmPage() {
     };
   }, []);
 
+  /*
+    この端末が前に覚えたカードを引く。
+
+    鍵は Cookie で、こちらからは渡しません（ブラウザが勝手に付けます）。
+    引けなければ、これまでどおりカード番号の入力欄が出るだけです。だから
+    失敗しても黙って進みます。
+
+    お名前・メール・電話も一緒に戻して、前と同じことを打ち直さなくて
+    済むようにします。打ちかけの入力は上書きしません。
+  */
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/saved-card");
+        if (!res.ok) return;
+        const data = (await res.json()) as { card: SavedCard | null };
+        if (cancelled || !data.card) return;
+
+        setSavedCard(data.card);
+        setUseSavedCard(true);
+        setName((current) => current || data.card!.customer_name);
+        setEmail((current) => current || data.card!.customer_email);
+        setPhone((current) => current || data.card!.customer_phone);
+      } catch {
+        /* 覚えが無いのと同じに扱う。入力欄が出るだけ。 */
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     // 置き場所が無いうちは何もしない。ここが今回の肝。
     if (!squareConfig || !cardHost) return;
@@ -404,80 +451,6 @@ export default function ConfirmPage() {
     (sum, item) => sum + item.product.price * item.quantity,
     0
   );
-
-  /**
-   * Apple Pay / Google Pay.
-   *
-   * Set up separately from the card form because the wallet sheet has to be
-   * told the amount up front, and the cart is only known after it is read back
-   * from storage. Neither wallet needs any credential of its own: they run on
-   * the same Square application and location as the card form.
-   *
-   * A wallet the device cannot offer — no Wallet card, wrong browser — simply
-   * reports itself unavailable and its button stays hidden. The card form is
-   * never blocked by it.
-   */
-  useEffect(() => {
-    const payments = paymentsRef.current;
-    if (!paymentsReady || !payments || totalAmount <= 0) return;
-
-    let cancelled = false;
-
-    const request = payments.paymentRequest({
-      countryCode: "JP",
-      currencyCode: "JPY",
-      // The yen has no fractional denomination, so no decimal point.
-      total: { amount: String(totalAmount), label: "お支払い金額" },
-    });
-
-    async function setUpWallet(
-      create: () => Promise<SquareWallet | null>,
-      containerId: string,
-      ref: React.RefObject<SquareWallet | null>,
-      setStatus: (status: WalletStatus) => void
-    ) {
-      try {
-        const wallet = await withTimeout(create(), 3000);
-        if (!wallet || cancelled) {
-          setStatus("unavailable");
-          await wallet?.destroy?.();
-          return;
-        }
-        await wallet.attach(`#${containerId}`);
-        if (cancelled) {
-          await wallet.destroy?.();
-          return;
-        }
-        ref.current = wallet;
-        setStatus("ready");
-      } catch {
-        // Square throws when the wallet is not supported here. That is the
-        // normal case on most desktops, not an error worth showing.
-        setStatus("unavailable");
-      }
-    }
-
-    setUpWallet(
-      () => payments.applePay(request),
-      "square-apple-pay",
-      applePayRef,
-      setApplePayStatus
-    );
-    setUpWallet(
-      () => payments.googlePay(request),
-      "square-google-pay",
-      googlePayRef,
-      setGooglePayStatus
-    );
-
-    return () => {
-      cancelled = true;
-      applePayRef.current?.destroy?.().catch(() => {});
-      googlePayRef.current?.destroy?.().catch(() => {});
-      applePayRef.current = null;
-      googlePayRef.current = null;
-    };
-  }, [paymentsReady, totalAmount]);
 
   /**
    * Whether there is enough on hand to take an order.
@@ -585,7 +558,7 @@ export default function ConfirmPage() {
    * お客様には何も見せません。送れなくても黙って続けます。
    */
   function report(
-    stage: "card_form" | "tokenize" | "verify" | "submit",
+    stage: "card_form" | "tokenize" | "verify" | "submit" | "store_card",
     outcome: "declined" | "error" | "abandoned",
     message: string,
     detail?: unknown
@@ -611,9 +584,45 @@ export default function ConfirmPage() {
     }
   }
 
+  /**
+   * 次回のために、このカードを覚えてもらう。
+   *
+   * ご注文が**通ったあと**に呼びます。ここで何が起きても、支払いも予約も
+   * もう済んでいます。失敗したら次回また入力していただくだけなので、
+   * 黙って諦めます。
+   *
+   * 本人認証（3Dセキュア）はかけません。払い終えたあとで認証画面を出すのは、
+   * お客様から見れば「何かおかしい」以外の何物でもないからです。銀行が
+   * 保存に認証を求める場合はここで断られ、記録だけが残ります。
+   */
+  async function rememberThisCard() {
+    if (!cardRef.current) return;
+
+    try {
+      const result = await cardRef.current.tokenize();
+      if (result.status !== "OK") return;
+
+      await fetch("/api/saved-card", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // 画面はこのあとすぐ切り替わる。置いていかれないように。
+        keepalive: true,
+        body: JSON.stringify({
+          source_id: result.token,
+          customer_name: name.trim(),
+          customer_email: email.trim(),
+          customer_phone: phone.trim(),
+        }),
+      });
+    } catch {
+      /* 覚えられなくても、ご注文は済んでいる。 */
+    }
+  }
+
   async function placeOrder(
     paymentSourceId?: string,
-    verificationToken?: string
+    verificationToken?: string,
+    payWithSavedCard = false
   ) {
     if (!event || !selectedDate) return;
 
@@ -630,6 +639,8 @@ export default function ConfirmPage() {
         payment_method: payByCard ? "credit_card" : "cash",
         payment_source_id: paymentSourceId,
         verification_token: verificationToken,
+        // 旗だけ。どのカードかはサーバーが Cookie から引き直す。
+        use_saved_card: payWithSavedCard,
         items: cart.map((item) => ({
           product_id: item.product.id,
           product_name_snapshot: item.product.name,
@@ -651,6 +662,16 @@ export default function ConfirmPage() {
         return;
       }
 
+      /*
+        覚えるのはここ。注文が通ってから、画面が切り替わる前に。
+
+        待たせません。失敗しても次回また入力していただくだけで、支払いと
+        予約はもう終わっています。
+      */
+      if (payByCard && !payWithSavedCard && rememberCard) {
+        void rememberThisCard();
+      }
+
       const order = await res.json();
       localStorage.setItem("lastOrder", JSON.stringify(order));
       localStorage.removeItem("cart");
@@ -670,6 +691,32 @@ export default function ConfirmPage() {
     }
   }
 
+  /**
+   * この端末の記憶を消す。
+   *
+   * Square 側のカードも止めます。消したあとは入力欄に戻るだけなので、
+   * 失敗しても一言出して、そのまま使えるようにしておきます。
+   */
+  async function forgetCard() {
+    setForgettingCard(true);
+    try {
+      const res = await fetch("/api/saved-card", { method: "DELETE" });
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      setSavedCard(null);
+      setUseSavedCard(false);
+      setCardError("");
+    } catch (err) {
+      setCardError(
+        "カードの削除に失敗しました。「別のカードを使う」から入力していただくこともできます。"
+      );
+      report("store_card", "error", "保存カードの削除に失敗しました", {
+        reason: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setForgettingCard(false);
+    }
+  }
+
   /** The card form: tokenise, verify the buyer, then order. */
   async function handleSubmit() {
     if (!ready()) return;
@@ -678,8 +725,50 @@ export default function ConfirmPage() {
     setSubmitting(true);
     setCardError("");
 
+    const usingSavedCard = Boolean(payByCard && savedCard && useSavedCard);
+
     let paymentSourceId: string | undefined;
     let verificationToken: string | undefined;
+
+    /*
+      覚えてあるカードで払う。
+
+      入力欄は出ていないのでトークンは作りません。本人認証だけ先に通して、
+      どのカードかはサーバーに Cookie から引いてもらいます。
+    */
+    if (payByCard && usingSavedCard) {
+      let token: string | undefined;
+      try {
+        const verification = await paymentsRef.current?.verifyBuyer(
+          savedCard!.square_card_id,
+          {
+            amount: String(totalAmount),
+            currencyCode: "JPY",
+            intent: "CHARGE",
+            billingContact: {
+              ...splitName(name),
+              email: email.trim(),
+              phone: phone.trim(),
+              countryCode: "JP",
+            },
+          }
+        );
+        token = verification?.token;
+      } catch (err) {
+        console.error("verifyBuyer (saved card) error:", err);
+        setCardError(
+          "カード会社の本人認証が完了しませんでした。「別のカードを使う」から入力し直すこともできます。"
+        );
+        report("verify", "error", "保存カードの本人認証が完了しませんでした", {
+          reason: err instanceof Error ? err.message : String(err),
+        });
+        setSubmitting(false);
+        return;
+      }
+
+      await placeOrder(undefined, token, true);
+      return;
+    }
 
     // Tokenise the card before touching the server, so a typo in the card
     // number never reaches the point of holding stock.
@@ -749,48 +838,6 @@ export default function ConfirmPage() {
     }
 
     await placeOrder(paymentSourceId, verificationToken);
-  }
-
-  /**
-   * Apple Pay / Google Pay.
-   *
-   * No 3-D Secure step here: the wallet has already authenticated the buyer
-   * on the device, and Square treats a wallet token as verified. Running
-   * verifyBuyer() on one would be rejected.
-   */
-  async function handleWalletPay(wallet: SquareWallet | null) {
-    if (!wallet || submitting) return;
-    if (!ready()) return;
-    // Validated before the sheet opens, so the customer is not asked to pay
-    // only to be sent back to a missing field afterwards.
-    if (!validate() || !event || !selectedDate) return;
-
-    setSubmitting(true);
-    setCardError("");
-
-    let token: string;
-    try {
-      const result = await wallet.tokenize();
-      if (result.status !== "OK") {
-        // Closing the sheet lands here too, which is not worth an error.
-        report("tokenize", "abandoned", "財布の支払いが完了しませんでした", {
-          status: result.status,
-        });
-        setSubmitting(false);
-        return;
-      }
-      token = result.token;
-    } catch (err) {
-      console.error("Wallet tokenize error:", err);
-      setCardError("お支払いを完了できませんでした。もう一度お試しください。");
-      report("tokenize", "error", "財布の支払いでエラーになりました", {
-        reason: err instanceof Error ? err.message : String(err),
-      });
-      setSubmitting(false);
-      return;
-    }
-
-    await placeOrder(token);
   }
 
   if (!selectedDate || cart.length === 0) {
@@ -1122,83 +1169,132 @@ export default function ConfirmPage() {
               </div>
 
               {/*
-                The wallet containers stay mounted while Square decides
-                whether the device can offer them — it attaches to a laid-out
-                element — and are hidden only once the answer is no. Empty,
-                they take up no room, so nothing flickers.
+                前に使ったカードがあるときは、それを出して入力欄は出しません。
+
+                出すのは下4桁とブランドだけです。これが出るのは、この端末に
+                置いた無記名の鍵を持っているあいだだけで、メールアドレスを
+                打っても他の方のカードが出ることはありません。
               */}
-              <div
-                className={`space-y-2 ${
-                  applePayStatus === "unavailable" &&
-                  googlePayStatus === "unavailable"
-                    ? "hidden"
-                    : ""
-                }`}
-              >
-                {/*
-                  財布で払うと、カードを選んだ時点でご予約まで決まります。
-                  下の「注文を確定する」を押す操作が無いので、そのつもりでいないと
-                  「いきなり終わった」と感じます。先に書いておく。
-                */}
-                {(applePayStatus === "ready" || googlePayStatus === "ready") && (
-                  <p className="text-xs leading-relaxed text-zinc-500">
-                    下のボタンから進むと、カードを選んだ時点でお支払いとご予約が
-                    確定します（このあとの確認画面はありません）。
+              {savedCard && useSavedCard ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-3">
+                    <Icon name="card" className="h-5 w-5 shrink-0 text-zinc-400" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-zinc-800">
+                        {savedCard.brand
+                          ? `${cardBrandLabel(savedCard.brand)} •••• ${savedCard.last4}`
+                          : `カード •••• ${savedCard.last4}`}
+                      </p>
+                      <p className="text-xs text-zinc-500">
+                        {savedCard.exp_month && savedCard.exp_year
+                          ? `有効期限 ${String(savedCard.exp_month).padStart(2, "0")}/${String(
+                              savedCard.exp_year
+                            ).slice(-2)} ・ `
+                          : ""}
+                        この端末に保存されています
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setUseSavedCard(false)}
+                      className="font-medium text-brand-700 underline underline-offset-2"
+                    >
+                      別のカードを使う
+                    </button>
+                    <button
+                      type="button"
+                      disabled={forgettingCard}
+                      onClick={forgetCard}
+                      className="text-zinc-500 underline underline-offset-2 disabled:opacity-50"
+                    >
+                      {forgettingCard ? "削除中..." : "このカードを削除する"}
+                    </button>
+                  </div>
+
+                  {cardError && (
+                    <p className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-600">
+                      {cardError}
+                    </p>
+                  )}
+
+                  <p className="text-xs leading-relaxed text-zinc-400">
+                    カード番号は決済代行会社（Square）が預かっており、当店のサーバーにはありません。
+                    <br />
+                    ご注文の確定時に、カード会社の本人認証（3Dセキュア）画面が表示される場合があります。
                   </p>
-                )}
-                <div
-                  id="square-apple-pay"
-                  onClick={() => handleWalletPay(applePayRef.current)}
-                  className={`h-11 cursor-pointer ${
-                    applePayStatus === "unavailable" ? "hidden" : ""
-                  }`}
-                />
-                <div
-                  id="square-google-pay"
-                  onClick={() => handleWalletPay(googlePayRef.current)}
-                  className={`h-11 cursor-pointer ${
-                    googlePayStatus === "unavailable" ? "hidden" : ""
-                  }`}
-                />
-              </div>
-
-              {(applePayStatus === "ready" || googlePayStatus === "ready") && (
-                <div className="flex items-center gap-3 py-1">
-                  <div className="h-px flex-1 bg-zinc-200" />
-                  <span className="text-xs text-zinc-400">
-                    またはカード番号を入力
-                  </span>
-                  <div className="h-px flex-1 bg-zinc-200" />
                 </div>
+              ) : (
+                <>
+                  {/*
+                    ここが DOM に入ったことを見てから Square を立ち上げます。
+                    置き場所の無いうちに差し込もうとすると落ちます。
+                  */}
+                  <div
+                    id="square-card"
+                    ref={setCardHost}
+                    className="rounded-xl border border-zinc-200 bg-white p-3 min-h-[92px]"
+                  />
+
+                  {!cardReady && !cardError && (
+                    <p className="text-xs text-zinc-400">
+                      決済フォームを読み込んでいます...
+                    </p>
+                  )}
+
+                  {cardError && (
+                    <p className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-600">
+                      {cardError}
+                    </p>
+                  )}
+
+                  {savedCard && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUseSavedCard(true);
+                        setCardError("");
+                      }}
+                      className="text-xs font-medium text-brand-700 underline underline-offset-2"
+                    >
+                      保存されたカード（•••• {savedCard.last4}）に戻す
+                    </button>
+                  )}
+
+                  {/*
+                    次回のために覚えるかどうか。
+
+                    イートインとテイクアウト、受取日が違えば別のお会計になるので、
+                    何度か払う方がいらっしゃいます。初期値は「覚える」にしてあり、
+                    外せばこれまでどおり毎回の入力です。
+                  */}
+                  <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-zinc-200 bg-white p-3">
+                    <input
+                      type="checkbox"
+                      checked={rememberCard}
+                      onChange={(e) => setRememberCard(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 shrink-0 accent-brand-600"
+                    />
+                    <span className="text-xs leading-relaxed text-zinc-600">
+                      <span className="font-semibold text-zinc-800">
+                        次回のために、このカードをこの端末に記憶する
+                      </span>
+                      <br />
+                      次からは下4桁を選ぶだけでお支払いいただけます。カード番号は
+                      決済代行会社（Square）が預かり、当店のサーバーには残りません。
+                      この画面からいつでも削除できます。
+                    </span>
+                  </label>
+
+                  <p className="text-xs leading-relaxed text-zinc-400">
+                    カード情報は決済代行会社（Square）が直接受け取ります。当店のサーバーには保存されません。
+                    <br />
+                    ご注文の確定時に、カード会社の本人認証（3Dセキュア）画面が表示される場合があります。
+                  </p>
+                </>
               )}
-
-              {/*
-                ここが DOM に入ったことを見てから Square を立ち上げます。
-                置き場所の無いうちに差し込もうとすると落ちます。
-              */}
-              <div
-                id="square-card"
-                ref={setCardHost}
-                className="rounded-xl border border-zinc-200 bg-white p-3 min-h-[92px]"
-              />
-
-              {!cardReady && !cardError && (
-                <p className="text-xs text-zinc-400">
-                  決済フォームを読み込んでいます...
-                </p>
-              )}
-
-              {cardError && (
-                <p className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-600">
-                  {cardError}
-                </p>
-              )}
-
-              <p className="text-xs leading-relaxed text-zinc-400">
-                カード情報は決済代行会社（Square）が直接受け取ります。当店のサーバーには保存されません。
-                <br />
-                ご注文の確定時に、カード会社の本人認証（3Dセキュア）画面が表示される場合があります。
-              </p>
             </div>
           )}
         </div>
@@ -1233,7 +1329,10 @@ export default function ConfirmPage() {
             submitting ||
             !event ||
             payByCard === null ||
-            (payByCard && !cardReady)
+            // 保存カードで払うときは、入力欄が無いので待つものもない。
+            (payByCard === true &&
+              !(savedCard && useSavedCard) &&
+              !cardReady)
           }
           className={`w-full py-4 rounded-2xl font-bold text-lg transition-colors ${
             submitting || !event

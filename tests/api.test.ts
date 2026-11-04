@@ -379,3 +379,101 @@ test("在庫の最後の1個に同時に殺到しても1件しか通らない", 
     "受付上限を超えて引き当てられている"
   );
 });
+
+/* ==================================================================== *
+ *  この端末に覚えたカード
+ *
+ *  ここで守りたいのは一点だけ。**本文に書かれたカードは決して使わない**
+ *  こと。使えば、id を当てた人が他人のカードで決済できてしまいます。
+ *  鍵になるのは Cookie だけです。
+ * ==================================================================== */
+
+test("覚えたカードは、Cookie を持っていない人には出てこない", async () => {
+  const res = await api("/api/saved-card");
+  assert.equal(res.status, 200);
+  assert.equal(
+    (res.body as { card: unknown }).card,
+    null,
+    "Cookie が無いのにカードが返っている"
+  );
+});
+
+test("Cookie が無いのに「保存カードで払う」と言われても、カードは切られない", async () => {
+  /*
+    ここが通ってしまうと、カード id を当てた人が他人のカードで決済できます。
+    鍵は Cookie だけで、本文に書かれた id は見ません。
+
+    カード払いが入っているかどうかで、正しい断り方が変わります。
+      - 入っている  → 400 で断る（保存カードが無いので切るものが無い）
+      - 入っていない → そもそもカードは切らず、店頭払いとして受ける
+    どちらでも守られるのは**本文のカードが使われないこと**なので、
+    そこを見ます。
+  */
+  const { event, date, row } = await pickBookableDate();
+
+  const config = await api("/api/payments/config");
+  const cardPaymentIsOn = (config.body as { enabled: boolean }).enabled;
+
+  const res = await api("/api/orders", {
+    method: "POST",
+    body: JSON.stringify({
+      event_id: event.id,
+      event_date_id: date.id,
+      customer_name: "なりすまし 太郎",
+      customer_email: "spoof@example.com",
+      customer_phone: "090-0000-0000",
+      payment_method: "credit_card",
+      dining_style: "takeout",
+      use_saved_card: true,
+      // 当てずっぽうのカード id。見てはいけないもの。
+      payment_source_id: "ccof:someone-elses-card",
+      items: [{ product_id: row.product_id, quantity: 1 }],
+    }),
+  });
+
+  if (cardPaymentIsOn) {
+    assert.ok(
+      res.status >= 400,
+      `保存カードが無いのに ${res.status} で通っている`
+    );
+    return;
+  }
+
+  assert.equal(res.status, 201);
+  const order = res.body as { payment_method: string; payment_status: string };
+  assert.equal(
+    order.payment_method,
+    "cash",
+    "カードの設定が無いのに、カード払いとして記録されている"
+  );
+  assert.notEqual(
+    order.payment_status,
+    "paid_by_card",
+    "切れないはずのカードが切られている"
+  );
+});
+
+test("覚えさせるには、Square の設定が要る", async () => {
+  /*
+    鍵が無い環境では何も保存せず、それでも 200 で返すこと。ご注文が
+    通ったあとに呼ばれるので、ここで 500 を返しても誰も得をしません。
+  */
+  const res = await api("/api/saved-card", {
+    method: "POST",
+    body: JSON.stringify({
+      source_id: "cnon:fake-token",
+      customer_name: "保存 太郎",
+      customer_email: "store@example.com",
+      customer_phone: "090-1111-1111",
+    }),
+  });
+
+  assert.equal(res.status, 200);
+  assert.equal((res.body as { saved: boolean }).saved, false);
+});
+
+test("忘れさせる操作は、何も覚えていなくても転ばない", async () => {
+  const res = await api("/api/saved-card", { method: "DELETE" });
+  assert.equal(res.status, 200);
+  assert.equal((res.body as { ok: boolean }).ok, true);
+});

@@ -22,6 +22,7 @@ import {
 } from "@/lib/utils";
 import { isUuid, readJsonObject } from "@/lib/http";
 import { recordIncident, recordPaymentEvent } from "@/lib/incident-log";
+import { DEVICE_COOKIE, findSavedCard } from "@/lib/saved-card";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,13 @@ interface OrderRequestBody {
   payment_source_id?: string;
   /** 3-D Secure result from `payments.verifyBuyer()`, when the issuer gave one. */
   verification_token?: string;
+  /**
+   * Pay with the card this device asked us to remember.
+   *
+   * A flag, not an id. The card itself is looked up from the device cookie,
+   * because anything the body could name, anyone could name.
+   */
+  use_saved_card?: boolean;
   /**
    * The browser's id for this attempt, so a request that is sent twice —
    * a dropped connection, a customer who taps again — is recognised as the
@@ -107,7 +115,28 @@ export async function POST(request: NextRequest) {
    */
   const payByCard = isSquareEnabled();
 
-  if (payByCard && !body.payment_source_id) {
+  /*
+    「この端末が覚えているカードで」と言われたときだけ、Cookie から引く。
+
+    本文に書かれたカード id は読みません。読めば、id を当てた人が他人の
+    カードで決済できてしまいます。鍵は Cookie だけです。
+  */
+  const savedCard =
+    payByCard && body.use_saved_card === true
+      ? await findSavedCard(request.cookies.get(DEVICE_COOKIE)?.value)
+      : null;
+
+  if (payByCard && body.use_saved_card === true && !savedCard) {
+    return NextResponse.json(
+      {
+        error:
+          "保存されたカードが見つかりませんでした。カード番号をご入力ください。",
+      },
+      { status: 400 }
+    );
+  }
+
+  if (payByCard && !savedCard && !body.payment_source_id) {
     return NextResponse.json(
       { error: "カード情報が読み取れませんでした。もう一度お試しください。" },
       { status: 400 }
@@ -216,12 +245,14 @@ export async function POST(request: NextRequest) {
           // The order id is the idempotency key, so a retry of this request
           // returns the original payment instead of charging a second time.
           charge = await chargeOrder({
-            sourceId: body.payment_source_id!,
+            sourceId: savedCard?.square_card_id ?? body.payment_source_id!,
             amountYen: order.total_amount,
             idempotencyKey: order.id,
             referenceId: order.order_number,
             note: `${event.name} ${event_date.pickup_date} ${order.order_number}`,
             customerEmail: order.customer_email,
+            // Square refuses a card-on-file charge that does not say whose.
+            customerId: savedCard?.square_customer_id,
             verificationToken: body.verification_token,
           });
         } catch (paymentError) {

@@ -21,6 +21,8 @@ export interface Product {
   description: string;
   price: number;
   image_url: string | null;
+  /** 2枚目以降の写真。一覧には出ず、詳細を開いたときだけ並びます。 */
+  extra_image_urls: string[];
   sort_order: number;
   is_active: boolean;
 }

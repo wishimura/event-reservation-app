@@ -11,6 +11,8 @@ import {
   getRemainingQuantity,
 } from "@/lib/utils";
 import { Icon } from "@/components/Icon";
+import { ProductDetail } from "@/components/ProductDetail";
+import type { Product } from "@/lib/types";
 
 /**
  * 確認画面から戻ってきたときに、選んでいた商品を取り戻す。
@@ -74,6 +76,16 @@ export default function ProductSelectionPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [capNoticeId, setCapNoticeId] = useState<string | null>(null);
+  /**
+   * 詳細を開いている商品。閉じているときは null。
+   *
+   * 売切かどうかも一緒に持ちます。一覧の中で計算した結果がそこにあるので、
+   * 外に出てから在庫を引き直して食い違わせるより、そのまま渡すほうが確か。
+   */
+  const [detail, setDetail] = useState<{
+    product: Product;
+    soldOut: boolean;
+  } | null>(null);
   const capNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(
@@ -266,7 +278,19 @@ export default function ProductSelectionPage() {
                   isSoldOut ? "opacity-50" : ""
                 }`}
               >
-                <div className="flex gap-4 p-4">
+                {/*
+                  カード全体を、詳細を開くボタンにします。
+
+                  一覧では名前が1行、説明が2行で切られます。読める場所が
+                  どこにも無かったので、押せば全部出るようにしました。
+                  数量の増減は下の別の行にあるので、ここと喧嘩しません。
+                */}
+                <button
+                  type="button"
+                  onClick={() => setDetail({ product, soldOut: isSoldOut })}
+                  aria-label={`${product.name}の詳細を見る`}
+                  className="flex w-full gap-4 p-4 text-left"
+                >
                   {/* Product Image */}
                   <div className="w-24 h-24 rounded-xl bg-zinc-100 overflow-hidden shrink-0 relative">
                     {product.image_url ? (
@@ -301,6 +325,14 @@ export default function ProductSelectionPage() {
                         {product.description}
                       </p>
                     )}
+                    {/*
+                      切られていることを言っておく。言わなければ、2行で
+                      終わっている説明を全文だと思って読み飛ばされます。
+                    */}
+                    <p className="mb-2 inline-flex items-center gap-1 text-xs font-medium text-brand-700">
+                      <Icon name="zoom" className="h-3.5 w-3.5" />
+                      くわしく見る
+                    </p>
                     <p className="text-brand-600 font-bold text-base">
                       {formatPrice(product.price)}
                     </p>
@@ -313,7 +345,7 @@ export default function ProductSelectionPage() {
                       </div>
                     )}
                   </div>
-                </div>
+                </button>
 
                 {/* Quantity Selector */}
                 {!isSoldOut && (
@@ -439,6 +471,14 @@ export default function ProductSelectionPage() {
           </div>
         </div>
       </div>
+
+      {detail && (
+        <ProductDetail
+          product={detail.product}
+          soldOut={detail.soldOut}
+          onClose={() => setDetail(null)}
+        />
+      )}
     </main>
   );
 }

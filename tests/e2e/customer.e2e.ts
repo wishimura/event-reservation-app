@@ -31,6 +31,82 @@ test.describe("S-01 お客様の予約", () => {
     await expect(page.getByText(placed.orderNumber)).toBeVisible();
   });
 
+  test("商品を押すと、説明が最後まで読める", async ({ page }) => {
+    /*
+      一覧では名前は1行、説明は2行で切られます。お店から「個別のメニューの
+      説明が読めない」「ガチ勢には隅々まで見せたい」という話が出たのがここ
+      です。一覧の密度は変えず、押せば全部出る形にしました。
+
+      切られる側に来る一文が出ているかどうかで見ます。
+    */
+    await page.goto(`/reserve/${data.today.id}`);
+
+    const card = productCard(page, FIXTURE.plenty.name);
+    await expect(card).toBeVisible();
+
+    const tail = "原材料：コーヒー豆（エチオピア産）のみ。";
+
+    /*
+      一覧では確かに切られていること。
+
+      文字が DOM に無いことでは見られません。`line-clamp` は文字を消さず、
+      見える高さだけを縮めるからです。中身の高さが枠より高ければ、はみ出して
+      いる＝読めていない、ということになります。
+    */
+    const clamped = card.locator("p").filter({ hasText: "エチオピア産の豆" });
+    const overflows = await clamped.evaluate(
+      (el) => el.scrollHeight > el.clientHeight + 1
+    );
+    expect(overflows, "一覧の説明が切られていない（前提が崩れている）").toBe(true);
+
+    await card.getByRole("button", { name: /の詳細を見る$/ }).click();
+
+    const detail = page.getByRole("dialog");
+    await expect(detail).toBeVisible();
+    await expect(detail).toContainText(FIXTURE.plenty.name);
+    await expect(detail).toContainText(tail);
+  });
+
+  test("開いた詳細は、×でもEscでも閉じられる", async ({ page }) => {
+    /*
+      開いたら必ず閉じられること。スマホで戻る手立てが無くなると、
+      そこで予約をやめるしかなくなります。
+    */
+    await page.goto(`/reserve/${data.today.id}`);
+
+    const card = productCard(page, FIXTURE.plenty.name);
+    const open = () => card.getByRole("button", { name: /の詳細を見る$/ }).click();
+    const detail = page.getByRole("dialog");
+
+    await open();
+    await expect(detail).toBeVisible();
+    await detail.getByRole("button", { name: "詳細を閉じる" }).click();
+    await expect(detail).toHaveCount(0);
+
+    await open();
+    await expect(detail).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(detail).toHaveCount(0);
+  });
+
+  test("詳細を開いても、かごの中身は変わらない", async ({ page }) => {
+    /*
+      カード全体が詳細を開くボタンになっています。数量の増減と喧嘩して、
+      見ただけで1つ入る——あるいは入れたものが消える——ことがないように。
+    */
+    await page.goto(`/reserve/${data.today.id}`);
+
+    const card = productCard(page, FIXTURE.plenty.name);
+    await card.getByRole("button", { name: "1つ増やす" }).click();
+    await expect(page.getByRole("button", { name: /確認へ進む/ })).toBeEnabled();
+
+    await card.getByRole("button", { name: /の詳細を見る$/ }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "詳細を閉じる" }).click();
+
+    // 1点のまま。増えても減ってもいない。
+    await expect(page.getByText("1 点")).toBeVisible();
+  });
+
   test("受取時間の枠を選ばせる操作がどこにも残っていない", async ({ page }) => {
     /*
       時間枠はやめた仕様です。消し残すと、選べない欄をお客様に見せることになります。

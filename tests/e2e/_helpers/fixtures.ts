@@ -21,7 +21,20 @@ export function dayFromToday(n: number): string {
 export const FIXTURE = {
   eventName: "E2E 検証イベント",
   /** 普通に買える商品。数に余裕がある。 */
-  plenty: { name: "E2E ドリップバッグ", price: 800, capacity: 10 },
+  plenty: {
+    name: "E2E ドリップバッグ",
+    price: 800,
+    capacity: 10,
+    /*
+      一覧では2行で切られる長さ。末尾の一文が切られる側に来るので、
+      「詳細では最後まで出る」ことを、この一文があるかどうかで見られます。
+    */
+    description:
+      "エチオピア産の豆を中煎りで。お湯を注ぐと柑橘のような香りが立ちます。" +
+      "ご自宅でも、お店と同じ一杯をどうぞ。1袋10gで、お湯は150mlが目安です。" +
+      "焙煎から2週間以内にお召し上がりください。" +
+      "【最後の一文】原材料：コーヒー豆（エチオピア産）のみ。",
+  },
   /** 残り1個しか作らない商品。上限で止まることを確かめる。 */
   scarce: { name: "E2E カヌレ", price: 1200, capacity: 1 },
   /** 売り切れにしてある商品。 */
@@ -76,17 +89,27 @@ export async function resetFixture(): Promise<Fixture> {
   );
   const eventId = event.rows[0].id;
 
-  const product = async (name: string, price: number, sort: number) => {
+  const product = async (
+    name: string,
+    price: number,
+    sort: number,
+    description = ""
+  ) => {
     const { rows } = await db.query<{ id: string }>(
       `insert into products (event_id, name, description, price, sort_order)
-       values ($1, $2, '', $3, $4) returning id`,
-      [eventId, name, price, sort]
+       values ($1, $2, $3, $4, $5) returning id`,
+      [eventId, name, description, price, sort]
     );
     return rows[0].id;
   };
 
   const products = {
-    plenty: await product(FIXTURE.plenty.name, FIXTURE.plenty.price, 1),
+    plenty: await product(
+      FIXTURE.plenty.name,
+      FIXTURE.plenty.price,
+      1,
+      FIXTURE.plenty.description
+    ),
     scarce: await product(FIXTURE.scarce.name, FIXTURE.scarce.price, 2),
     soldOut: await product(FIXTURE.soldOut.name, FIXTURE.soldOut.price, 3),
   };

@@ -22,7 +22,9 @@ export type IconName =
   | "pin"
   | "note"
   | "cash"
-  | "card";
+  | "card"
+  | "close"
+  | "zoom";
 
 const paths: Record<IconName, React.ReactNode> = {
   home: (
@@ -109,6 +111,20 @@ const paths: Record<IconName, React.ReactNode> = {
       <path d="M3 6h18v12H3z" />
       <path d="M3 10h18" />
       <path d="M6.5 14.5h4" />
+    </>
+  ),
+  close: (
+    <>
+      <path d="M6 6l12 12" />
+      <path d="M18 6 6 18" />
+    </>
+  ),
+  zoom: (
+    <>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="m16 16 4.5 4.5" />
+      <path d="M11 8.5v5" />
+      <path d="M8.5 11h5" />
     </>
   ),
 };

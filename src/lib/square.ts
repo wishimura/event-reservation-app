@@ -88,6 +88,11 @@ export async function chargeOrder(params: {
   note: string;
   customerEmail?: string;
   /**
+   * Required when `sourceId` is a stored card rather than a one-time token.
+   * Square refuses a card-on-file charge that does not say whose card it is.
+   */
+  customerId?: string;
+  /**
    * The 3-D Secure result from `payments.verifyBuyer()` in the browser.
    * Cards issued in Japan and the EU increasingly require it, and Square
    * declines the payment outright when the issuer asks for a challenge and
@@ -114,6 +119,7 @@ export async function chargeOrder(params: {
         referenceId: params.referenceId.slice(0, 40),
         note: params.note.slice(0, 500),
         buyerEmailAddress: params.customerEmail,
+        ...(params.customerId ? { customerId: params.customerId } : {}),
         // Omitted entirely when absent — Square rejects an empty string.
         ...(params.verificationToken
           ? { verificationToken: params.verificationToken }
@@ -191,4 +197,123 @@ export async function registerApplePayDomain(
   return response.status === "VERIFIED"
     ? { status: "verified" }
     : { status: "pending" };
+}
+
+/* ------------------------------------------------------------------ *
+ *  Cards kept for next time
+ * ------------------------------------------------------------------ */
+
+export interface StoredCard {
+  customerId: string;
+  cardId: string;
+  brand: string;
+  last4: string;
+  expMonth: number | null;
+  expYear: number | null;
+}
+
+/**
+ * Hands a card to Square to keep, and comes back with the handle for it.
+ *
+ * **The card number never reaches us.** What goes up is the single-use token
+ * the browser got from Square's own form; what comes back is an id that only
+ * works alongside this shop's secret key. The four digits and the brand are
+ * for showing the customer which card they are about to use.
+ *
+ * Throws on failure, and the caller is expected to carry on regardless: this
+ * runs *after* the reservation is paid for, so nothing a customer is waiting
+ * on depends on it working.
+ */
+export async function storeCardForNextTime(params: {
+  /** A fresh token from `card.tokenize()` — not the one the charge used. */
+  sourceId: string;
+  idempotencyKey: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  /**
+   * From `verifyBuyer(token, { intent: "STORE" })`. Square asks for it where
+   * the buyer's bank requires strong authentication to keep a card on file.
+   */
+  verificationToken?: string;
+}): Promise<StoredCard> {
+  const client = getClient();
+
+  /*
+    A customer profile per saved card, rather than one looked up by email.
+
+    Searching by email and reusing the match would tie together people who
+    share an address, and would make the lookup itself a way of asking
+    "does this address have a card with you?". Each device that saves a
+    card gets its own profile; duplicates in the Square dashboard are a
+    smaller problem than either of those.
+  */
+  const { given, family } = splitJapaneseName(params.customerName);
+  const customerResponse = await client.customers.create({
+    idempotencyKey: `cust-${params.idempotencyKey}`,
+    givenName: given || undefined,
+    familyName: family || undefined,
+    emailAddress: params.customerEmail || undefined,
+    phoneNumber: params.customerPhone || undefined,
+  });
+
+  const customerId = customerResponse.customer?.id;
+  if (!customerId) {
+    throw new Error("Square returned no customer id");
+  }
+
+  const cardResponse = await client.cards.create({
+    idempotencyKey: `card-${params.idempotencyKey}`,
+    sourceId: params.sourceId,
+    ...(params.verificationToken
+      ? { verificationToken: params.verificationToken }
+      : {}),
+    card: {
+      customerId,
+      cardholderName: params.customerName || undefined,
+    },
+  });
+
+  const card = cardResponse.card;
+  if (!card?.id) {
+    throw new Error("Square returned no card id");
+  }
+
+  return {
+    customerId,
+    cardId: card.id,
+    brand: card.cardBrand ?? "",
+    last4: card.last4 ?? "",
+    expMonth: card.expMonth == null ? null : Number(card.expMonth),
+    expYear: card.expYear == null ? null : Number(card.expYear),
+  };
+}
+
+/**
+ * Tells Square to stop honouring a stored card.
+ *
+ * Called when the customer asks us to forget it, and when a saved card is
+ * replaced. Never throws: the row on our side is going away either way, and
+ * a card nobody can name is already unreachable.
+ */
+export async function disableStoredCard(cardId: string): Promise<void> {
+  try {
+    await getClient().cards.disable({ cardId });
+  } catch (error) {
+    console.error("Failed to disable a stored card:", cardId, error);
+  }
+}
+
+/**
+ * Splits a Japanese name the way Square's two fields expect.
+ *
+ * Mirrors `splitName` on the confirm page. Names typed without a space stay
+ * whole in the family-name field, which is the convention the shop's own
+ * paperwork follows.
+ */
+function splitJapaneseName(full: string): { given: string; family: string } {
+  const parts = full.trim().split(/[\s　]+/).filter(Boolean);
+  if (parts.length === 0) return { given: "", family: "" };
+  if (parts.length === 1) return { given: "", family: parts[0] };
+  return { family: parts[0], given: parts.slice(1).join(" ") };
 }

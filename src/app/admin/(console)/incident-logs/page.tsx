@@ -28,6 +28,7 @@ const STAGE_LABELS: Record<string, string> = {
   submit: "注文の送信",
   charge: "カードへの請求",
   record: "結果の記録",
+  store_card: "次回のためのカード保存",
   customer_mail: "お客様への確認メール",
   shop_mail: "店舗への通知メール",
   mail_config: "メールの設定",

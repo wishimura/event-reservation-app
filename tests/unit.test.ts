@@ -592,6 +592,11 @@ test("名寄せ：渡した順番が保たれる", () => {
 /* ====================================================== 確認メールの文面 */
 
 import { buildCustomerEmail, buildShopEmail } from "../src/lib/email";
+import {
+  findSavedCard,
+  hashDeviceToken,
+  newDeviceToken,
+} from "../src/lib/saved-card";
 
 function mail(
   payment_method: "cash" | "credit_card",
@@ -708,4 +713,38 @@ test("確認メール：設定が無くても、注文を壊さずに戻る", ()
       items: [],
     });
   });
+});
+
+/* ==================================================================== *
+ *  この端末に覚えたカード
+ * ==================================================================== */
+
+test("端末の鍵は、毎回ちがう長いものが出る", () => {
+  const a = newDeviceToken();
+  const b = newDeviceToken();
+
+  assert.notEqual(a, b, "同じ鍵が2度出ている");
+  // 32バイトを base64url にすると 43 文字。短いものは総当たりできる。
+  assert.ok(a.length >= 43, `鍵が短すぎる (${a.length}文字)`);
+  assert.match(a, /^[A-Za-z0-9_-]+$/, "Cookie に置けない文字が入っている");
+});
+
+test("鍵そのものは残さず、ハッシュだけを残す", () => {
+  /*
+    データベースだけを覗けた人が、そこから Cookie を組み立てて成りすませては
+    いけません。保存するのは一方向にした値だけです。
+  */
+  const token = newDeviceToken();
+  const hash = hashDeviceToken(token);
+
+  assert.notEqual(hash, token, "鍵がそのまま保存されている");
+  assert.ok(!hash.includes(token), "ハッシュの中に鍵が混ざっている");
+  assert.match(hash, /^[0-9a-f]{64}$/, "SHA-256 の形になっていない");
+  assert.equal(hashDeviceToken(token), hash, "同じ鍵で違う値が出る");
+});
+
+test("鍵が無ければ、覚えているカードは無い", async () => {
+  // Cookie を持たない人に他人のカードが出ないこと。問い合わせ自体が起きない。
+  assert.equal(await findSavedCard(undefined), null);
+  assert.equal(await findSavedCard(""), null);
 });

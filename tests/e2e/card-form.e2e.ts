@@ -66,10 +66,20 @@ test.describe("S-09 カード払いの画面", () => {
 
     await expect(page.locator("#square-card")).toBeAttached();
     await expect(page.getByText("クレジットカード", { exact: true })).toBeVisible();
+  });
+
+  test("財布（Apple Pay / Google Pay）のボタンは出さない", async ({ page }) => {
     /*
-      「またはカード番号を入力」の区切り線は、Apple Pay / Google Pay が
-      使えるときにだけ出ます。ここでは Square に届かないので出ません。
+      お店から「GPay だとエラーになる。ボタンなくしてクレカ一本にしても
+      良いかも」とのご要望があり、財布は両方とも取りました。消したつもりで
+      置き場所だけが残ると、Square の都合で押せるものが生えてきます。
     */
+    await pretendCardPaymentIsOn(page);
+    await goToConfirm(page);
+
+    await expect(page.locator("#square-apple-pay")).toHaveCount(0);
+    await expect(page.locator("#square-google-pay")).toHaveCount(0);
+    await expect(page.getByText("またはカード番号を入力")).toHaveCount(0);
   });
 
   test("立ち上げに失敗したら、そのことが記録に残る", async ({ page }) => {

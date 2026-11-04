@@ -38,6 +38,7 @@ export const INCIDENT_STAGES = [
   "submit",
   "charge",
   "record",
+  "store_card",
   // email
   "customer_mail",
   "shop_mail",

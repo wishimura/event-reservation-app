@@ -10,9 +10,23 @@ interface ProductPatchBody {
   name: string;
   description?: string;
   image_url?: string;
+  extra_image_urls?: unknown;
   price: number;
   sort_order?: number;
   is_active?: boolean;
+}
+
+/** 1商品あたりの追加写真の上限。詳細を開いて見てもらえる現実的な枚数。 */
+const MAX_EXTRA_IMAGES = 8;
+
+/** 画面から来るものなので素直に信じない。 */
+function cleanExtraImageUrls(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((url): url is string => typeof url === "string")
+    .map((url) => url.trim())
+    .filter(Boolean)
+    .slice(0, MAX_EXTRA_IMAGES);
 }
 
 export async function PATCH(
@@ -55,6 +69,7 @@ export async function PATCH(
         name: body.name.trim(),
         description: body.description ?? "",
         image_url: (body.image_url ?? "").trim() || null,
+        extra_image_urls: cleanExtraImageUrls(body.extra_image_urls),
         price: body.price,
         sort_order: Number.isInteger(body.sort_order)
           ? (body.sort_order as number)

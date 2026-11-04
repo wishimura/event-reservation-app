@@ -10,8 +10,7 @@ import Link from "next/link";
  * ★ 下の ENTRIES は、公開情報（店舗情報・法人登記）から組んだ仮の文面です。
  *   公開前に、お店に次の3点を確認してください。hint は画面には出ません。
  *     1. 運営統括責任者の氏名
- *     2. 問い合わせ用のメールアドレス
- *     3. キャンセル・返金の扱いが、実際の運用と合っているか
+ *     2. キャンセル・返金の扱いが、実際の運用と合っているか
  *   value を空文字にした項目は「準備中」と表示されます。
  */
 
@@ -47,8 +46,11 @@ const ENTRIES: Entry[] = [
   },
   {
     label: "メールアドレス",
-    value: "（公開前にご記入ください）",
-    hint: "★要記入：ご予約の確認メールの送信元と同じアドレスで構いません",
+    value: "tonarinoto@good-commons.org",
+    hint:
+      "お店の名刺の記載。注文通知の宛先（SHOP_NOTIFICATION_EMAIL）と同じにしてあります。" +
+      "なお特商法が電子メールアドレスの表示を求めるのは「電子メールで商業広告を送る場合」で、" +
+      "ご予約の確認メールだけなら表示は必須ではありません。書いておくほうが親切なので載せています。",
   },
   {
     label: "販売価格",
@@ -63,7 +65,7 @@ const ENTRIES: Entry[] = [
   {
     label: "お支払い方法",
     value:
-      "クレジットカード決済（Square）\nVisa / Mastercard / American Express / JCB / Diners Club / Discover\nApple Pay・Google Pay もご利用いただけます。",
+      "クレジットカード決済（Square）\nVisa / Mastercard / American Express / JCB / Diners Club / Discover",
   },
   {
     label: "お支払い時期",

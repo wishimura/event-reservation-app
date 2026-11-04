@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ApiError, fetchJson } from "@/lib/api-client";
 import { LoadErrorNotice } from "@/components/LoadErrorNotice";
+import { ExtraProductImages } from "@/components/ExtraProductImages";
 import { ProductImageField } from "@/components/ProductImageField";
 import { Toast } from "@/components/Toast";
 import { formatPrice } from "@/lib/utils";
@@ -14,6 +15,8 @@ interface Draft {
   name: string;
   description: string;
   image_url: string;
+  /** 2枚目以降。詳細を開いたときだけ並ぶ写真。 */
+  extra_image_urls: string[];
   price: string;
   sort_order: string;
   is_active: boolean;
@@ -24,6 +27,7 @@ function toDraft(p: ProductWithCount): Draft {
     name: p.name,
     description: p.description,
     image_url: p.image_url ?? "",
+    extra_image_urls: p.extra_image_urls ?? [],
     price: String(p.price),
     sort_order: String(p.sort_order),
     is_active: p.is_active,
@@ -34,6 +38,7 @@ const newDraft: Draft = {
   name: "",
   description: "",
   image_url: "",
+  extra_image_urls: [],
   price: "",
   sort_order: "",
   is_active: true,
@@ -92,6 +97,7 @@ export default function ProductsPage() {
           name: draft.name,
           description: draft.description,
           image_url: draft.image_url,
+          extra_image_urls: draft.extra_image_urls,
           price: parseInt(draft.price, 10) || 0,
           sort_order: parseInt(draft.sort_order, 10) || 0,
           is_active: draft.is_active,
@@ -119,6 +125,7 @@ export default function ProductsPage() {
             name: addDraft.name,
             description: addDraft.description,
             image_url: addDraft.image_url,
+            extra_image_urls: addDraft.extra_image_urls,
             price: parseInt(addDraft.price, 10) || 0,
             sort_order: parseInt(addDraft.sort_order, 10) || 0,
             default_capacity: parseInt(addCapacity, 10) || 0,
@@ -208,6 +215,10 @@ export default function ProductsPage() {
         <ProductImageField
           value={d.image_url}
           onChange={(url) => set({ ...d, image_url: url })}
+        />
+        <ExtraProductImages
+          urls={d.extra_image_urls}
+          onChange={(urls) => set({ ...d, extra_image_urls: urls })}
         />
         <div className="grid grid-cols-2 gap-3">
           <div>
