@@ -302,6 +302,31 @@ export async function sendOrderEmails(payload: OrderMailPayload): Promise<void> 
     return;
   }
 
+  /*
+    お店への通知先が無いときも、黙って飛ばさない。
+
+    ここは長いこと、宛先が無ければ何も送らず**何も残さない**作りでした。
+    お客様には確認メールが届くので画面上はどこも変わらず、お店だけが
+    「予約が入ったことに気づかない」状態になります。気づくきっかけが
+    どこにも無いのが一番まずいので、記録を残します。
+
+    ご注文は止めません。お客様の確認メールは出ますし、予約そのものは
+    管理画面の注文一覧に入っています。
+  */
+  if (!shopNotificationEmail) {
+    await recordIncident({
+      area: "email",
+      source: "server",
+      stage: "mail_config",
+      outcome: "error",
+      order_number: payload.order_number,
+      customer_email: payload.customer_email,
+      message:
+        "店舗への通知メールの宛先（SHOP_NOTIFICATION_EMAIL）が設定されていないため、" +
+        "お店に通知を送っていません",
+    });
+  }
+
   const messages = [
     { to: payload.customer_email, ...buildCustomerEmail(payload) },
     ...(shopNotificationEmail
