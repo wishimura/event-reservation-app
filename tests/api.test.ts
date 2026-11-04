@@ -474,3 +474,59 @@ test("忘れさせる操作は、何も覚えていなくても転ばない", as
   assert.equal(res.status, 200);
   assert.equal((res.body as { ok: boolean }).ok, true);
 });
+
+test("かけられない電話番号は、サーバーも受け取らない", async () => {
+  /*
+    画面でも見ていますが、そこだけに任せると、画面側の取りこぼしが
+    そのまま注文になります。実際なりました——`09000000000A` が1件通って
+    います（数字以外をすべて落としてから桁を数えていたため、A が消えて
+    正しい番号に化けていました）。
+
+    お店は変更・キャンセルを電話でのみ受けているので、連絡の取れない
+    予約はそれだけで困ります。
+  */
+  const { event, date, row } = await pickBookableDate();
+
+  const bad = ["09000000000A", "----------", "9012345678", "1234", "でんわ"];
+
+  for (const phone of bad) {
+    const res = await api("/api/orders", {
+      method: "POST",
+      body: JSON.stringify({
+        event_id: event.id,
+        event_date_id: date.id,
+        customer_name: "電話 太郎",
+        customer_email: "phone@example.com",
+        customer_phone: phone,
+        payment_method: "cash",
+        dining_style: "takeout",
+        items: [{ product_id: row.product_id, quantity: 1 }],
+      }),
+    });
+
+    assert.equal(res.status, 400, `「${phone}」が通っている`);
+  }
+});
+
+test("まともな電話番号は、書き方が違っても受け取る", async () => {
+  // 区切りの入れ方は人それぞれ。そこで断るのは行き過ぎ。
+  const { event, date, row } = await pickBookableDate();
+
+  for (const phone of ["090-1234-5678", "09012345678", "(090) 1234-5678", "+819012345678", "03-1234-5678"]) {
+    const res = await api("/api/orders", {
+      method: "POST",
+      body: JSON.stringify({
+        event_id: event.id,
+        event_date_id: date.id,
+        customer_name: "電話 花子",
+        customer_email: "phone-ok@example.com",
+        customer_phone: phone,
+        payment_method: "cash",
+        dining_style: "takeout",
+        items: [{ product_id: row.product_id, quantity: 1 }],
+      }),
+    });
+
+    assert.equal(res.status, 201, `「${phone}」が断られている`);
+  }
+});

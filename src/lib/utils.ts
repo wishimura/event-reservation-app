@@ -188,12 +188,21 @@ export function toE164Japan(input: string): string | undefined {
   const trimmed = input.trim();
   if (!trimmed) return undefined;
 
+  /*
+    落としてよいのは、区切りに使われる記号だけ。
+
+    ここを「数字以外すべて」にしていたせいで、`09000000000A` が
+    `09000000000` に化けて通りました。番号でない文字が混ざっているなら、
+    それは番号の書き間違いです。黙って直すのではなく、突き返します。
+  */
+  const separators = /[\s\u3000().-]/g;
+
   if (trimmed.startsWith("+")) {
-    const digits = trimmed.slice(1).replace(/\D/g, "");
-    return digits.length >= 8 && digits.length <= 15 ? `+${digits}` : undefined;
+    const rest = trimmed.slice(1).replace(separators, "");
+    return /^\d{8,15}$/.test(rest) ? `+${rest}` : undefined;
   }
 
-  const digits = trimmed.replace(/\D/g, "");
+  const digits = trimmed.replace(separators, "");
   // 国内の番号は 0 で始まり、市外局番を含めて 10桁か 11桁。
   if (!/^0\d{9,10}$/.test(digits)) return undefined;
   return `+81${digits.slice(1)}`;

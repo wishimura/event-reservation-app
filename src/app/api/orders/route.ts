@@ -21,6 +21,7 @@ import {
   isPastReservationDeadline,
 } from "@/lib/utils";
 import { isUuid, readJsonObject } from "@/lib/http";
+import { toE164Japan } from "@/lib/utils";
 import { recordIncident, recordPaymentEvent } from "@/lib/incident-log";
 import {
   DEVICE_COOKIE,
@@ -105,6 +106,24 @@ export async function POST(request: NextRequest) {
 
   if (body.payment_method !== "cash" && body.payment_method !== "credit_card") {
     return NextResponse.json({ error: "支払方法が不正です" }, { status: 400 });
+  }
+
+  /*
+    かけられる番号であること。
+
+    画面でも見ていますが、そこだけに任せると、画面側の取りこぼしがそのまま
+    本番の注文になります。実際なりました——`09000000000A` が1件通っています。
+    お店は変更・キャンセルを電話でのみ受けているので、連絡の取れない予約は
+    それだけで困ります。
+
+    画面と同じ関数で見ます。別々の決まりにすると、片方だけ直したときに
+    また食い違います。
+  */
+  if (!toE164Japan(body.customer_phone)) {
+    return NextResponse.json(
+      { error: "電話番号の形式をご確認ください（例：090-1234-5678）" },
+      { status: 400 }
+    );
   }
 
   // uuid でないものは、問い合わせた先の Postgres が型エラーで突き返す。

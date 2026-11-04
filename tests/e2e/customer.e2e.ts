@@ -140,6 +140,15 @@ test.describe("S-01 お客様の予約", () => {
     await phone.fill("9012345678");
     await expect(complaint).toBeVisible();
 
+    /*
+      数字でない文字が混ざっているもの。
+
+      本番でこれが通りました（`09000000000A`）。数字以外をすべて落として
+      から桁を数えていたので、A が消えて正しい番号に化けていました。
+    */
+    await phone.fill("09000000000A");
+    await expect(complaint).toBeVisible();
+
     // まともな番号を入れれば、その場で引っ込んで先へ進める。
     await phone.fill("090-1234-5678");
     await expect(complaint).toHaveCount(0);
