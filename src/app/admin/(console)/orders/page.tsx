@@ -51,6 +51,8 @@ export default function OrdersPage() {
   const [csvDownloading, setCsvDownloading] = useState(false);
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  /** キャンセルを取り消している最中の注文。 */
+  const [restoringId, setRestoringId] = useState<string | null>(null);
 
   // Filters
   const [filterDate, setFilterDate] = useState("");
@@ -133,7 +135,10 @@ export default function OrdersPage() {
             ]
           : []),
         "",
-        "キャンセルは取り消せません。よろしいですか？",
+        "押し間違えたときは、このあと「キャンセルを取り消す」で戻せます。",
+        "（ただし、他の方のご予約が入って在庫が無くなっていると戻せません）",
+        "",
+        "よろしいですか？",
       ].join("\n")
     );
     if (!ok) return;
@@ -151,6 +156,54 @@ export default function OrdersPage() {
       );
     } finally {
       setCancellingId(null);
+    }
+  }
+
+  async function handleRestore(order: OrderWithItems) {
+    const ok = window.confirm(
+      [
+        `${order.customer_name} 様の注文 ${order.order_number} のキャンセルを取り消します。`,
+        "",
+        "受付枠から在庫を取り直します。",
+        "他の方のご予約で埋まっていた場合は戻せません（その場合は何も変わりません）。",
+        ...(order.square_payment_id
+          ? [
+              "",
+              "※ Square で既に返金をお済ませの場合、お金は戻りません。",
+              "　 この画面では「決済済み」の表示に戻りますので、",
+              "　 Square 側と食い違わないかご確認ください。",
+            ]
+          : []),
+        "",
+        "よろしいですか？",
+      ].join("\n")
+    );
+    if (!ok) return;
+
+    setRestoringId(order.id);
+    try {
+      await fetchJson(`/api/admin/orders/${order.id}/restore`, {
+        method: "PATCH",
+      });
+      await loadOrders();
+    } catch (err) {
+      console.error("Restore error:", err);
+      /*
+        在庫が足りないときは、どの商品がいくつ足りないかまで返ってきます。
+        「戻せません」だけだと、お店は次に何をすればよいか分かりません。
+      */
+      const details =
+        err instanceof ApiError && Array.isArray(err.details) ? err.details : [];
+      alert(
+        [
+          err instanceof ApiError
+            ? err.message
+            : "キャンセルの取り消しに失敗しました",
+          ...details,
+        ].join("\n")
+      );
+    } finally {
+      setRestoringId(null);
     }
   }
 
@@ -438,15 +491,45 @@ export default function OrdersPage() {
 
                           <div className="mt-4 border-t border-slate-200 pt-3">
                             {order.order_status === "cancelled" ? (
-                              <div className="text-xs text-slate-500">
-                                <p>
-                                  この注文はキャンセル済みです。在庫は受付枠に戻っています。
-                                </p>
-                                {order.square_payment_id && (
-                                  <p className="mt-1 text-amber-700">
-                                    返金は Square の管理画面から手動で行ってください（上記の決済IDで検索できます）。
-                                  </p>
+                              <div className="flex flex-wrap items-center gap-3">
+                                {/*
+                                  押し間違いを戻せるように。無いと、その場で
+                                  注文を作り直すことになり、注文番号も決済の
+                                  記録も合わなくなります。
+
+                                  決済が通らなかった注文には出しません。戻すと
+                                  「お金を受け取っていないのに確定している注文」
+                                  ができてしまうためです。
+                                */}
+                                {order.payment_status !== "pending" && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRestore(order);
+                                    }}
+                                    disabled={restoringId === order.id}
+                                    className="rounded-lg border border-indigo-300 bg-white px-4 py-1.5 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-50 disabled:opacity-50"
+                                  >
+                                    {restoringId === order.id
+                                      ? "処理中..."
+                                      : "キャンセルを取り消す"}
+                                  </button>
                                 )}
+                                <div className="text-xs text-slate-500">
+                                  <p>
+                                    この注文はキャンセル済みです。在庫は受付枠に戻っています。
+                                  </p>
+                                  {order.payment_status === "pending" && (
+                                    <p className="mt-1">
+                                      決済が完了しなかったため、戻すことはできません。
+                                    </p>
+                                  )}
+                                  {order.square_payment_id && (
+                                    <p className="mt-1 text-amber-700">
+                                      返金は Square の管理画面から手動で行ってください（上記の決済IDで検索できます）。
+                                    </p>
+                                  )}
+                                </div>
                               </div>
                             ) : (
                               <div className="flex flex-wrap items-center gap-3">
@@ -463,7 +546,8 @@ export default function OrdersPage() {
                                     : "この注文をキャンセル"}
                                 </button>
                                 <span className="text-xs text-slate-500">
-                                  在庫は受付枠に戻ります。取り消しはできません。
+                                  在庫は受付枠に戻ります。押し間違えたときは、
+                                  このあと戻せます（在庫が残っていれば）。
                                   {order.square_payment_id &&
                                     " 返金は Square の管理画面から別途お願いします。"}
                                 </span>

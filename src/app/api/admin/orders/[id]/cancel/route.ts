@@ -7,10 +7,12 @@ export const dynamic = "force-dynamic";
 /**
  * Cancels an order and returns its stock to the day's allowance.
  *
- * Cancellation is one-way on purpose. Un-cancelling would have to re-reserve
- * stock that may have been taken in the meantime, and a status that can be
- * toggled invites the double-count bugs that reversible counters are prone to.
- * Re-book the customer instead.
+ * 一方通行ではなくなりました。戻す口は `../restore` です。
+ *
+ * 一方通行にしていた理由は2つあり、どちらも本物でした——取り直す在庫が
+ * 残っているとは限らないこと、行き来できる状態は数え間違いを呼ぶこと。
+ * `restoreCancelledOrder` はその両方を潰してあります（新規注文と同じ
+ * 取り方をして、足りなければ何も変えずに断る）。
  *
  * No money moves here — the refund is issued by hand in Square.
  */

@@ -530,3 +530,149 @@ test("まともな電話番号は、書き方が違っても受け取る", async
     assert.equal(res.status, 201, `「${phone}」が断られている`);
   }
 });
+
+/* ==================================================================== *
+ *  キャンセルの取り消し
+ *
+ *  押し間違い——隣の方の注文を消してしまった——のための口です。
+ *  在庫を取り直すので、二重に数えないことがいちばん大事です。
+ * ==================================================================== */
+
+async function placeOrder(quantity = 1) {
+  const { event, date, row } = await pickBookableDate();
+  const res = await api("/api/orders", {
+    method: "POST",
+    body: orderBody(event.id, date.id, row.product_id, quantity),
+  });
+  assert.equal(res.status, 201, "前提の注文が作れない");
+  return {
+    order: res.body as { id: string; order_number: string },
+    dateId: date.id,
+    productId: row.product_id,
+  };
+}
+
+async function remainingFor(dateId: string, productId: string) {
+  const { body } = await api(`/api/reserve/${dateId}`);
+  const row = (
+    body as {
+      inventory: Array<{
+        product_id: string;
+        production_quantity: number;
+        reserved_quantity: number;
+      }>;
+    }
+  ).inventory.find((i) => i.product_id === productId)!;
+  return row.production_quantity - row.reserved_quantity;
+}
+
+test("キャンセルを取り消すと、在庫も元に戻る", async () => {
+
+  const { order, dateId, productId } = await placeOrder(2);
+
+  const afterOrder = await remainingFor(dateId, productId);
+
+  const cancelled = await api(
+    `/api/admin/orders/${order.id}/cancel`,
+    asAdmin({ method: "PATCH" })
+  );
+  assert.equal(cancelled.status, 200);
+  assert.equal(
+    await remainingFor(dateId, productId),
+    afterOrder + 2,
+    "キャンセルで在庫が戻っていない"
+  );
+
+  const restored = await api(
+    `/api/admin/orders/${order.id}/restore`,
+    asAdmin({ method: "PATCH" })
+  );
+  assert.equal(restored.status, 200);
+  assert.equal(
+    await remainingFor(dateId, productId),
+    afterOrder,
+    "取り消しで在庫が元に戻っていない"
+  );
+});
+
+test("二度取り消しても、在庫は二重に減らない", async () => {
+  /*
+    ここが、キャンセルを一方通行にしていた理由そのものです。行き来できる
+    状態は数え間違いを呼びます。2回目は断られ、在庫は1つも動かないこと。
+  */
+
+  const { order, dateId, productId } = await placeOrder(1);
+
+  await api(`/api/admin/orders/${order.id}/cancel`, asAdmin({ method: "PATCH" }));
+  await api(`/api/admin/orders/${order.id}/restore`, asAdmin({ method: "PATCH" }));
+
+  const afterFirst = await remainingFor(dateId, productId);
+
+  const second = await api(
+    `/api/admin/orders/${order.id}/restore`,
+    asAdmin({ method: "PATCH" })
+  );
+  assert.equal(second.status, 400, "キャンセルされていない注文が戻せている");
+  assert.equal(
+    await remainingFor(dateId, productId),
+    afterFirst,
+    "2回目の取り消しで在庫が動いている"
+  );
+});
+
+test("在庫が無くなっていたら、戻さずに断る", async () => {
+  /*
+    キャンセルしたあと、その枠を他の方が買ってしまうことがあります。
+    そこで無理に戻すと、受付上限を超えた注文ができ、当日お店が足りません。
+    何も変えずに断り、どの商品がいくつ足りないかを返すこと。
+  */
+
+  const { event, date, row } = await pickBookableDate();
+
+  const remaining = await remainingFor(date.id, row.product_id);
+  assert.ok(remaining > 0, "在庫のある商品が必要");
+
+  // 残りぜんぶを1件で押さえる。
+  const mine = await api("/api/orders", {
+    method: "POST",
+    body: orderBody(event.id, date.id, row.product_id, remaining),
+  });
+  assert.equal(mine.status, 201);
+  const mineId = (mine.body as { id: string }).id;
+
+  // キャンセルして枠を空け、すぐ他の方が同じだけ買う。
+  await api(`/api/admin/orders/${mineId}/cancel`, asAdmin({ method: "PATCH" }));
+  const theirs = await api("/api/orders", {
+    method: "POST",
+    body: orderBody(event.id, date.id, row.product_id, remaining),
+  });
+  assert.equal(theirs.status, 201, "空いた枠が買えていない");
+
+  const before = await remainingFor(date.id, row.product_id);
+
+  const restored = await api(
+    `/api/admin/orders/${mineId}/restore`,
+    asAdmin({ method: "PATCH" })
+  );
+  assert.equal(restored.status, 400, "在庫が無いのに戻せている");
+
+  const body = restored.body as { error: string; details?: string[] };
+  assert.ok(
+    Array.isArray(body.details) && body.details.length > 0,
+    "どの商品が足りないかが返っていない"
+  );
+
+  assert.equal(
+    await remainingFor(date.id, row.product_id),
+    before,
+    "断ったのに在庫が動いている"
+  );
+});
+
+test("キャンセルの取り消しは、ログインしていないとできない", async () => {
+  const { order } = await placeOrder(1);
+  const res = await api(`/api/admin/orders/${order.id}/restore`, {
+    method: "PATCH",
+  });
+  assert.equal(res.status, 401);
+});

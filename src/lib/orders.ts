@@ -278,3 +278,179 @@ export async function holdStockAndCreateOrder(
 
   return { order, items };
 }
+
+/** 戻せなかった理由を、どの商品が足りないかまで添えて返す。 */
+export class OrderRestoreError extends Error {
+  constructor(message: string, readonly details: string[] = []) {
+    super(message);
+  }
+}
+
+/**
+ * キャンセルを取り消して、注文を元に戻す。
+ *
+ * ## なぜ以前は無かったか
+ *
+ * 「キャンセルは一方通行」と決めていました。理由は2つで、どちらも本物です。
+ *
+ *   1. 戻すには在庫を取り直す必要があり、そのあいだに他の方が買っている
+ *      かもしれない。
+ *   2. 行ったり来たりできる状態は、数え間違い（二重に数える・戻しすぎる）
+ *      を呼び込みやすい。
+ *
+ * ただ、お店には「隣の人の注文を間違えて消した」という現実があります。
+ * 無いと、その場で作り直すことになり、注文番号も決済も合わなくなります。
+ * なので、上の2つを潰したうえで用意します。
+ *
+ *   1. 取り直しは**新規注文とまったく同じ一文**で行います。Postgres が
+ *      行ロックの解放後に WHERE を評価し直すので、受付上限を超えた側は
+ *      黙って外れます。足りなければ**何も変えずに**断ります。
+ *   2. 戻せるのは `cancelled` の注文だけです。既に生きている注文に対して
+ *      押しても、在庫は1つも動きません。
+ *
+ * ## 戻さないもの
+ *
+ * **決済が通らなかった注文は戻せません。** カードが落ちたときの後始末でも
+ * この同じキャンセルを使っているので、それを戻すと「お金を受け取って
+ * いないのに確定している注文」ができます。`payment_status` が `pending` の
+ * ものは、そういう注文です。
+ *
+ * **お金は動きません。** 既に Square で返金していた場合、この操作では
+ * 戻りません。画面にはそう書いてあります。
+ */
+export async function restoreCancelledOrder(orderId: string): Promise<{
+  restored: number;
+}> {
+  return db.transaction(async (tx) => {
+    const [order] = await tx
+      .select()
+      .from(orders)
+      .where(eq(orders.id, orderId))
+      .limit(1);
+
+    if (!order) {
+      throw new OrderRestoreError("注文が見つかりません");
+    }
+    if (order.order_status !== "cancelled") {
+      throw new OrderRestoreError("この注文はキャンセルされていません");
+    }
+    if (order.payment_status === "pending") {
+      throw new OrderRestoreError(
+        "この注文は決済が完了しなかったためキャンセルされています。戻すことはできません。"
+      );
+    }
+
+    const items = await tx
+      .select()
+      .from(orderItems)
+      .where(eq(orderItems.order_id, orderId));
+
+    if (items.length === 0) {
+      throw new OrderRestoreError("この注文には商品が入っていません");
+    }
+
+    /*
+      取り直す先の枠。
+
+      商品が消されていると行が無く、戻す先がありません。黙って一部だけ
+      戻すより、何が足りないかを言って断ります。
+    */
+    const rows = await tx
+      .select({ inventory: dailyProductInventory, product: products })
+      .from(dailyProductInventory)
+      .innerJoin(products, eq(products.id, dailyProductInventory.product_id))
+      .where(
+        and(
+          eq(dailyProductInventory.event_date_id, order.event_date_id),
+          inArray(
+            dailyProductInventory.product_id,
+            items.map((i) => i.product_id)
+          )
+        )
+      );
+
+    if (rows.length !== items.length) {
+      const found = new Set(rows.map((r) => r.product.id));
+      throw new OrderRestoreError(
+        "この受取日に無い商品が含まれているため、戻せません",
+        items
+          .filter((i) => !found.has(i.product_id))
+          .map((i) => `「${i.product_name_snapshot}」は、この受取日の商品から外れています`)
+      );
+    }
+
+    const quantityByProduct = new Map(items.map((i) => [i.product_id, i.quantity]));
+    // 並び順を決めておく。新規注文と同じで、取り合いのときの行き詰まりを避ける。
+    const sortedRows = [...rows].sort((a, b) =>
+      a.inventory.id.localeCompare(b.inventory.id)
+    );
+
+    /*
+      新規注文とまったく同じ取り方。
+
+      受付上限を超える側は WHERE に合わず、更新されずに返ってきます。
+      1行でも足りなければ下で例外になり、この取引ごと巻き戻るので、
+      「一部だけ戻った」状態にはなりません。
+    */
+    const held = await tx.execute(sql`
+      UPDATE daily_product_inventory AS d
+      SET reserved_quantity = d.reserved_quantity + v.qty,
+          is_sold_out = d.reserved_quantity + v.qty >= d.production_quantity
+      FROM (VALUES ${sql.join(
+        sortedRows.map(
+          (row) =>
+            sql`(${row.inventory.id}::uuid, ${quantityByProduct.get(
+              row.product.id
+            )!}::integer)`
+        ),
+        sql`, `
+      )}) AS v(id, qty)
+      WHERE d.id = v.id
+        AND d.reserved_quantity + v.qty <= d.production_quantity
+      RETURNING d.id
+    `);
+
+    const heldIds = new Set((held.rows as Array<{ id: string }>).map((r) => r.id));
+
+    if (heldIds.size !== sortedRows.length) {
+      const short = sortedRows.filter((row) => !heldIds.has(row.inventory.id));
+      const current = await tx
+        .select()
+        .from(dailyProductInventory)
+        .where(
+          inArray(
+            dailyProductInventory.id,
+            short.map((row) => row.inventory.id)
+          )
+        );
+      const remainingById = new Map(
+        current.map((row) => [
+          row.id,
+          Math.max(0, row.production_quantity - row.reserved_quantity),
+        ])
+      );
+
+      throw new OrderRestoreError(
+        "キャンセル後に他のご予約が入ったため、戻せません",
+        short.map(
+          (row) =>
+            `「${row.product.name}」は ${quantityByProduct.get(
+              row.product.id
+            )} 個必要ですが、残り ${
+              remainingById.get(row.inventory.id) ?? 0
+            } 個です`
+        )
+      );
+    }
+
+    await tx
+      .update(orders)
+      .set({ order_status: "confirmed" })
+      .where(eq(orders.id, orderId));
+
+    // 枠が埋まれば、その受取日は締まる。
+    await refreshDateReservationStatus(tx, order.event_date_id);
+
+    return { restored: items.length };
+  });
+}

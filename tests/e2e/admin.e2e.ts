@@ -163,6 +163,54 @@ test.describe("S-04 管理画面", () => {
     await expect(rowContaining(page, marker)).toBeVisible();
   });
 
+  test("間違えてキャンセルしても、取り消して元に戻せる", async ({ page }) => {
+    /*
+      お店の現実は「隣の人の注文を間違えて消した」です。戻す道が無いと、
+      その場で作り直すことになり、注文番号も決済の記録も合わなくなります。
+
+      在庫も一緒に戻ること（キャンセルで戻した枠を、取り直すこと）まで
+      見ます。表示だけ戻って在庫が戻らないと、当日お店が足りません。
+    */
+    const placed = await reserve(page, {
+      product: FIXTURE.plenty.name,
+      name: "取り消し 太郎",
+      diningStyle: "takeout",
+      eventDateId: data.today.id,
+      email: "restore@example.com",
+    });
+
+    await loginAsAdmin(page);
+    await page.goto("/admin/orders");
+
+    const row = rowContaining(page, placed.orderNumber);
+    await row.click();
+
+    page.once("dialog", (d) => d.accept());
+    await page.getByRole("button", { name: "この注文をキャンセル" }).click();
+
+    /*
+      キャンセルできたことは、取り消すボタンが出たことで分かります。
+      「キャンセル」という文字で探すと、絞り込みの選択肢まで引っかかります。
+    */
+    const restore = page.getByRole("button", { name: "キャンセルを取り消す" });
+    await expect(restore).toBeVisible();
+
+    page.once("dialog", (d) => d.accept());
+    await restore.click();
+
+    // 戻ったら、またキャンセルできる状態に戻っていること。
+    await expect(
+      page.getByRole("button", { name: "この注文をキャンセル" })
+    ).toBeVisible();
+    await expect(restore).toHaveCount(0);
+
+    // 製造計画の数が元どおりであること（在庫も戻っている証拠）。
+    await page.goto("/admin/production");
+    await expect(page.locator("main")).toContainText(
+      new RegExp(`1\\s*/\\s*(上限\\s*)?${FIXTURE.plenty.capacity}`)
+    );
+  });
+
   test("CSV に、納める消費税の根拠が入っている", async ({ page }) => {
     await reserve(page, {
       product: FIXTURE.plenty.name,
