@@ -26,14 +26,15 @@ import { resolveSoldOut } from "../src/lib/inventory";
 
 /* ------------------------------------------------------------------ 締切 */
 
-test("締切：前日23:59:59（日本時間）になる", () => {
+test("締切：前日15:00（日本時間）になる", () => {
+  // お店の運用も、ご案内文も、特商法のページも前日15:00。既定もそこに揃える。
   const d = defaultReservationCloseAt("2026-11-18");
-  assert.equal(d.toISOString(), "2026-11-17T14:59:59.000Z");
+  assert.equal(d.toISOString(), "2026-11-17T06:00:00.000Z");
 });
 
 test("締切：今日を受取日に足したら、その日の終わりまで受け付ける", () => {
   // 前日の夜はもう過ぎている。ここで前日を返すと、足した瞬間に閉じた日ができる。
-  const now = new Date("2026-11-18T05:00:00+09:00");
+  const now = new Date("2026-11-18T16:00:00+09:00");
   assert.equal(
     defaultReservationCloseAt("2026-11-18", now).toISOString(),
     "2026-11-18T14:59:59.000Z"
@@ -42,18 +43,18 @@ test("締切：今日を受取日に足したら、その日の終わりまで�
 
 test("締切：過ぎた日を足した場合は、閉じたままにする", () => {
   // 昨日の受取日に締切だけ未来を与えると、売れないものが売れてしまう。
-  const now = new Date("2026-11-18T05:00:00+09:00");
+  const now = new Date("2026-11-18T16:00:00+09:00");
   assert.equal(
     defaultReservationCloseAt("2026-11-17", now).toISOString(),
-    "2026-11-16T14:59:59.000Z"
+    "2026-11-16T06:00:00.000Z"
   );
 });
 
-test("締切：明日以降なら、いつ足しても前日の夜のまま", () => {
+test("締切：明日以降なら、いつ足しても前日15:00のまま", () => {
   const now = new Date("2026-11-18T05:00:00+09:00");
   assert.equal(
     defaultReservationCloseAt("2026-11-19", now).toISOString(),
-    "2026-11-18T14:59:59.000Z"
+    "2026-11-18T06:00:00.000Z"
   );
 });
 
@@ -87,11 +88,11 @@ test("締切の入力：画面に出した値をそのまま戻すと、同じ�
 test("締切：月初・年初でも前日にまたがる", () => {
   assert.equal(
     defaultReservationCloseAt("2026-11-01").toISOString(),
-    "2026-10-31T14:59:59.000Z"
+    "2026-10-31T06:00:00.000Z"
   );
   assert.equal(
     defaultReservationCloseAt("2026-01-01").toISOString(),
-    "2025-12-31T14:59:59.000Z"
+    "2025-12-31T06:00:00.000Z"
   );
 });
 
@@ -99,7 +100,7 @@ test("締切：うるう年の2/29も正しく前日を指す", () => {
   // 2028年はうるう年。3/1 の前日は 2/29。
   assert.equal(
     defaultReservationCloseAt("2028-03-01").toISOString(),
-    "2028-02-29T14:59:59.000Z"
+    "2028-02-29T06:00:00.000Z"
   );
   assert.equal(
     defaultReservationCloseAt("2028-03-01").toLocaleDateString("ja-JP", {
@@ -113,8 +114,10 @@ test("締切判定：境界の前後", () => {
   const deadline = defaultReservationCloseAt("2026-11-18");
   const at = (s: string) => new Date(s);
 
-  assert.equal(isPastReservationDeadline(deadline, at("2026-11-17T23:59:59+09:00")), false);
-  assert.equal(isPastReservationDeadline(deadline, at("2026-11-18T00:00:00+09:00")), true);
+  // 前日15:00ちょうどまでは受け付ける。1秒でも過ぎたら締切。
+  assert.equal(isPastReservationDeadline(deadline, at("2026-11-17T14:59:59+09:00")), false);
+  assert.equal(isPastReservationDeadline(deadline, at("2026-11-17T15:00:01+09:00")), true);
+  assert.equal(isPastReservationDeadline(deadline, at("2026-11-17T23:59:59+09:00")), true);
   assert.equal(isPastReservationDeadline(deadline, at("2026-11-18T12:00:00+09:00")), true);
 });
 
@@ -129,7 +132,9 @@ test("締切を過ぎた受取日は受付終了として見える", () => {
   const close = defaultReservationCloseAt("2026-11-18");
   const open = { reservation_status: "open" as const, reservation_close_at: close };
 
-  assert.equal(effectiveReservationStatus(open, new Date("2026-11-17T20:00:00+09:00")), "open");
+  assert.equal(effectiveReservationStatus(open, new Date("2026-11-17T10:00:00+09:00")), "open");
+  // 前日の夕方には、もう締まっている。
+  assert.equal(effectiveReservationStatus(open, new Date("2026-11-17T20:00:00+09:00")), "closed");
   assert.equal(effectiveReservationStatus(open, new Date("2026-11-18T09:00:00+09:00")), "closed");
 });
 

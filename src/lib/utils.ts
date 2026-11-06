@@ -104,11 +104,18 @@ export function effectiveReservationStatus(
 }
 
 /**
- * The default deadline for a pickup date: 23:59 the evening before, JST.
+ * 受取日を足したときの、既定の締切：**前日の15:00**（日本時間）。
  *
- * Everything is made to order, so the kitchen needs the day's numbers settled
- * before it starts. Written as a +09:00 offset rather than built from local
- * parts, so the server's own timezone never moves it.
+ * すべて受注生産なので、厨房はその日の数が決まってからでないと動けません。
+ *
+ * 以前は前日23:59でした。お店は現に全部の日を15:00に直して使っており、
+ * ご案内文にも特商法のページにも15:00と書いてあります。既定だけ23:59のまま
+ * にしておくと、**新しく足した日だけが、公開している文面と食い違います**。
+ * 特商法のページは約束として出しているものなので、そこがずれるのはまずい。
+ *
+ * 既にある受取日は動きません。この関数が使われるのは、日を足すときだけです。
+ *
+ * 日本時間は +09:00 と書いて与えます。サーバーの時間帯で動かされないように。
  */
 export function defaultReservationCloseAt(
   pickupDate: string,
@@ -117,11 +124,11 @@ export function defaultReservationCloseAt(
   const [year, month, day] = pickupDate.split("-").map(Number);
   const dayBefore = new Date(Date.UTC(year, month - 1, day - 1));
   const iso = dayBefore.toISOString().slice(0, 10);
-  const evening = new Date(`${iso}T23:59:59+09:00`);
+  const evening = new Date(`${iso}T15:00:00+09:00`);
 
   /*
-    前日の夜がもう過ぎていて、当日の夜はまだ来ていないなら、その日の終わりまで
-    受け付けます。要するに「今日」を足したときです。
+    前日の締切がもう過ぎていて、当日の終わりはまだ来ていないなら、その日の
+    終わりまで受け付けます。要するに「今日」や「今日の夕方」を足したときです。
 
     これが無いと、当日の受取日を足した瞬間に「受付締切済み」になります。足した
     本人に締切のつもりは無いので、作ったそばから閉じている理由が分かりません
