@@ -132,6 +132,17 @@ export const products = pgTable(
       .default(sql`'{}'::text[]`),
     sort_order: integer("sort_order").notNull().default(0),
     is_active: boolean("is_active").notNull().default(true),
+    /**
+     * トップページの丸い写真に出すか。
+     *
+     * 並び順とは別に持ちます。並び順で代用すると、トップに出したい商品を
+     * 上げるたびに**商品選択ページの並びまで動いて**しまうからです。
+     * お店が見せたい順と、選んでもらう順は、別のものです。
+     *
+     * 1つも選ばれていないあいだは、並び順の先頭から出します（この列を
+     * 足した時点で全部 false になるため、トップが空になるのを避ける）。
+     */
+    show_on_top: boolean("show_on_top").notNull().default(false),
   },
   (t) => [
     index("products_event_id_idx").on(t.event_id),

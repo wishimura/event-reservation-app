@@ -73,15 +73,15 @@ export default async function EventTopPage() {
   const showcase = await getEventShowcase(event.id);
 
   /*
-    上段に大きく3品、下段に小さく4品。**7品まで**。
+    上段に大きく3品、下段に小さく4品。
 
     全部同じ大きさだと、どれから見ればいいのか分からなくなります。
     全部出すのも違う——10品を丸で並べると、青い帯がそれだけで画面を
     埋めてしまい、肝心の受取日が下に消えます。ここは品書きではなく
-    「こういう催しです」と伝える入口なので、顔ぶれが分かれば足ります。
+    「こういう催しです」と伝える入口です。
 
-    どの7品かは、商品マスタの並び順の先頭からです。出したいものを
-    上に並べてください。
+    どれを出すかは商品マスタの「トップページに出す」で選びます
+    （`getEventShowcase`）。
   */
   const featured = showcase.slice(0, 3);
   const rest = showcase.slice(3, 7);

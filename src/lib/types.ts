@@ -25,6 +25,8 @@ export interface Product {
   extra_image_urls: string[];
   sort_order: number;
   is_active: boolean;
+  /** トップページの丸い写真に出すか。並び順とは別に持ちます。 */
+  show_on_top: boolean;
 }
 
 export interface EventDate {

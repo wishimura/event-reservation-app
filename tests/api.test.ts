@@ -9,6 +9,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { SHOWCASE_LIMIT } from "../src/lib/utils";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3981";
 const PASSWORD = process.env.ADMIN_PASSWORD ?? "qa-password";
@@ -846,4 +847,157 @@ test("未払いの店頭販売も、キャンセルを取り消せる", async ()
       `未払いの店頭販売が戻せない: ${JSON.stringify(restored.body)}`
     );
   });
+});
+
+/* ==================================================================== *
+ *  トップに出す商品を選ぶ
+ * ==================================================================== */
+
+/**
+ * 小さな PNG を1枚上げて、その置き場所を返す。
+ *
+ * トップの丸い写真は**写真のある商品**しか出しません。前提データは写真を
+ * 持たないので、この確認のぶんだけここで用意します。上げる口そのものも
+ * 通るので、一石二鳥です。
+ */
+async function uploadTinyImage(): Promise<string> {
+  // 1×1 の透明 PNG。中身は何でもよく、型と大きさだけが見られます。
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "base64"
+  );
+  const form = new FormData();
+  form.append("file", new Blob([new Uint8Array(png)], { type: "image/png" }), "dot.png");
+
+  const res = await fetch(`${BASE}/api/admin/images`, {
+    method: "POST",
+    headers: { Cookie: adminCookie },
+    body: form,
+  });
+  assert.ok(res.status === 200 || res.status === 201, `画像を上げられない (${res.status})`);
+  return ((await res.json()) as { url: string }).url;
+}
+
+async function adminProducts() {
+  const { body } = await api("/api/admin/products", asAdmin());
+  return (
+    body as {
+      products: Array<{
+        id: string;
+        name: string;
+        price: number;
+        image_url: string | null;
+        show_on_top: boolean;
+        sort_order: number;
+        is_active: boolean;
+      }>;
+    }
+  ).products;
+}
+
+/** 写真のある商品が n 品あるようにして、その一覧を返す。 */
+async function ensurePhotos(n: number) {
+  const all = await adminProducts();
+  const withPhoto = all.filter((p) => p.image_url);
+  if (withPhoto.length >= n) return withPhoto;
+
+  const url = await uploadTinyImage();
+  for (const p of all.filter((x) => !x.image_url).slice(0, n - withPhoto.length)) {
+    const res = await api(
+      `/api/admin/products/${p.id}`,
+      asAdmin({
+        method: "PATCH",
+        body: JSON.stringify({
+          name: p.name, price: p.price, sort_order: p.sort_order,
+          image_url: url, is_active: true, show_on_top: false,
+        }),
+      })
+    );
+    assert.equal(res.status, 200, `「${p.name}」に写真を付けられない`);
+  }
+  return (await adminProducts()).filter((p) => p.image_url);
+}
+
+async function setShowOnTop(
+  p: { id: string; name: string; price: number; sort_order: number; image_url: string | null },
+  show: boolean
+) {
+  const res = await api(
+    `/api/admin/products/${p.id}`,
+    asAdmin({
+      method: "PATCH",
+      body: JSON.stringify({
+        name: p.name,
+        price: p.price,
+        sort_order: p.sort_order,
+        image_url: p.image_url ?? "",
+        is_active: true,
+        show_on_top: show,
+      }),
+    })
+  );
+  assert.equal(res.status, 200, `「${p.name}」の指定に失敗: ${JSON.stringify(res.body)}`);
+}
+
+test("トップに出す商品を選ぶと、選んだものだけが並ぶ", async () => {
+  /*
+    これまでは並び順の先頭から出していたので、テスト商品や似たセット商品が
+    枠を占めていました。並び順で調整すると**商品選択ページの並びまで動く**
+    ので、別の指定として持たせています。
+  */
+  const withPhoto = await ensurePhotos(2);
+
+  // いちばん後ろの1品だけを選ぶ。並び順では出てこない位置のもの。
+  const pick = withPhoto[withPhoto.length - 1];
+  await setShowOnTop(pick, true);
+
+  try {
+    const html = await (await fetch(`${BASE}/`)).text();
+    assert.ok(html.includes(pick.name), "選んだ商品がトップに出ていない");
+
+    // 選ばれていない商品は出ない。
+    const notPicked = withPhoto.find((p) => p.id !== pick.id)!;
+    assert.ok(
+      !html.includes(notPicked.name),
+      `選んでいない「${notPicked.name}」がトップに出ている`
+    );
+  } finally {
+    await setShowOnTop(pick, false);
+  }
+});
+
+test("1つも選んでいないときは、これまでどおり並び順の先頭から出る", async () => {
+  /*
+    列を足した直後は全部未選択です。ここで空にしてしまうと、お店が気づく前に
+    トップから写真が消えます。
+  */
+  const withPhoto = await ensurePhotos(2);
+  assert.ok(
+    withPhoto.every((p) => !p.show_on_top),
+    "この確認は、1つも選ばれていない状態が前提"
+  );
+
+  const html = await (await fetch(`${BASE}/`)).text();
+  assert.ok(
+    html.includes(withPhoto[0].name),
+    "未選択なのに、並び順の先頭が出ていない"
+  );
+});
+
+test("トップに出すのは7品まで", async () => {
+  // 全部並べると青い帯だけで画面が埋まり、受取日が下に消えます。
+  const withPhoto = await ensurePhotos(2);
+  if (withPhoto.length <= SHOWCASE_LIMIT) return; // 母数が足りないので確かめられない
+
+  for (const p of withPhoto) await setShowOnTop(p, true);
+  try {
+    const html = await (await fetch(`${BASE}/`)).text();
+    const shown = withPhoto.filter((p) => html.includes(p.name)).length;
+    assert.ok(
+      shown <= SHOWCASE_LIMIT,
+      `${shown} 品出ている（${SHOWCASE_LIMIT} 品までのはず）`
+    );
+  } finally {
+    for (const p of withPhoto) await setShowOnTop(p, false);
+  }
 });

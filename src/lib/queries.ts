@@ -1,6 +1,7 @@
 import { and, asc, eq, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
 import { eventDates, events, products } from "@/db/schema";
+import { SHOWCASE_LIMIT } from "@/lib/utils";
 
 /** The app is built around a single active event at a time. */
 export async function getActiveEvent() {
@@ -58,27 +59,46 @@ export async function getAllEventDates(eventId: string) {
 /**
  * トップに並べる料理の写真。
  *
- * 写真のある商品だけを、並び順で返します。無いものは出しません——丸い穴が
- * 空いているより、そこだけ詰まっているほうが見られます。
+ * 写真のある商品だけを返します。無いものは出しません——丸い穴が空いている
+ * より、そこだけ詰まっているほうが見られます。
  *
- * 価格も一緒に返します。トップで値段が分かると、受取日を選ぶ前に
- * 「いくらくらいか」の見当がつきます。
+ * ## どれを出すか
+ *
+ * 商品マスタで「トップページに出す」を選んだものです。1つも選ばれて
+ * いなければ、並び順の先頭から出します。列を足した直後は全部未選択なので、
+ * この逃げ道が無いとトップが空になります。
+ *
+ * 並び順で代用しないのは、それをするとトップに出したい商品を上げるたびに
+ * **商品選択ページの並びまで動く**からです。見せたい順と、選んでもらう順は
+ * 別のものです。
  */
 export async function getEventShowcase(eventId: string) {
-  return db
-    .select({
-      id: products.id,
-      name: products.name,
-      price: products.price,
-      image_url: products.image_url,
-    })
+  const withPhoto = and(
+    eq(products.event_id, eventId),
+    eq(products.is_active, true),
+    isNotNull(products.image_url)
+  );
+
+  const columns = {
+    id: products.id,
+    name: products.name,
+    price: products.price,
+    image_url: products.image_url,
+  };
+
+  const chosen = await db
+    .select(columns)
     .from(products)
-    .where(
-      and(
-        eq(products.event_id, eventId),
-        eq(products.is_active, true),
-        isNotNull(products.image_url)
-      )
-    )
-    .orderBy(asc(products.sort_order), asc(products.name));
+    .where(and(withPhoto, eq(products.show_on_top, true)))
+    .orderBy(asc(products.sort_order), asc(products.name))
+    .limit(SHOWCASE_LIMIT);
+
+  if (chosen.length > 0) return chosen;
+
+  return db
+    .select(columns)
+    .from(products)
+    .where(withPhoto)
+    .orderBy(asc(products.sort_order), asc(products.name))
+    .limit(SHOWCASE_LIMIT);
 }

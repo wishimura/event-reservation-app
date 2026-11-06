@@ -11,6 +11,7 @@ interface ProductPatchBody {
   description?: string;
   image_url?: string;
   extra_image_urls?: unknown;
+  show_on_top?: boolean;
   price: number;
   sort_order?: number;
   is_active?: boolean;
@@ -70,6 +71,7 @@ export async function PATCH(
         description: body.description ?? "",
         image_url: (body.image_url ?? "").trim() || null,
         extra_image_urls: cleanExtraImageUrls(body.extra_image_urls),
+        show_on_top: body.show_on_top === true,
         price: body.price,
         sort_order: Number.isInteger(body.sort_order)
           ? (body.sort_order as number)
