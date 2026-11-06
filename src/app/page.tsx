@@ -23,15 +23,11 @@ export const dynamic = "force-dynamic";
  */
 function ShowcaseDish({
   dish,
-  size,
 }: {
   dish: { id: string; name: string; price: number; image_url: string | null };
-  size: "large" | "small";
 }) {
-  const box = size === "large" ? "w-28 sm:w-32" : "w-[5.5rem] sm:w-24";
-
   return (
-    <figure className={`${box} m-0 text-center`}>
+    <figure className="m-0 min-w-0 text-center">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={dish.image_url!}
@@ -77,13 +73,18 @@ export default async function EventTopPage() {
   const showcase = await getEventShowcase(event.id);
 
   /*
-    先頭の3品は大きく、残りは小さく。
+    上段に大きく3品、下段に小さく4品。**7品まで**。
 
-    全部同じ大きさだと、どれから見ればいいのか分からなくなります。並び順は
-    お店が商品マスタで決めているので、そこが「推し」の順になります。
+    全部同じ大きさだと、どれから見ればいいのか分からなくなります。
+    全部出すのも違う——10品を丸で並べると、青い帯がそれだけで画面を
+    埋めてしまい、肝心の受取日が下に消えます。ここは品書きではなく
+    「こういう催しです」と伝える入口なので、顔ぶれが分かれば足ります。
+
+    どの7品かは、商品マスタの並び順の先頭からです。出したいものを
+    上に並べてください。
   */
   const featured = showcase.slice(0, 3);
-  const rest = showcase.slice(3, 10);
+  const rest = showcase.slice(3, 7);
 
   return (
     <main className="min-h-screen bg-paper">
@@ -131,15 +132,23 @@ export default async function EventTopPage() {
         */}
         {showcase.length > 0 && (
           <div className="mx-auto max-w-5xl px-4 pb-10">
-            <div className="flex flex-wrap items-start justify-center gap-x-4 gap-y-6">
+            {/*
+              上に3つ、下に4つ。**幅に関わらず、その割り付けを崩さない。**
+
+              はじめは円を固定ピクセルで置いて折り返させていましたが、
+              iPhone の標準幅（390px）では上段の3つすら入らず、2+1+3+1 に
+              割れました。並びが崩れると、どれが主役なのか分からなくなります。
+              円の大きさのほうを画面に合わせます。
+            */}
+            <div className="mx-auto grid max-w-[26rem] grid-cols-3 gap-x-4 gap-y-6">
               {featured.map((p) => (
-                <ShowcaseDish key={p.id} dish={p} size="large" />
+                <ShowcaseDish key={p.id} dish={p} />
               ))}
             </div>
             {rest.length > 0 && (
-              <div className="mt-6 flex flex-wrap items-start justify-center gap-x-4 gap-y-6">
+              <div className="mx-auto mt-6 grid max-w-[26rem] grid-cols-4 gap-x-3 gap-y-6">
                 {rest.map((p) => (
-                  <ShowcaseDish key={p.id} dish={p} size="small" />
+                  <ShowcaseDish key={p.id} dish={p} />
                 ))}
               </div>
             )}

@@ -451,6 +451,8 @@ test("Cookie が無いのに「保存カードで払う」と言われても、�
     "paid_by_card",
     "切れないはずのカードが切られている"
   );
+
+  await releaseOrder((res.body as { id: string }).id);
 });
 
 test("カードを覚えさせる窓口は、外に開いていない", async () => {
@@ -528,6 +530,7 @@ test("まともな電話番号は、書き方が違っても受け取る", async
     });
 
     assert.equal(res.status, 201, `「${phone}」が断られている`);
+    await releaseOrder((res.body as { id: string }).id);
   }
 });
 
@@ -550,6 +553,19 @@ async function placeOrder(quantity = 1) {
     dateId: date.id,
     productId: row.product_id,
   };
+}
+
+/**
+ * 取った枠を返す。
+ *
+ * この結合テストは、1回の実行のあいだデータベースを作り直しません。確かめ
+ * 終わった注文を残したままにすると、その日の枠を握り続け、**あとに走る
+ * テストが在庫切れで落ちます**。実際に落としました。
+ *
+ * 自分の後始末をしないテストは、自分より後ろのテストを壊します。
+ */
+async function releaseOrder(id: string) {
+  await api(`/api/admin/orders/${id}/cancel`, asAdmin({ method: "PATCH" }));
 }
 
 async function remainingFor(dateId: string, productId: string) {
@@ -593,6 +609,8 @@ test("キャンセルを取り消すと、在庫も元に戻る", async () => {
     afterOrder,
     "取り消しで在庫が元に戻っていない"
   );
+
+  await releaseOrder(order.id);
 });
 
 test("二度取り消しても、在庫は二重に減らない", async () => {
@@ -618,6 +636,8 @@ test("二度取り消しても、在庫は二重に減らない", async () => {
     afterFirst,
     "2回目の取り消しで在庫が動いている"
   );
+
+  await releaseOrder(order.id);
 });
 
 test("在庫が無くなっていたら、戻さずに断る", async () => {
@@ -667,6 +687,18 @@ test("在庫が無くなっていたら、戻さずに断る", async () => {
     before,
     "断ったのに在庫が動いている"
   );
+
+  /*
+    取った枠を返しておく。
+
+    この確認はその日の残りを**全部**押さえます。返さずに終わると、あとに
+    走るテストが在庫切れで落ちます（実際に4件落としました）。自分の後始末を
+    しないテストは、自分より後ろのテストを壊します。
+  */
+  await api(
+    `/api/admin/orders/${(theirs.body as { id: string }).id}/cancel`,
+    asAdmin({ method: "PATCH" })
+  );
 });
 
 test("キャンセルの取り消しは、ログインしていないとできない", async () => {
@@ -703,6 +735,19 @@ async function walkIn(extra: Record<string, unknown> = {}) {
   return (res.body as { order: { id: string; order_number: string } }).order;
 }
 
+/** 店頭販売をつくって、渡した確認が終わったら必ず返す。 */
+async function withWalkIn(
+  extra: Record<string, unknown>,
+  check: (order: { id: string; order_number: string }) => Promise<void>
+) {
+  const order = await walkIn(extra);
+  try {
+    await check(order);
+  } finally {
+    await releaseOrder(order.id);
+  }
+}
+
 async function orderById(id: string) {
   const { body } = await api("/api/admin/orders", asAdmin());
   return (
@@ -711,50 +756,47 @@ async function orderById(id: string) {
 }
 
 test("店頭販売は、未払いでも登録できる", async () => {
-  const order = await walkIn({ payment_status: "pending" });
-  const found = await orderById(order.id);
-
-  assert.equal(found.payment_status, "pending");
-  assert.equal(
-    found.paid_at,
-    null,
-    "頂いていないお金に支払日時が付いている"
-  );
+  await withWalkIn({ payment_status: "pending" }, async (order) => {
+    const found = await orderById(order.id);
+    assert.equal(found.payment_status, "pending");
+    assert.equal(found.paid_at, null, "頂いていないお金に支払日時が付いている");
+  });
 });
 
 test("何も言わなければ、これまでどおり「頂いた」で記録する", async () => {
-  const order = await walkIn();
-  const found = await orderById(order.id);
-  assert.equal(found.payment_status, "paid");
-  assert.ok(found.paid_at, "支払日時が入っていない");
+  await withWalkIn({}, async (order) => {
+    const found = await orderById(order.id);
+    assert.equal(found.payment_status, "paid");
+    assert.ok(found.paid_at, "支払日時が入っていない");
+  });
 });
 
 test("あとから「決済済み」に直せる。日時も一緒に入る", async () => {
-  const order = await walkIn({ payment_status: "pending" });
+  await withWalkIn({ payment_status: "pending" }, async (order) => {
+    const res = await api(
+      `/api/admin/orders/${order.id}/payment-status`,
+      asAdmin({ method: "PATCH", body: JSON.stringify({ payment_status: "paid" }) })
+    );
+    assert.equal(res.status, 200);
 
-  const res = await api(
-    `/api/admin/orders/${order.id}/payment-status`,
-    asAdmin({ method: "PATCH", body: JSON.stringify({ payment_status: "paid" }) })
-  );
-  assert.equal(res.status, 200);
-
-  const found = await orderById(order.id);
-  assert.equal(found.payment_status, "paid");
-  assert.ok(found.paid_at, "支払日時が入っていない");
+    const found = await orderById(order.id);
+    assert.equal(found.payment_status, "paid");
+    assert.ok(found.paid_at, "支払日時が入っていない");
+  });
 });
 
 test("「未決済」に戻すと、支払日時も消える", async () => {
   // 頂いていないお金に日時が残っているのは、ただの嘘。
-  const order = await walkIn();
+  await withWalkIn({}, async (order) => {
+    await api(
+      `/api/admin/orders/${order.id}/payment-status`,
+      asAdmin({ method: "PATCH", body: JSON.stringify({ payment_status: "pending" }) })
+    );
 
-  await api(
-    `/api/admin/orders/${order.id}/payment-status`,
-    asAdmin({ method: "PATCH", body: JSON.stringify({ payment_status: "pending" }) })
-  );
-
-  const found = await orderById(order.id);
-  assert.equal(found.payment_status, "pending");
-  assert.equal(found.paid_at, null, "支払日時が残っている");
+    const found = await orderById(order.id);
+    assert.equal(found.payment_status, "pending");
+    assert.equal(found.paid_at, null, "支払日時が残っている");
+  });
 });
 
 test("ネット予約のお支払い状況は、この口からは変えられない", async () => {
@@ -777,12 +819,13 @@ test("ネット予約のお支払い状況は、この口からは変えられ�
 });
 
 test("お支払い状況の変更は、ログインしていないとできない", async () => {
-  const order = await walkIn();
-  const res = await api(`/api/admin/orders/${order.id}/payment-status`, {
-    method: "PATCH",
-    body: JSON.stringify({ payment_status: "pending" }),
+  await withWalkIn({}, async (order) => {
+    const res = await api(`/api/admin/orders/${order.id}/payment-status`, {
+      method: "PATCH",
+      body: JSON.stringify({ payment_status: "pending" }),
+    });
+    assert.equal(res.status, 401);
   });
-  assert.equal(res.status, 401);
 });
 
 test("未払いの店頭販売も、キャンセルを取り消せる", async () => {
@@ -791,17 +834,16 @@ test("未払いの店頭販売も、キャンセルを取り消せる", async ()
     店頭の未払いは「あとで頂く」なので、別物として戻せること。
     `payment_status` だけで弾いていた頃は、これも巻き込んでいました。
   */
-  const order = await walkIn({ payment_status: "pending" });
-
-  await api(`/api/admin/orders/${order.id}/cancel`, asAdmin({ method: "PATCH" }));
-  const restored = await api(
-    `/api/admin/orders/${order.id}/restore`,
-    asAdmin({ method: "PATCH" })
-  );
-
-  assert.equal(
-    restored.status,
-    200,
-    `未払いの店頭販売が戻せない: ${JSON.stringify(restored.body)}`
-  );
+  await withWalkIn({ payment_status: "pending" }, async (order) => {
+    await api(`/api/admin/orders/${order.id}/cancel`, asAdmin({ method: "PATCH" }));
+    const restored = await api(
+      `/api/admin/orders/${order.id}/restore`,
+      asAdmin({ method: "PATCH" })
+    );
+    assert.equal(
+      restored.status,
+      200,
+      `未払いの店頭販売が戻せない: ${JSON.stringify(restored.body)}`
+    );
+  });
 });
