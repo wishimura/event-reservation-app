@@ -67,6 +67,37 @@ test.describe("S-01 お客様の予約", () => {
     await expect(detail).toContainText(tail);
   });
 
+  test("詳細は、写真より先に説明が出る", async ({ page }) => {
+    /*
+      開く理由が「説明が読めない」なので、開いた先で写真を越えていかないと
+      本文に届かないのでは本末転倒です。
+
+      どちらが上かは、画面上の位置で見ます。並び順や DOM の形は変わりえますが、
+      「説明のほうが上にある」ことは変わりません。
+    */
+    await page.goto(`/reserve/${data.today.id}`);
+    await productCard(page, FIXTURE.plenty.name)
+      .getByRole("button", { name: /の詳細を見る$/ })
+      .click();
+
+    const detail = page.getByRole("dialog");
+    const description = detail.getByText("エチオピア産の豆");
+    await expect(description).toBeVisible();
+
+    const strip = detail.locator("div.snap-x");
+    const photoCount = await strip.locator("button").count();
+    if (photoCount === 0) return; // 写真の無い商品では、確かめることがない
+
+    const textBox = await description.boundingBox();
+    const stripBox = await strip.boundingBox();
+    expect(textBox, "説明の位置が取れない").not.toBeNull();
+    expect(stripBox, "写真の位置が取れない").not.toBeNull();
+    expect(
+      textBox!.y,
+      "写真のほうが説明より上にある"
+    ).toBeLessThan(stripBox!.y);
+  });
+
   test("開いた詳細は、×でもEscでも閉じられる", async ({ page }) => {
     /*
       開いたら必ず閉じられること。スマホで戻る手立てが無くなると、

@@ -41,6 +41,37 @@ export function ProductDetail({
   const [zoomed, setZoomed] = useState<string | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
 
+  /* ---------------- 写真を横に送る ---------------- */
+
+  const stripRef = useRef<HTMLDivElement>(null);
+  /** いま何枚目を見ているか。下の丸印に出します。 */
+  const [current, setCurrent] = useState(0);
+
+  /**
+   * 送った先がどこかを、位置から割り出す。
+   *
+   * 送っている最中も呼ばれるので、いちばん近い1枚に丸めます。幅は実測で
+   * 取ります——画面の幅で計算すると、余白や端末の違いでずれていきます。
+   */
+  function handleStripScroll() {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const slide = strip.firstElementChild as HTMLElement | null;
+    if (!slide) return;
+    // 1枚ぶんの送り幅は、写真の幅と隙間を足したもの。
+    const step = slide.offsetWidth + 12;
+    setCurrent(Math.round(strip.scrollLeft / step));
+  }
+
+  /** 丸印から選んだとき。 */
+  function scrollToPhoto(index: number) {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const slide = strip.children[index] as HTMLElement | undefined;
+    if (!slide) return;
+    strip.scrollTo({ left: slide.offsetLeft - strip.offsetLeft, behavior: "smooth" });
+  }
+
   useEffect(() => {
     closeRef.current?.focus();
 
@@ -110,34 +141,13 @@ export function ProductDetail({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">
-          {photos.length > 0 && (
-            <div className="mb-4 space-y-3">
-              {photos.map((url, index) => (
-                <button
-                  key={url}
-                  type="button"
-                  onClick={() => setZoomed(url)}
-                  aria-label={`${index + 1}枚目の写真を拡大する`}
-                  className="relative block w-full overflow-hidden rounded-2xl bg-zinc-100"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={url}
-                    alt=""
-                    loading={index === 0 ? "eager" : "lazy"}
-                    className="w-full object-cover"
-                  />
-                  <span className="absolute bottom-2 right-2 rounded-full bg-zinc-900/60 px-2.5 py-1 text-xs font-medium text-white">
-                    タップで拡大
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-
           {/*
-            説明は切りません。ここが「最後まで表示されるようにしたい」の答え
-            なので、行数で詰めることはしない。改行は書かれたとおりに出します。
+            説明が先、写真はそのあと。
+
+            開いた理由が「説明が読めない」なので、開いた先で写真を越えて
+            いかないと本文に届かないのでは本末転倒です。
+
+            説明は切りません。行数で詰めることはせず、改行は書かれたとおりに。
           */}
           {product.description ? (
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-600">
@@ -147,6 +157,68 @@ export function ProductDetail({
             <p className="text-sm text-zinc-400">
               この商品の説明はまだありません。
             </p>
+          )}
+
+          {photos.length > 0 && (
+            <div className="mt-4">
+              {/*
+                横に送って見ます。
+
+                縦に積むと、2枚目以降があること自体に気づきにくく、説明も
+                そのぶん下に押しやられます。
+
+                仕掛けはブラウザの scroll-snap だけで、指でも、トラックパッドでも、
+                キーボードでも同じように動きます。
+              */}
+              <div
+                ref={stripRef}
+                onScroll={handleStripScroll}
+                className="-mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
+                {photos.map((url, index) => (
+                  <button
+                    key={url}
+                    type="button"
+                    onClick={() => setZoomed(url)}
+                    aria-label={`${index + 1}枚目の写真を拡大する`}
+                    className="relative block w-full shrink-0 snap-center overflow-hidden rounded-2xl bg-zinc-100"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={url}
+                      alt=""
+                      loading={index === 0 ? "eager" : "lazy"}
+                      className="w-full object-cover"
+                    />
+                    <span className="absolute bottom-2 right-2 rounded-full bg-zinc-900/60 px-2.5 py-1 text-xs font-medium text-white">
+                      タップで拡大
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {/*
+                何枚目か。1枚しか無いときは、伝えることが無いので出しません。
+              */}
+              {photos.length > 1 && (
+                <div className="mt-2 flex items-center justify-center gap-1.5">
+                  {photos.map((url, index) => (
+                    <button
+                      key={url}
+                      type="button"
+                      aria-label={`${index + 1}枚目を見る`}
+                      aria-current={index === current}
+                      onClick={() => scrollToPhoto(index)}
+                      className={`h-1.5 rounded-full transition-all ${
+                        index === current
+                          ? "w-5 bg-zinc-500"
+                          : "w-1.5 bg-zinc-300"
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
 
