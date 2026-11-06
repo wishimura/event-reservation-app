@@ -90,7 +90,7 @@ export default async function EventTopPage() {
     <main className="min-h-screen bg-paper">
       {/* The shop first, then the event — people come here from その店の告知 */}
       <header className="bg-white">
-        <div className="mx-auto flex max-w-lg justify-center px-4 py-6">
+        <div className="mx-auto flex max-w-lg justify-center px-4 py-4">
           <Image
             src="/logo.png"
             alt="となりのと commons kitchen"
