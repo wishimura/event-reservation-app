@@ -2,16 +2,57 @@ import Image from "next/image";
 import Link from "next/link";
 import { SiteFooter } from "@/components/SiteFooter";
 import { Icon } from "@/components/Icon";
-import { getActiveEventWithDates } from "@/lib/queries";
+import { getActiveEventWithDates, getEventShowcase } from "@/lib/queries";
 import type { EventDate } from "@/lib/types";
 import {
   effectiveReservationStatus,
   formatDate,
+  formatPrice,
   getStatusLabel,
 } from "@/lib/utils";
 
 // Availability changes as orders come in, so never serve this from the cache.
 export const dynamic = "force-dynamic";
+
+/**
+ * 丸く切り抜いた料理1品。
+ *
+ * 写真は商品マスタのものです。正方形に切ってから丸くするので、縦長・横長の
+ * 写真は端が落ちます。うまく収まらない商品は、商品マスタで**真ん中に寄せた
+ * 写真**に差し替えてください（詳細の写真は何枚でも足せます）。
+ */
+function ShowcaseDish({
+  dish,
+  size,
+}: {
+  dish: { id: string; name: string; price: number; image_url: string | null };
+  size: "large" | "small";
+}) {
+  const box = size === "large" ? "w-28 sm:w-32" : "w-[5.5rem] sm:w-24";
+
+  return (
+    <figure className={`${box} m-0 text-center`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={dish.image_url!}
+        alt={dish.name}
+        loading="lazy"
+        className="aspect-square w-full rounded-full object-cover shadow-lg ring-[3px] ring-fes-cream"
+      />
+      <figcaption className="mt-2 text-[11px] font-medium leading-snug text-white sm:text-xs">
+        {/*
+          名前は2行まで。本番には「一反もめんナン＆カレー1種（バターチキン）
+          セット」のような長い名前があり、そのまま出すと1つだけ背が高くなって
+          列が揃いません。全部はここで読ませなくてよく、押せば詳細に出ます。
+        */}
+        <span className="line-clamp-2">{dish.name}</span>
+        <span className="mt-0.5 block font-bold text-sun-300">
+          {formatPrice(dish.price)}
+        </span>
+      </figcaption>
+    </figure>
+  );
+}
 
 export default async function EventTopPage() {
   const event = await getActiveEventWithDates();
@@ -33,6 +74,16 @@ export default async function EventTopPage() {
   }
 
   const dates = event.event_dates as EventDate[];
+  const showcase = await getEventShowcase(event.id);
+
+  /*
+    先頭の3品は大きく、残りは小さく。
+
+    全部同じ大きさだと、どれから見ればいいのか分からなくなります。並び順は
+    お店が商品マスタで決めているので、そこが「推し」の順になります。
+  */
+  const featured = showcase.slice(0, 3);
+  const rest = showcase.slice(3, 10);
 
   return (
     <main className="min-h-screen bg-paper">
@@ -50,26 +101,62 @@ export default async function EventTopPage() {
         </div>
       </header>
 
-      {/* Hero */}
-      <div className="bg-gradient-to-br from-brand-500 to-brand-700 text-white">
-        <div className="max-w-lg mx-auto px-4 pt-9 pb-10">
-          <p className="mb-2 flex items-center gap-1.5 text-sm font-medium tracking-wider text-sun-200">
-            <Icon name="coffee" className="w-4 h-4" />
+      {/*
+        催しの入口。
+
+        ここだけポスターと同じ紺・朱でいきます。受取日から先は落ち着いた
+        ままです（`globals.css` の fes-* の注を参照）。
+      */}
+      <div className="bg-fes-navy text-white">
+        <div className="mx-auto max-w-5xl px-4 pt-9 pb-8 text-center">
+          <p className="mb-2 text-xs font-medium tracking-[0.3em] text-white/75">
             CAFE EVENT
           </p>
-          <h1 className="text-3xl font-bold leading-tight mb-3">
+          <h1 className="text-balance text-[clamp(1.9rem,7vw,3.25rem)] font-extrabold leading-[1.15] text-fes-coral">
             {event.name}
           </h1>
-          <p className="text-white/85 text-sm leading-relaxed">
-            {event.description}
-          </p>
+          {event.description && (
+            <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-white/85">
+              {event.description}
+            </p>
+          )}
         </div>
+
+        {/*
+          料理の写真を丸く並べる。
+
+          写真は商品マスタのものをそのまま使うので、商品を入れ替えれば
+          ここも変わります。丸の外に白い輪を一枚回してあるのは、紺から
+          浮かせるためです。
+        */}
+        {showcase.length > 0 && (
+          <div className="mx-auto max-w-5xl px-4 pb-10">
+            <div className="flex flex-wrap items-start justify-center gap-x-4 gap-y-6">
+              {featured.map((p) => (
+                <ShowcaseDish key={p.id} dish={p} size="large" />
+              ))}
+            </div>
+            {rest.length > 0 && (
+              <div className="mt-6 flex flex-wrap items-start justify-center gap-x-4 gap-y-6">
+                {rest.map((p) => (
+                  <ShowcaseDish key={p.id} dish={p} size="small" />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Content */}
-      <div className="max-w-lg mx-auto px-4 -mt-4">
+      {/*
+        ここから下は落ち着いた側。
+
+        PCでは「催しの案内」と「受取日」を横に並べます。1列のまま伸ばすと、
+        広い画面で1行が長くなりすぎて読みにくく、受取日も画面の下に
+        落ちてしまいます。選ぶものが最初から見えているほうがよい。
+      */}
+      <div className="mx-auto grid max-w-5xl gap-6 px-4 pb-2 -mt-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:items-start lg:gap-8">
         {/* Info Card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-5 mb-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-5 lg:sticky lg:top-6">
           <div className="space-y-4">
             <div className="flex items-start gap-3">
               <Icon name="calendar" className="w-4 h-4 text-brand-500 mt-0.5 shrink-0" />
@@ -111,7 +198,7 @@ export default async function EventTopPage() {
 
         {/* Date Selection - Click to Reserve */}
         {dates.length > 0 && (
-          <div className="mb-6">
+          <div>
             <h2 className="text-sm font-bold text-zinc-500 uppercase tracking-wider mb-3">
               受取日を選んで予約
             </h2>
@@ -205,12 +292,15 @@ export default async function EventTopPage() {
         )}
 
         {dates.length === 0 && (
-          <div className="text-center py-8 text-zinc-400 mb-6">
+          <div className="text-center py-8 text-zinc-400">
             <Icon name="calendar" className="w-10 h-10 mx-auto mb-3 text-zinc-300" />
             <p>予約可能な日程がまだありません</p>
           </div>
         )}
 
+      </div>
+
+      <div className="mx-auto max-w-5xl px-4">
         <SiteFooter />
       </div>
     </main>

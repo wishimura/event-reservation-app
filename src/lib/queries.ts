@@ -1,6 +1,6 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNotNull } from "drizzle-orm";
 import { db } from "@/db";
-import { eventDates, events } from "@/db/schema";
+import { eventDates, events, products } from "@/db/schema";
 
 /** The app is built around a single active event at a time. */
 export async function getActiveEvent() {
@@ -53,4 +53,32 @@ export async function getAllEventDates(eventId: string) {
     .from(eventDates)
     .where(eq(eventDates.event_id, eventId))
     .orderBy(asc(eventDates.pickup_date));
+}
+
+/**
+ * トップに並べる料理の写真。
+ *
+ * 写真のある商品だけを、並び順で返します。無いものは出しません——丸い穴が
+ * 空いているより、そこだけ詰まっているほうが見られます。
+ *
+ * 価格も一緒に返します。トップで値段が分かると、受取日を選ぶ前に
+ * 「いくらくらいか」の見当がつきます。
+ */
+export async function getEventShowcase(eventId: string) {
+  return db
+    .select({
+      id: products.id,
+      name: products.name,
+      price: products.price,
+      image_url: products.image_url,
+    })
+    .from(products)
+    .where(
+      and(
+        eq(products.event_id, eventId),
+        eq(products.is_active, true),
+        isNotNull(products.image_url)
+      )
+    )
+    .orderBy(asc(products.sort_order), asc(products.name));
 }
