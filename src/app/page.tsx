@@ -154,9 +154,28 @@ export default async function EventTopPage() {
         広い画面で1行が長くなりすぎて読みにくく、受取日も画面の下に
         落ちてしまいます。選ぶものが最初から見えているほうがよい。
       */}
-      <div className="mx-auto grid max-w-5xl gap-6 px-4 pb-2 -mt-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:items-start lg:gap-8">
+      {/*
+        青と白をきれいに分ける。
+
+        以前は白いカードを青帯に食い込ませていました（-mt-4）。見た目の
+        重なりは悪くないのですが、PCではそのカードが追従して止まるので、
+        **青の上に乗っていたものが途中で白の中に収まる**という動き方になり、
+        スクロールのたびに落ち着かない。境目をまたがせないほうが素直です。
+
+        PCでは「催しの案内」と「受取日」を横に並べます。1列のまま伸ばすと、
+        広い画面で1行が長くなりすぎて読みにくく、受取日も下に落ちます。
+      */}
+      <div className="mx-auto grid max-w-5xl gap-6 px-4 pt-7 pb-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:items-start lg:gap-8">
         {/* Info Card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-zinc-200 p-5 lg:sticky lg:top-6">
+        {/*
+          PCでは、スクロールしてもここだけ残します。受取日を選ぶあいだ、
+          締切や受取場所が見えているように。
+
+          高さには蓋をします。「ご注意」はお店が自由に書ける欄で、画面より
+          高くなると**追従したまま下が読めなくなる**からです。そうなった
+          ときだけ、この中だけでスクロールします。
+        */}
+        <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:overflow-y-auto">
           <div className="space-y-4">
             <div className="flex items-start gap-3">
               <Icon name="calendar" className="w-4 h-4 text-brand-500 mt-0.5 shrink-0" />
@@ -199,10 +218,10 @@ export default async function EventTopPage() {
         {/* Date Selection - Click to Reserve */}
         {dates.length > 0 && (
           <div>
-            <h2 className="text-sm font-bold text-zinc-500 uppercase tracking-wider mb-3">
+            <h2 className="mb-1 text-lg font-bold text-fes-navy">
               受取日を選んで予約
             </h2>
-            <p className="text-xs text-zinc-400 mb-4">
+            <p className="mb-4 text-xs text-zinc-500">
               ご希望の受取日をタップすると、商品選択に進みます。
             </p>
             <div className="space-y-3">
