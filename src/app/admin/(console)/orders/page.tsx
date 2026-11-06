@@ -53,6 +53,8 @@ export default function OrdersPage() {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   /** キャンセルを取り消している最中の注文。 */
   const [restoringId, setRestoringId] = useState<string | null>(null);
+  /** お支払い状況を直している最中の注文。 */
+  const [payingId, setPayingId] = useState<string | null>(null);
 
   // Filters
   const [filterDate, setFilterDate] = useState("");
@@ -204,6 +206,48 @@ export default function OrdersPage() {
       );
     } finally {
       setRestoringId(null);
+    }
+  }
+
+  /**
+   * 店頭販売のお支払い状況を直す。
+   *
+   * 直すのはこちらの帳簿だけで、お金は動きません。ネット予約は Square が
+   * お金を持っているので、サーバー側で断られます。
+   */
+  async function handlePaymentStatus(
+    order: OrderWithItems,
+    next: "paid" | "pending"
+  ) {
+    const ok = window.confirm(
+      next === "paid"
+        ? `${order.order_number} を「決済済み」にします。よろしいですか？`
+        : [
+            `${order.order_number} を「未決済」に戻します。`,
+            "",
+            "※ お金は動きません。実際に返金する場合は別途お願いします。",
+            "",
+            "よろしいですか？",
+          ].join("\n")
+    );
+    if (!ok) return;
+
+    setPayingId(order.id);
+    try {
+      await fetchJson(`/api/admin/orders/${order.id}/payment-status`, {
+        method: "PATCH",
+        body: JSON.stringify({ payment_status: next }),
+      });
+      await loadOrders();
+    } catch (err) {
+      console.error("Payment status error:", err);
+      alert(
+        err instanceof ApiError
+          ? err.message
+          : "お支払い状況の変更に失敗しました"
+      );
+    } finally {
+      setPayingId(null);
     }
   }
 
@@ -501,7 +545,10 @@ export default function OrdersPage() {
                                   「お金を受け取っていないのに確定している注文」
                                   ができてしまうためです。
                                 */}
-                                {order.payment_status !== "pending" && (
+                                {!(
+                                  order.source === "online" &&
+                                  order.payment_status === "pending"
+                                ) && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -519,11 +566,12 @@ export default function OrdersPage() {
                                   <p>
                                     この注文はキャンセル済みです。在庫は受付枠に戻っています。
                                   </p>
-                                  {order.payment_status === "pending" && (
-                                    <p className="mt-1">
-                                      決済が完了しなかったため、戻すことはできません。
-                                    </p>
-                                  )}
+                                  {order.source === "online" &&
+                                    order.payment_status === "pending" && (
+                                      <p className="mt-1">
+                                        決済が完了しなかったため、戻すことはできません。
+                                      </p>
+                                    )}
                                   {order.square_payment_id && (
                                     <p className="mt-1 text-amber-700">
                                       返金は Square の管理画面から手動で行ってください（上記の決済IDで検索できます）。
@@ -533,6 +581,34 @@ export default function OrdersPage() {
                               </div>
                             ) : (
                               <div className="flex flex-wrap items-center gap-3">
+                                {/*
+                                  店頭販売だけ、お支払い状況を直せます。
+
+                                  ネット予約のお金は Square が持っていて、
+                                  こちらの表示だけ書き換えると二度と
+                                  突き合わせられなくなります。
+                                */}
+                                {order.source === "walk_in" && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handlePaymentStatus(
+                                        order,
+                                        order.payment_status === "paid"
+                                          ? "pending"
+                                          : "paid"
+                                      );
+                                    }}
+                                    disabled={payingId === order.id}
+                                    className="rounded-lg border border-emerald-300 bg-white px-4 py-1.5 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 disabled:opacity-50"
+                                  >
+                                    {payingId === order.id
+                                      ? "処理中..."
+                                      : order.payment_status === "paid"
+                                        ? "「未決済」に戻す"
+                                        : "「決済済み」にする"}
+                                  </button>
+                                )}
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();

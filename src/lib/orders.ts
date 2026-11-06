@@ -334,7 +334,19 @@ export async function restoreCancelledOrder(orderId: string): Promise<{
     if (order.order_status !== "cancelled") {
       throw new OrderRestoreError("この注文はキャンセルされていません");
     }
-    if (order.payment_status === "pending") {
+    /*
+      決済が通らなかった注文は戻しません。
+
+      見分けるのは `source` と `payment_status` の組み合わせです。
+      ネット予約は「作る→カードを切る→成功したら paid」の順なので、
+      **ネット予約で pending** は「お金が入らなかった」ことを意味します。
+      これを戻すと、受け取っていないのに確定している注文ができます。
+
+      店頭販売の未払い（あとでいただく）は別物です。こちらは `walk_in` で、
+      戻せます。`payment_status` だけで弾いていた頃は、これも巻き込んで
+      いました。
+    */
+    if (order.source === "online" && order.payment_status === "pending") {
       throw new OrderRestoreError(
         "この注文は決済が完了しなかったためキャンセルされています。戻すことはできません。"
       );

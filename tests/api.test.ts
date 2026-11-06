@@ -676,3 +676,132 @@ test("キャンセルの取り消しは、ログインしていないとでき�
   });
   assert.equal(res.status, 401);
 });
+
+/* ==================================================================== *
+ *  店頭販売のお支払い状況
+ *
+ *  カウンターでは「先に商品だけ渡して、お会計はあとで」が起きます。
+ *  未払いのまま売上に混ざらないこと、そしてあとから直せることを見ます。
+ * ==================================================================== */
+
+async function walkIn(extra: Record<string, unknown> = {}) {
+  const { date, row } = await pickBookableDate();
+  const res = await api(
+    "/api/admin/orders",
+    asAdmin({
+      method: "POST",
+      body: JSON.stringify({
+        event_date_id: date.id,
+        customer_name: "店頭 太郎",
+        dining_style: "takeout",
+        items: [{ product_id: row.product_id, quantity: 1 }],
+        ...extra,
+      }),
+    })
+  );
+  assert.equal(res.status, 201, `店頭販売が登録できない: ${JSON.stringify(res.body)}`);
+  return (res.body as { order: { id: string; order_number: string } }).order;
+}
+
+async function orderById(id: string) {
+  const { body } = await api("/api/admin/orders", asAdmin());
+  return (
+    body as { orders: Array<{ id: string; payment_status: string; paid_at: string | null }> }
+  ).orders.find((o) => o.id === id)!;
+}
+
+test("店頭販売は、未払いでも登録できる", async () => {
+  const order = await walkIn({ payment_status: "pending" });
+  const found = await orderById(order.id);
+
+  assert.equal(found.payment_status, "pending");
+  assert.equal(
+    found.paid_at,
+    null,
+    "頂いていないお金に支払日時が付いている"
+  );
+});
+
+test("何も言わなければ、これまでどおり「頂いた」で記録する", async () => {
+  const order = await walkIn();
+  const found = await orderById(order.id);
+  assert.equal(found.payment_status, "paid");
+  assert.ok(found.paid_at, "支払日時が入っていない");
+});
+
+test("あとから「決済済み」に直せる。日時も一緒に入る", async () => {
+  const order = await walkIn({ payment_status: "pending" });
+
+  const res = await api(
+    `/api/admin/orders/${order.id}/payment-status`,
+    asAdmin({ method: "PATCH", body: JSON.stringify({ payment_status: "paid" }) })
+  );
+  assert.equal(res.status, 200);
+
+  const found = await orderById(order.id);
+  assert.equal(found.payment_status, "paid");
+  assert.ok(found.paid_at, "支払日時が入っていない");
+});
+
+test("「未決済」に戻すと、支払日時も消える", async () => {
+  // 頂いていないお金に日時が残っているのは、ただの嘘。
+  const order = await walkIn();
+
+  await api(
+    `/api/admin/orders/${order.id}/payment-status`,
+    asAdmin({ method: "PATCH", body: JSON.stringify({ payment_status: "pending" }) })
+  );
+
+  const found = await orderById(order.id);
+  assert.equal(found.payment_status, "pending");
+  assert.equal(found.paid_at, null, "支払日時が残っている");
+});
+
+test("ネット予約のお支払い状況は、この口からは変えられない", async () => {
+  /*
+    あちらのお金は Square が持っています。こちらの表示だけ書き換えると、
+    二度と突き合わせられなくなります。
+  */
+  const { event, date, row } = await pickBookableDate();
+  const placed = await api("/api/orders", {
+    method: "POST",
+    body: orderBody(event.id, date.id, row.product_id, 1),
+  });
+  assert.equal(placed.status, 201);
+
+  const res = await api(
+    `/api/admin/orders/${(placed.body as { id: string }).id}/payment-status`,
+    asAdmin({ method: "PATCH", body: JSON.stringify({ payment_status: "pending" }) })
+  );
+  assert.equal(res.status, 400, "ネット予約が書き換えられている");
+});
+
+test("お支払い状況の変更は、ログインしていないとできない", async () => {
+  const order = await walkIn();
+  const res = await api(`/api/admin/orders/${order.id}/payment-status`, {
+    method: "PATCH",
+    body: JSON.stringify({ payment_status: "pending" }),
+  });
+  assert.equal(res.status, 401);
+});
+
+test("未払いの店頭販売も、キャンセルを取り消せる", async () => {
+  /*
+    戻せない注文は「ネット予約で、お金が入らなかったもの」だけです。
+    店頭の未払いは「あとで頂く」なので、別物として戻せること。
+    `payment_status` だけで弾いていた頃は、これも巻き込んでいました。
+  */
+  const order = await walkIn({ payment_status: "pending" });
+
+  await api(`/api/admin/orders/${order.id}/cancel`, asAdmin({ method: "PATCH" }));
+  const restored = await api(
+    `/api/admin/orders/${order.id}/restore`,
+    asAdmin({ method: "PATCH" })
+  );
+
+  assert.equal(
+    restored.status,
+    200,
+    `未払いの店頭販売が戻せない: ${JSON.stringify(restored.body)}`
+  );
+});

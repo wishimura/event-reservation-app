@@ -46,6 +46,13 @@ export function WalkInOrderForm({
   const [diningStyle, setDiningStyle] = useState<DiningStyle>("takeout");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "credit_card">("cash");
   const [handedOver, setHandedOver] = useState(true);
+  /*
+    もう頂いたか、あとで頂くか。
+
+    既定は「頂いた」です。カウンターではその場でお会計するのが普通で、
+    そうでないほうが例外だからです。あとから注文一覧で直せます。
+  */
+  const [paidAlready, setPaidAlready] = useState(true);
 
   /** Today if the shop is open today, otherwise the next day still to come. */
   const defaultDateId = useCallback(() => {
@@ -131,6 +138,7 @@ export function WalkInOrderForm({
             customer_phone: phone,
             dining_style: diningStyle,
             payment_method: paymentMethod,
+            payment_status: paidAlready ? "paid" : "pending",
             handed_over: handedOver,
             items: lines.map((l) => ({
               product_id: l.inv.product_id,
@@ -338,6 +346,28 @@ export function WalkInOrderForm({
             </span>
           </label>
         </div>
+
+        {/*
+          お会計が済んでいるか。
+
+          「先に商品だけ渡して、お会計はあとで」がカウンターでは起きます。
+          これまでは必ず「頂いた」で記録していたので、未払いがそのまま
+          売上に混ざっていました。
+        */}
+        <label className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={paidAlready}
+            onChange={(e) => setPaidAlready(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>
+            お支払い済み
+            <span className="block text-xs text-slate-400">
+              外すと「未払い」で登録されます。あとで注文一覧から変更できます
+            </span>
+          </span>
+        </label>
 
         {error && (
           <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>

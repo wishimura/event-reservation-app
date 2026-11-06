@@ -111,6 +111,8 @@ interface WalkInBody {
   customer_phone?: string;
   dining_style?: DiningStyle;
   payment_method?: "cash" | "credit_card";
+  /** 省略時は「頂いた」。`"pending"` のときだけ未払いで記録します。 */
+  payment_status?: "paid" | "pending";
   /** Sold and handed over at the same time, which is the usual counter sale. */
   handed_over?: boolean;
   items: Array<{ product_id: string; quantity: number }>;
@@ -158,6 +160,16 @@ export async function POST(request: NextRequest) {
 
   const paymentMethod = body.payment_method === "credit_card" ? "credit_card" : "cash";
 
+  /*
+    もう頂いたか、あとで頂くか。
+
+    カウンターでは「先に商品だけ渡して、お会計はあとで」が起きます。
+    これまでは必ず「頂いた」で記録していたので、未払いのまま売上に
+    混ざっていました。`paid_at` も揃えて空にします——頂いていない
+    お金に日時が付いているのは、ただの嘘です。
+  */
+  const paidAlready = body.payment_status !== "pending";
+
   const MAX_ATTEMPTS = 3;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -201,11 +213,11 @@ export async function POST(request: NextRequest) {
           customer_email: body.customer_email?.trim() ?? "",
           customer_phone: body.customer_phone?.trim() ?? "",
           dining_style: diningStyle,
-          payment_status: "paid",
+          payment_status: paidAlready ? "paid" : "pending",
           payment_method: paymentMethod,
           order_status: "confirmed",
           pickup_status: handedOver ? "picked_up" : "not_picked_up",
-          paid_at: new Date(),
+          paid_at: paidAlready ? new Date() : null,
           source: "walk_in",
         });
       });
