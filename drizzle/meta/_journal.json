@@ -99,6 +99,13 @@
       "when": 1793170816211,
       "tag": "0013_add_product_show_on_top",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793170816212,
+      "tag": "0014_add_product_walk_in_only",
+      "breakpoints": true
     }
   ]
 }

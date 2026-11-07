@@ -13,7 +13,9 @@ type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
  * can book and no screen explains.
  *
  * Hidden rows are left out: the operator took them off sale deliberately, so
- * they should not be able to close the day on their own.
+ * they should not be able to close the day on their own. Counter-only
+ * products are left out for the same reason — they are never bookable, so
+ * counting them would close every date the moment one existed.
  *
  * One statement rather than a read and a write. This runs inside the order
  * transaction, while the day's stock rows are locked, and every round trip
@@ -26,11 +28,14 @@ export async function refreshDateReservationStatus(
   await tx.execute(sql`
     WITH stock AS (
       SELECT
-        production_quantity - reserved_quantity AS remaining,
-        warning_threshold,
-        is_sold_out OR reserved_quantity >= production_quantity AS sold_out
-      FROM daily_product_inventory
-      WHERE event_date_id = ${eventDateId} AND is_hidden = false
+        i.production_quantity - i.reserved_quantity AS remaining,
+        i.warning_threshold,
+        i.is_sold_out OR i.reserved_quantity >= i.production_quantity AS sold_out
+      FROM daily_product_inventory i
+      JOIN products p ON p.id = i.product_id
+      WHERE i.event_date_id = ${eventDateId}
+        AND i.is_hidden = false
+        AND p.walk_in_only = false
     ),
     verdict AS (
       SELECT

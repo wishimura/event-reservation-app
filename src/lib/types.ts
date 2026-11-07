@@ -27,6 +27,8 @@ export interface Product {
   is_active: boolean;
   /** トップページの丸い写真に出すか。並び順とは別に持ちます。 */
   show_on_top: boolean;
+  /** 予約は受けず、当日の店頭だけで売る商品か。売り切れとは別物です。 */
+  walk_in_only: boolean;
 }
 
 export interface EventDate {

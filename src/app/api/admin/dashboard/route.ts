@@ -115,7 +115,8 @@ export async function GET() {
      * Capacity 0 on a visible product reads to customers as SOLD OUT, so a
      * product added and left at the default never sells and nothing says why.
      * Rows the operator deliberately hid are excluded — that is a choice,
-     * not the trap.
+     * not the trap. So are counter-only products: they are never bookable,
+     * and warning about their capacity would be noise every day.
      */
     const zeroCapacity = upcomingDateIds.length
       ? await db
@@ -138,6 +139,7 @@ export async function GET() {
               eq(eventDates.is_active, true),
               eq(products.is_active, true),
               eq(dailyProductInventory.is_hidden, false),
+              eq(products.walk_in_only, false),
               eq(dailyProductInventory.production_quantity, 0)
             )
           )

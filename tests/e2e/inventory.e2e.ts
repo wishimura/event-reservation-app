@@ -105,6 +105,58 @@ test.describe("S-03 在庫", () => {
     await expect(productCard(page, FIXTURE.plenty.name)).toContainText("SOLD OUT");
   });
 
+  test("当日店頭だけの商品は、売切と区別して並び、予約には進めない", async ({ page }) => {
+    /*
+      「売り切れ」と「はじめから予約を受けない」は別物です。
+
+      生産数を0にして代用すると、お客様には売り切れと同じ顔に見えて、
+      作ったのに出せなかったのか、はじめから店頭だけなのかが分かりません。
+      ここで見るのは、札が入れ替わること・数量が選べないこと・
+      それでも在庫は持ったままであることの3つです。
+    */
+    await e2eDb().query("update products set walk_in_only = true where name = $1", [
+      FIXTURE.plenty.name,
+    ]);
+
+    await page.goto(`/reserve/${data.today.id}`);
+    const card = productCard(page, FIXTURE.plenty.name);
+    await expect(card).toContainText("当日店頭販売のみ");
+    await expect(card).not.toContainText("SOLD OUT");
+    await expect(card.getByRole("button", { name: "1つ増やす" })).toHaveCount(0);
+
+    // 売り切れの商品のほうは、今までどおり SOLD OUT のまま。
+    await expect(productCard(page, FIXTURE.soldOut.name)).toContainText("SOLD OUT");
+  });
+
+  test("当日店頭だけの商品は、画面を飛ばして直接送っても予約にならない", async ({
+    page,
+  }) => {
+    await e2eDb().query("update products set walk_in_only = true where name = $1", [
+      FIXTURE.plenty.name,
+    ]);
+
+    const res = await page.request.post("/api/orders", {
+      data: {
+        event_id: data.eventId,
+        event_date_id: data.today.id,
+        customer_name: "テスト 太郎",
+        customer_email: "e2e@example.com",
+        customer_phone: "090-1111-2222",
+        dining_style: "takeout",
+        items: [{ product_id: data.products.plenty, quantity: 1 }],
+      },
+    });
+    expect(res.ok()).toBe(false);
+
+    // 断られた以上、受付枠は1つも減っていないこと。
+    const { rows } = await e2eDb().query<{ reserved_quantity: number }>(
+      `select reserved_quantity from daily_product_inventory
+        where event_date_id = $1 and product_id = $2`,
+      [data.today.id, data.products.plenty]
+    );
+    expect(rows[0].reserved_quantity).toBe(0);
+  });
+
   test("その日だけ並ばない商品があれば、画面が知らせて、その場で直せる", async ({ page }) => {
     /*
       （受取日 × 商品）の行が無い商品は、その日には存在しない扱いになります。

@@ -156,6 +156,22 @@ export async function holdStockAndCreateOrder(
     );
   }
 
+  /*
+    当日店頭だけの商品は、ネットの予約では受け取らない。
+
+    画面には並んでいて数量が選べないだけなので、古いカートが残っていたり、
+    画面を飛ばして直接送られたりすれば、ここまで届きます。店頭からの登録
+    （`walk_in`）は本来の売り方なので、そちらは通します。
+  */
+  if (params.source === "online") {
+    const counterOnly = rows.find((r) => r.product.walk_in_only);
+    if (counterOnly) {
+      throw new OrderValidationError(
+        `「${counterOnly.product.name}」は当日店頭販売のみのため、ご予約いただけません`
+      );
+    }
+  }
+
   // Deterministic order avoids deadlocks between concurrent orders.
   const sortedRows = [...rows].sort((a, b) =>
     a.inventory.id.localeCompare(b.inventory.id)

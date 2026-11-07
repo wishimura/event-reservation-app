@@ -53,6 +53,8 @@ function restoreCart(
 
       const inv = inventory.find((i) => i.product_id === productId);
       if (!inv || inv.is_sold_out || inv.is_hidden) continue;
+      // 予約を受けない商品は、古いカートに残っていても戻さない。
+      if (inv.product?.walk_in_only) continue;
 
       const remaining = Math.max(0, inv.production_quantity - inv.reserved_quantity);
       const quantity = Math.min(Math.max(0, Math.trunc(wanted)), remaining);
@@ -260,7 +262,16 @@ export default function ProductSelectionPage() {
             if (!inv.product) return null;
             const product = inv.product;
             const remaining = getRemainingQuantity(inv);
-            const isSoldOut = inv.is_sold_out || remaining === 0;
+            /*
+              「売り切れ」と「はじめから予約を受けない」は別物です。
+
+              どちらも数量は選べませんが、理由が違うので札を分けます。
+              売り切れは在庫の話、当日店頭のみは売り方の話で、後者は
+              「作らなかった」わけではありません。
+            */
+            const counterOnly = product.walk_in_only === true;
+            const isSoldOut = !counterOnly && (inv.is_sold_out || remaining === 0);
+            const canOrder = !counterOnly && !isSoldOut;
             const qty = cart.get(product.id) ?? 0;
             const atCap = qty >= remaining;
             // Only call out the count when it is actually scarce; "残り20個"
@@ -275,7 +286,7 @@ export default function ProductSelectionPage() {
                   e.currentTarget.classList.remove("animate-cap-nudge")
                 }
                 className={`bg-white rounded-2xl border border-zinc-200 overflow-hidden transition-opacity ${
-                  isSoldOut ? "opacity-50" : ""
+                  canOrder ? "" : "opacity-50"
                 }`}
               >
                 {/*
@@ -287,7 +298,7 @@ export default function ProductSelectionPage() {
                 */}
                 <button
                   type="button"
-                  onClick={() => setDetail({ product, soldOut: isSoldOut })}
+                  onClick={() => setDetail({ product, soldOut: !canOrder })}
                   aria-label={`${product.name}の詳細を見る`}
                   className="flex w-full gap-4 p-4 text-left"
                 >
@@ -310,6 +321,15 @@ export default function ProductSelectionPage() {
                       <div className="absolute inset-0 bg-zinc-900/50 flex items-center justify-center">
                         <span className="text-white text-xs font-bold bg-zinc-800 px-2 py-1 rounded">
                           SOLD OUT
+                        </span>
+                      </div>
+                    )}
+                    {counterOnly && (
+                      <div className="absolute inset-0 bg-zinc-900/45 flex items-center justify-center p-1">
+                        <span className="rounded bg-amber-500 px-1.5 py-1 text-center text-[10px] font-bold leading-tight text-white">
+                          当日
+                          <br />
+                          店頭のみ
                         </span>
                       </div>
                     )}
@@ -336,7 +356,14 @@ export default function ProductSelectionPage() {
                     <p className="text-brand-600 font-bold text-base">
                       {formatPrice(product.price)}
                     </p>
-                    {!isSoldOut && isLowStock && (
+                    {counterOnly && (
+                      <div className="mt-1.5">
+                        <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-bold text-amber-800">
+                          当日店頭販売のみ（ご予約不可）
+                        </span>
+                      </div>
+                    )}
+                    {canOrder && isLowStock && (
                       <div className="mt-1.5">
                         <span className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-xs font-bold text-red-700">
                           <span className="h-1.5 w-1.5 rounded-full bg-current" />
@@ -348,7 +375,7 @@ export default function ProductSelectionPage() {
                 </button>
 
                 {/* Quantity Selector */}
-                {!isSoldOut && (
+                {canOrder && (
                   <>
                   <div className="border-t border-zinc-100 px-4 py-3 flex items-center justify-between bg-paper/50">
                     <span

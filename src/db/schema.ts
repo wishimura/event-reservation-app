@@ -143,6 +143,19 @@ export const products = pgTable(
      * 足した時点で全部 false になるため、トップが空になるのを避ける）。
      */
     show_on_top: boolean("show_on_top").notNull().default(false),
+    /**
+     * 予約は受けず、当日の店頭だけで売る商品か。
+     *
+     * 「売り切れ」とは別物です。売り切れは在庫の話で、こちらは**売り方**の
+     * 話。生産数を0にして代用すると、お客様の画面では売り切れと同じ
+     * 「SOLD OUT」になり、作ったのに出せなかったのか、はじめから予約を
+     * 受けていないのかが区別できません。店頭で何個売れたかも残せません。
+     *
+     * この列が true のとき、商品選択の画面には並びますが数量は選べず、
+     * 「当日店頭販売のみ」と出ます。生産数はふつうに入れてよく、
+     * 店頭販売登録から売れば、そのぶん在庫が減ります。
+     */
+    walk_in_only: boolean("walk_in_only").notNull().default(false),
   },
   (t) => [
     index("products_event_id_idx").on(t.event_id),

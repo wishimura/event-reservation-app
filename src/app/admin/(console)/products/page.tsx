@@ -19,6 +19,8 @@ interface Draft {
   extra_image_urls: string[];
   /** トップページの丸い写真に出すか。 */
   show_on_top: boolean;
+  /** 予約は受けず、当日の店頭だけで売るか。 */
+  walk_in_only: boolean;
   price: string;
   sort_order: string;
   is_active: boolean;
@@ -31,6 +33,7 @@ function toDraft(p: ProductWithCount): Draft {
     image_url: p.image_url ?? "",
     extra_image_urls: p.extra_image_urls ?? [],
     show_on_top: p.show_on_top ?? false,
+    walk_in_only: p.walk_in_only ?? false,
     price: String(p.price),
     sort_order: String(p.sort_order),
     is_active: p.is_active,
@@ -43,6 +46,7 @@ const newDraft: Draft = {
   image_url: "",
   extra_image_urls: [],
   show_on_top: false,
+  walk_in_only: false,
   price: "",
   sort_order: "",
   is_active: true,
@@ -106,6 +110,7 @@ export default function ProductsPage() {
           image_url: draft.image_url,
           extra_image_urls: draft.extra_image_urls,
           show_on_top: draft.show_on_top,
+          walk_in_only: draft.walk_in_only,
           price: parseInt(draft.price, 10) || 0,
           sort_order: parseInt(draft.sort_order, 10) || 0,
           is_active: draft.is_active,
@@ -135,6 +140,7 @@ export default function ProductsPage() {
             image_url: addDraft.image_url,
             extra_image_urls: addDraft.extra_image_urls,
             show_on_top: addDraft.show_on_top,
+            walk_in_only: addDraft.walk_in_only,
             price: parseInt(addDraft.price, 10) || 0,
             sort_order: parseInt(addDraft.sort_order, 10) || 0,
             default_capacity: parseInt(addCapacity, 10) || 0,
@@ -248,6 +254,33 @@ export default function ProductsPage() {
               入口の丸い写真に並びます。写真のある商品から先頭7つまで。
               <br />
               1つも選んでいないあいだは、並び順の先頭から出ます。
+            </span>
+          </span>
+        </label>
+        {/*
+          予約を受けるか、当日の店頭だけで売るか。
+
+          売り切れとは別物です。生産数を0にして代わりにすると、お客様には
+          売り切れと同じ「SOLD OUT」に見えますし、店頭販売登録でも打てなく
+          なって、何個売れたかが残りません。
+        */}
+        <label className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={d.walk_in_only}
+            onChange={(e) => set({ ...d, walk_in_only: e.target.checked })}
+            className="mt-0.5"
+          />
+          <span>
+            当日店頭販売のみ（予約を受けない）
+            <span className="block text-xs text-slate-400">
+              商品選択の画面には並びますが、数量は選べず「当日店頭販売のみ」と
+              出ます。
+              <br />
+              <strong className="font-medium text-slate-500">
+                生産数はふつうに入れてください。
+              </strong>
+              店頭販売登録から売れば在庫が減ります。
             </span>
           </span>
         </label>
@@ -447,6 +480,11 @@ export default function ProductsPage() {
                       {p.show_on_top && (
                         <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
                           トップに表示
+                        </span>
+                      )}
+                      {p.walk_in_only && (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                          当日店頭のみ
                         </span>
                       )}
                     </div>
