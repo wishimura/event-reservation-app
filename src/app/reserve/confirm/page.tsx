@@ -1052,7 +1052,7 @@ export default function ConfirmPage() {
           <div className="space-y-4">
             <div id="field-name">
               <label className="block text-xs text-zinc-500 mb-1.5 font-medium">
-                お名前 <span className="text-red-400">*</span>
+                お名前（ニックネーム可） <span className="text-red-400">*</span>
               </label>
               <input
                 type="text"
