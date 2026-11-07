@@ -14,25 +14,37 @@ import {
 // Availability changes as orders come in, so never serve this from the cache.
 export const dynamic = "force-dynamic";
 
-/*
-  ゲゲゲ忌のロゴ。
-
-  お店から支給されたら `public/` に置いて、ここを
-  `{ src: "/gegege-logo.png", alt: "ゲゲゲ忌2026" }` にすれば
-  見出しの右に出ます。**こちらで似せて作ることはしません。**
-  許諾のある意匠なので、本物を置くか、置かないかのどちらかです。
-*/
-const GEGEGE_LOGO: { src: string; alt: string } | null = null;
-
-/** 見出しの左右に置く、白い丸に収めたロゴ。 */
-function LogoBadge({ src, alt }: { src: string; alt: string }) {
+/**
+ * 見出しの左右に置くロゴ。
+ *
+ * `filled` は「渡した画像がすでに丸い」という意味です。ゲゲゲ忌の
+ * ロゴは珊瑚色の円そのものなので、白い円に載せると外側に白い輪が
+ * できてしまいます。その場合は枠を敷かず、画像で円を埋めます。
+ */
+function LogoBadge({
+  src,
+  alt,
+  width,
+  height,
+  filled = false,
+}: {
+  src: string;
+  alt: string;
+  width: number;
+  height: number;
+  filled?: boolean;
+}) {
   return (
-    <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white p-1.5 sm:h-20 sm:w-20 sm:p-2.5">
+    <span
+      className={`flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full sm:h-20 sm:w-20 ${
+        filled ? "" : "bg-white p-1.5 sm:p-2.5"
+      }`}
+    >
       <Image
         src={src}
         alt={alt}
-        width={931}
-        height={977}
+        width={width}
+        height={height}
         priority
         className="h-full w-full object-contain"
       />
@@ -95,9 +107,14 @@ export default async function EventTopPage() {
             狭い画面では丸が小さくなり、名前は2行に折り返します。丸は
             縮めない（`shrink-0`）かわりに、名前のほうを縮めます。
           */}
-          <div className="flex items-center justify-center gap-3 sm:gap-6">
-            <LogoBadge src="/logo.png" alt="となりのと commons kitchen" />
-            <h1 className="min-w-0 text-center text-[clamp(1.5rem,5.5vw,2.75rem)] font-extrabold leading-[1.2] text-fes-coral">
+          <div className="flex items-center justify-center gap-2.5 sm:gap-6">
+            <LogoBadge
+              src="/logo.png"
+              alt="となりのと commons kitchen"
+              width={931}
+              height={977}
+            />
+            <h1 className="min-w-0 text-center text-[clamp(1.2rem,5.5vw,2.75rem)] font-extrabold leading-[1.2] text-fes-coral">
               {/*
                 折り返しは**空白のところだけ**。
 
@@ -116,9 +133,13 @@ export default async function EventTopPage() {
                   </Fragment>
                 ))}
             </h1>
-            {GEGEGE_LOGO && (
-              <LogoBadge src={GEGEGE_LOGO.src} alt={GEGEGE_LOGO.alt} />
-            )}
+            <LogoBadge
+              src="/gegege-ki-logo.png"
+              alt="ゲゲゲ忌 水木マンガの生まれた街 調布"
+              width={400}
+              height={400}
+              filled
+            />
           </div>
 
           {/*
