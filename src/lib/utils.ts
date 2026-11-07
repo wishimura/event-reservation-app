@@ -1,15 +1,3 @@
-/**
- * トップの丸い写真に出す上限。
- *
- * 品書きではないので、顔ぶれが分かれば足ります。全部並べると青い帯だけで
- * 画面が埋まり、肝心の受取日が下に消えます。
- *
- * サーバー（`queries.ts`）と管理画面の両方が見るので、どちらにも寄らない
- * ここに置きます。管理画面は "use client" なので、DB を読む側から持ち出すと
- * ブラウザに DB 層ごと配られてしまいます。
- */
-export const SHOWCASE_LIMIT = 7;
-
 export function formatDate(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");
   const days = ["日", "月", "火", "水", "木", "金", "土"];

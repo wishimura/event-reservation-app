@@ -43,7 +43,6 @@ interface ProductBody {
   description?: string;
   image_url?: string;
   extra_image_urls?: unknown;
-  show_on_top?: boolean;
   walk_in_only?: boolean;
   price: number;
   sort_order?: number;
@@ -118,7 +117,6 @@ export async function POST(request: NextRequest) {
           description: body.description ?? "",
           image_url: (body.image_url ?? "").trim() || null,
           extra_image_urls: cleanExtraImageUrls(body.extra_image_urls),
-          show_on_top: body.show_on_top === true,
           walk_in_only: body.walk_in_only === true,
           price: body.price,
           sort_order: Number.isInteger(body.sort_order)

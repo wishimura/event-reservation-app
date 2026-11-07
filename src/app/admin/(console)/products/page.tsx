@@ -6,7 +6,7 @@ import { LoadErrorNotice } from "@/components/LoadErrorNotice";
 import { ExtraProductImages } from "@/components/ExtraProductImages";
 import { ProductImageField } from "@/components/ProductImageField";
 import { Toast } from "@/components/Toast";
-import { formatPrice, SHOWCASE_LIMIT } from "@/lib/utils";
+import { formatPrice } from "@/lib/utils";
 import type { Product } from "@/lib/types";
 
 type ProductWithCount = Product & { order_count: number };
@@ -17,8 +17,6 @@ interface Draft {
   image_url: string;
   /** 2枚目以降。詳細を開いたときだけ並ぶ写真。 */
   extra_image_urls: string[];
-  /** トップページの丸い写真に出すか。 */
-  show_on_top: boolean;
   /** 予約は受けず、当日の店頭だけで売るか。 */
   walk_in_only: boolean;
   price: string;
@@ -32,7 +30,6 @@ function toDraft(p: ProductWithCount): Draft {
     description: p.description,
     image_url: p.image_url ?? "",
     extra_image_urls: p.extra_image_urls ?? [],
-    show_on_top: p.show_on_top ?? false,
     walk_in_only: p.walk_in_only ?? false,
     price: String(p.price),
     sort_order: String(p.sort_order),
@@ -45,7 +42,6 @@ const newDraft: Draft = {
   description: "",
   image_url: "",
   extra_image_urls: [],
-  show_on_top: false,
   walk_in_only: false,
   price: "",
   sort_order: "",
@@ -96,9 +92,6 @@ export default function ProductsPage() {
     }
   }
 
-  /** 写真があって、トップに出す指定のある商品の数。 */
-  const topCount = products.filter((p) => p.show_on_top && p.image_url).length;
-
   async function handleSave(id: string) {
     setBusyId(id);
     try {
@@ -109,7 +102,6 @@ export default function ProductsPage() {
           description: draft.description,
           image_url: draft.image_url,
           extra_image_urls: draft.extra_image_urls,
-          show_on_top: draft.show_on_top,
           walk_in_only: draft.walk_in_only,
           price: parseInt(draft.price, 10) || 0,
           sort_order: parseInt(draft.sort_order, 10) || 0,
@@ -139,7 +131,6 @@ export default function ProductsPage() {
             description: addDraft.description,
             image_url: addDraft.image_url,
             extra_image_urls: addDraft.extra_image_urls,
-            show_on_top: addDraft.show_on_top,
             walk_in_only: addDraft.walk_in_only,
             price: parseInt(addDraft.price, 10) || 0,
             sort_order: parseInt(addDraft.sort_order, 10) || 0,
@@ -236,28 +227,6 @@ export default function ProductsPage() {
           onChange={(urls) => set({ ...d, extra_image_urls: urls })}
         />
         {/*
-          トップの丸い写真に出すかどうか。
-
-          並び順とは別に持ちます。並び順で代わりにすると、トップに出したい
-          ものを上げるたびに、お客様が商品を選ぶ画面の並びまで動きます。
-        */}
-        <label className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={d.show_on_top}
-            onChange={(e) => set({ ...d, show_on_top: e.target.checked })}
-            className="mt-0.5"
-          />
-          <span>
-            トップページに出す
-            <span className="block text-xs text-slate-400">
-              入口の丸い写真に並びます。写真のある商品から先頭7つまで。
-              <br />
-              1つも選んでいないあいだは、並び順の先頭から出ます。
-            </span>
-          </span>
-        </label>
-        {/*
           予約を受けるか、当日の店頭だけで売るか。
 
           売り切れとは別物です。生産数を0にして代わりにすると、お客様には
@@ -327,29 +296,8 @@ export default function ProductsPage() {
           </button>
         )}
       </div>
-      <p className="text-sm text-slate-500">
+      <p className="mb-6 text-sm text-slate-500">
         価格と説明はお客様向けページにそのまま出ます。受付上限の調整は「在庫管理」です。
-      </p>
-      {/*
-        いま何品がトップに出ているか。
-
-        1品ずつ開かないと分からないのでは、7枠の取り合いを管理できません。
-        上限を超えて選んだときは、そのことも言います（黙って切り捨てると、
-        選んだのに出ない商品の理由が分かりません）。
-      */}
-      <p className="mb-6 mt-1 text-sm text-slate-500">
-        トップページの丸い写真：
-        {topCount === 0 ? (
-          <span className="font-medium text-slate-700">
-            未選択（並び順の先頭{SHOWCASE_LIMIT}件が出ています）
-          </span>
-        ) : (
-          <span className="font-medium text-slate-700">
-            {topCount} 品を選択中
-            {topCount > SHOWCASE_LIMIT &&
-              `（先頭 ${SHOWCASE_LIMIT} 品までが出ます）`}
-          </span>
-        )}
       </p>
 
       <Toast message={message} />
@@ -475,11 +423,6 @@ export default function ProductsPage() {
                       {p.extra_image_urls?.length > 0 && (
                         <span className="text-xs text-slate-400">
                           写真 {p.extra_image_urls.length + 1} 枚
-                        </span>
-                      )}
-                      {p.show_on_top && (
-                        <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
-                          トップに表示
                         </span>
                       )}
                       {p.walk_in_only && (
