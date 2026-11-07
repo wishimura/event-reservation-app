@@ -114,22 +114,34 @@ export default async function EventTopPage() {
               width={931}
               height={977}
             />
-            <h1 className="min-w-0 text-center text-[clamp(1.2rem,5.5vw,2.75rem)] font-extrabold leading-[1.2] text-fes-coral">
+            <h1 className="min-w-0 text-center text-[clamp(1.2rem,5.5vw,2.75rem)] font-extrabold leading-[1.2] text-fes-coral [overflow-wrap:break-word] [word-break:keep-all]">
               {/*
-                折り返しは**空白のところだけ**。
+                折り返してよい場所を、こちらから決めます。
 
-                日本語は本来どこでも改行できるので、素のままだと狭い画面で
-                「ゲゲゲ忌2026 コ／ラボメニュー」のように語の途中で割れます。
-                催しの名前が割れると読み違えられるので、空白で区切った
-                かたまりごとに `inline-block` で包んで、中では折り返させません。
+                日本語は本来どの文字と文字のあいだでも改行できます。その
+                ままだと「ゲゲゲ忌2026コラボメ／ニュー」のように語の途中で
+                割れました。催しの名前が割れると読み違えられます。
+
+                `word-break: keep-all` で自動の切れ目を全部止めたうえで、
+                **数字のかたまりの前後にだけ** `<wbr>` を置きます。
+                「ゲゲゲ忌2026コラボメニュー」なら「ゲゲゲ忌2026」で折れて
+                「コラボメニュー」が次の行に落ちます。お店が名前に空白を
+                入れていなくても効くので、データに手を入れずに済みます。
+
+                `<wbr>` は**折れてよい場所**を示すだけで、空白にはなりません。
+                PC のように1行に収まる幅では、今までどおり1行のままです。
+
+                どうしても収まらないとき（極端に狭い画面）だけは、
+                `overflow-wrap: break-word` が最後の逃げ道になって、
+                はみ出すかわりにそこで折ります。
               */}
               {event.name
-                .split(/\s+/)
+                .split(/(\d+)/)
                 .filter(Boolean)
                 .map((part, i) => (
                   <Fragment key={i}>
-                    {i > 0 && " "}
-                    <span className="inline-block">{part}</span>
+                    {i > 0 && <wbr />}
+                    {part}
                   </Fragment>
                 ))}
             </h1>
