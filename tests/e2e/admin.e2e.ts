@@ -280,11 +280,22 @@ test.describe("S-04 管理画面", () => {
       "メール未送信"
     );
 
+    // 絞り込みは残件数も兼ねます。1件なら「1件」と出ること。
+    const onlyFailed = page.getByRole("checkbox", {
+      name: /メール未送信のみ（1件）/,
+    });
+    await onlyFailed.check();
+    await expect(rowContaining(page, order.orderNumber)).toBeVisible();
+
     // 再送して届いた、という記録。印はここで消えること。
     await logMail("ok");
     await page.goto("/admin/orders");
     await expect(rowContaining(page, order.orderNumber)).not.toContainText(
       "メール未送信"
     );
+    // 残り0件になったので、絞り込み自体が消えること。
+    await expect(
+      page.getByRole("checkbox", { name: /メール未送信のみ/ })
+    ).toHaveCount(0);
   });
 });

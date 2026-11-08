@@ -64,6 +64,8 @@ export default function OrdersPage() {
   const [filterDate, setFilterDate] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterSearch, setFilterSearch] = useState("");
+  /** 確認メールが届いていない注文だけに絞るか。 */
+  const [filterMailFailed, setFilterMailFailed] = useState(false);
 
   /**
    * How many rows are on the screen at once.
@@ -81,7 +83,7 @@ export default function OrdersPage() {
 
   useEffect(() => {
     applyFilters();
-  }, [orders, filterDate, filterStatus, filterSearch]);
+  }, [orders, filterDate, filterStatus, filterSearch, filterMailFailed]);
 
   async function loadOrders() {
     setLoadError("");
@@ -103,6 +105,11 @@ export default function OrdersPage() {
     }
   }
 
+  /** 確認メールが届いていない注文の数。絞り込みの札と残件数を兼ねます。 */
+  const mailFailedCount = orders.filter(
+    (o) => o.confirmation_mail_failed
+  ).length;
+
   function applyFilters() {
     setVisibleCount(PAGE_SIZE);
     let result = [...orders];
@@ -112,6 +119,9 @@ export default function OrdersPage() {
     }
     if (filterStatus) {
       result = result.filter((o) => o.order_status === filterStatus);
+    }
+    if (filterMailFailed) {
+      result = result.filter((o) => o.confirmation_mail_failed);
     }
     if (filterSearch) {
       const q = filterSearch.toLowerCase();
@@ -448,6 +458,28 @@ export default function OrdersPage() {
               <option value="cancelled">キャンセル</option>
             </select>
           </div>
+          {/*
+            届いていないものだけを並べる。
+
+            62件が一覧に散らばった日、札を目で探すしかありませんでした。
+            絞ってから上から順に再送すれば、届いたものはその場で一覧から
+            外れるので、**残っている数がそのまま残件数**になります。
+
+            一件も無いときは出しません。平時は何の意味も持たない操作で、
+            置いておくと「これは何だろう」と押させてしまいます。
+          */}
+          {mailFailedCount > 0 && (
+            <div className="flex items-end">
+              <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                <input
+                  type="checkbox"
+                  checked={filterMailFailed}
+                  onChange={(e) => setFilterMailFailed(e.target.checked)}
+                />
+                メール未送信のみ（{mailFailedCount}件）
+              </label>
+            </div>
+          )}
         </div>
       </div>
 
