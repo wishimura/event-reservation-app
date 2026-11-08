@@ -8,6 +8,7 @@ import {
   pickupOrder,
   reserve,
   resetFixture,
+  rowContaining,
   type Fixture,
 } from "./_helpers";
 
@@ -218,5 +219,26 @@ test.describe("S-05 受取管理と名寄せ", () => {
       .getByRole("button", { name: "取消" })
       .click();
     await expect(group).toContainText("2/3 受取済");
+  });
+
+  test("注文一覧からも、渡し終わったものに印を付けられる", async ({ page }) => {
+    /*
+      当日は注文一覧を開いたまま進めることが多く、渡すたびに「受取管理」へ
+      移るのは現実的ではありません。同じことが一覧の中でもできること、
+      押し間違えたら戻せることを見ます。
+    */
+    const { first } = await placeOrders(page);
+
+    await loginAsAdmin(page);
+    await page.goto("/admin/orders");
+    const row = rowContaining(page, first.orderNumber);
+    await expect(row).toContainText("未受取");
+    await row.click();
+
+    await page.getByRole("button", { name: "「受取済」にする" }).click();
+    await expect(rowContaining(page, first.orderNumber)).toContainText("受取済");
+
+    await page.getByRole("button", { name: "「未受取」に戻す" }).click();
+    await expect(rowContaining(page, first.orderNumber)).toContainText("未受取");
   });
 });
