@@ -164,8 +164,8 @@ export default async function EventTopPage() {
           <Image
             src="/gegege-2026-dishes.png"
             alt="ゲゲゲ忌2026 コラボメニューの料理"
-            width={832}
-            height={621}
+            width={1032}
+            height={963}
             priority
             sizes="(min-width: 640px) 34rem, 100vw"
             className="mx-auto mt-6 h-auto w-full max-w-[34rem]"
