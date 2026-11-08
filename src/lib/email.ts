@@ -276,6 +276,99 @@ export function buildShopEmail(payload: OrderMailPayload) {
 }
 
 /**
+ * お客様あての確認メールだけを、もう一度送る。
+ *
+ * 配信事業者の1日の上限に当たった日、62件の予約が確認メールなしで通りました。
+ * 予約そのものは生きているので、必要なのは**あとからもう一通送ること**だけ
+ * です。それまでは、お店が1件ずつ電話するしかありませんでした。
+ *
+ * お店あての通知は送りません。お店はすでに注文一覧で見ているので、
+ * ここで送っても減るのは残りの送信枠だけです。
+ *
+ * 送れたかどうかを返します。`sendOrderEmails` は注文の裏で走るので結果を
+ * 返しませんが、こちらは人がボタンを押して待っているので、何が起きたかを
+ * その場に返す必要があります。
+ */
+export async function resendCustomerEmail(
+  payload: OrderMailPayload
+): Promise<{ ok: boolean; message: string }> {
+  if (!resend || !mailFrom) {
+    await recordIncident({
+      area: "email",
+      source: "server",
+      stage: "mail_config",
+      outcome: "error",
+      order_number: payload.order_number,
+      customer_email: payload.customer_email,
+      message:
+        "メールの設定（RESEND_API_KEY / MAIL_FROM）が無いため、再送できませんでした",
+    });
+    return {
+      ok: false,
+      message: "メールの設定がないため送信できませんでした",
+    };
+  }
+
+  const mail = buildCustomerEmail(payload);
+
+  try {
+    const result = await resend.emails.send({
+      from: mailFrom,
+      to: payload.customer_email,
+      subject: mail.subject,
+      html: mail.html,
+      text: mail.text,
+    });
+
+    if (result.error) {
+      console.error(`Resend to ${payload.customer_email} rejected:`, result.error);
+      await recordIncident({
+        area: "email",
+        source: "server",
+        stage: "customer_mail",
+        outcome: "error",
+        order_number: payload.order_number,
+        customer_email: payload.customer_email,
+        message: "メールが配信事業者に断られました",
+        detail: { error: result.error, resent: true },
+      });
+      return {
+        ok: false,
+        message: `配信事業者に断られました（${result.error.message}）`,
+      };
+    }
+
+    await recordIncident({
+      area: "email",
+      source: "server",
+      stage: "customer_mail",
+      outcome: "ok",
+      order_number: payload.order_number,
+      customer_email: payload.customer_email,
+      message: "確認メールを再送しました",
+      detail: { resent: true },
+    });
+    return { ok: true, message: "確認メールを再送しました" };
+  } catch (error) {
+    console.error(`Resend to ${payload.customer_email} failed:`, error);
+    await recordIncident({
+      area: "email",
+      source: "server",
+      stage: "customer_mail",
+      outcome: "error",
+      order_number: payload.order_number,
+      customer_email: payload.customer_email,
+      message: "メールを送信できませんでした",
+      detail: {
+        reason: error instanceof Error ? error.message : String(error),
+        resent: true,
+      },
+    });
+    return { ok: false, message: "メールを送信できませんでした" };
+  }
+}
+
+/**
  * Sends the customer confirmation and the shop notification.
  * Resolves even when sending fails — check the logs, not the return value.
  */

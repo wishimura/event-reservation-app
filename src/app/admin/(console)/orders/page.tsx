@@ -57,6 +57,8 @@ export default function OrdersPage() {
   const [payingId, setPayingId] = useState<string | null>(null);
   /** 受取ステータスを書き換え中の注文。二度押しを止めるためだけに持ちます。 */
   const [pickingId, setPickingId] = useState<string | null>(null);
+  /** 確認メールを再送中の注文。 */
+  const [resendingId, setResendingId] = useState<string | null>(null);
 
   // Filters
   const [filterDate, setFilterDate] = useState("");
@@ -287,6 +289,47 @@ export default function OrdersPage() {
       );
     } finally {
       setPickingId(null);
+    }
+  }
+
+  /**
+   * 確認メールをもう一度送る。
+   *
+   * 配信事業者の1日の上限に当たった日、予約は通るのに確認メールだけが
+   * 出ませんでした。電話で1件ずつ注文番号をお伝えするしかなかったので、
+   * 押せば済むようにします。
+   *
+   * 送り終えたら一覧を読み直します。「メール未送信」の印はその注文の
+   * 最後の記録で決まるので、届いた時点で消えます。消えることが、
+   * どれがまだ終わっていないかの目印になります。
+   */
+  async function handleResendMail(order: OrderWithItems) {
+    const ok = window.confirm(
+      [
+        `${order.customer_name} 様（${order.customer_email}）に`,
+        "確認メールをもう一度送ります。",
+        "",
+        "よろしいですか？",
+      ].join("\n")
+    );
+    if (!ok) return;
+
+    setResendingId(order.id);
+    try {
+      await fetchJson(`/api/admin/orders/${order.id}/resend-mail`, {
+        method: "POST",
+      });
+      setMessage({ text: "確認メールを再送しました", ok: true });
+      await loadOrders();
+    } catch (err) {
+      console.error("Resend mail error:", err);
+      alert(
+        err instanceof ApiError
+          ? err.message
+          : "確認メールの再送に失敗しました"
+      );
+    } finally {
+      setResendingId(null);
     }
   }
 
@@ -672,6 +715,28 @@ export default function OrdersPage() {
                                       : order.payment_status === "paid"
                                         ? "「未決済」に戻す"
                                         : "「決済済み」にする"}
+                                  </button>
+                                )}
+                                {/*
+                                  確認メールの再送。
+
+                                  宛先が無い店頭販売には出しません。失敗した
+                                  ときだけに絞ってもいません——「届いていない」
+                                  とお客様から言われるのは、こちらの記録が
+                                  成功になっている場合もあるからです。
+                                */}
+                                {order.customer_email && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleResendMail(order);
+                                    }}
+                                    disabled={resendingId === order.id}
+                                    className="rounded-lg border border-sky-300 bg-white px-4 py-1.5 text-sm font-medium text-sky-700 transition-colors hover:bg-sky-50 disabled:opacity-50"
+                                  >
+                                    {resendingId === order.id
+                                      ? "送信中..."
+                                      : "確認メールを再送"}
                                   </button>
                                 )}
                                 <button

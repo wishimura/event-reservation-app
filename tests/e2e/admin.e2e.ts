@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
   closeE2eDb,
+  e2eDb,
   expectNoHorizontalOverflow,
   FIXTURE,
   loginAsAdmin,
@@ -246,5 +247,44 @@ test.describe("S-04 管理画面", () => {
     }
     expect(csv).toContain("イートイン");
     expect(csv).toContain("10%");
+  });
+
+  test("メールが届かなかった注文に印が付き、届いたら消える", async ({ page }) => {
+    /*
+      配信事業者の1日の上限に当たると、予約は通るのに確認メールだけが
+      出ません。お客様は何も受け取らず、こちらも気づけませんでした。
+
+      大事なのは**印が消えること**です。一度でも失敗があれば印を付ける
+      作りだと、あとから再送して届いたあとも残り続け、どれがまだ
+      終わっていないのか分からなくなります。見るのは最後の記録だけ。
+    */
+    const order = await reserve(page, {
+      product: FIXTURE.plenty.name,
+      name: "メール 太郎",
+      diningStyle: "takeout",
+      eventDateId: data.today.id,
+    });
+
+    const logMail = (outcome: "ok" | "error") =>
+      e2eDb().query(
+        `insert into incident_logs (area, source, stage, outcome, order_number, message)
+         values ('email', 'server', 'customer_mail', $1, $2, $3)`,
+        [outcome, order.orderNumber, outcome === "ok" ? "送信しました" : "断られました"]
+      );
+
+    await loginAsAdmin(page);
+
+    await logMail("error");
+    await page.goto("/admin/orders");
+    await expect(rowContaining(page, order.orderNumber)).toContainText(
+      "メール未送信"
+    );
+
+    // 再送して届いた、という記録。印はここで消えること。
+    await logMail("ok");
+    await page.goto("/admin/orders");
+    await expect(rowContaining(page, order.orderNumber)).not.toContainText(
+      "メール未送信"
+    );
   });
 });

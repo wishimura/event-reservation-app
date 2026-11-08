@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { eventDates, events, incidentLogs, orderItems, orders } from "@/db/schema";
 import { isUniqueViolation } from "@/lib/db-errors";
@@ -58,20 +58,26 @@ export async function GET() {
     }
 
     /*
-      確認メールを送れなかった注文。
+      確認メールが届いていない注文。
 
       送信の失敗はこれまでコンソールに出るだけで、お客様にメールが届いて
       いないことに誰も気づけませんでした。一覧で見えるようにしておけば、
       電話でご連絡するなり、注文番号をお伝えするなりできます。
+
+      見るのは**その注文の最後の記録**です。一度でも失敗があれば印を付ける
+      作りだと、あとから再送して届いたあとも印が残り続けます。印が消えない
+      なら、どれがまだ終わっていないのかが分からなくなります。
     */
-    const mailFailures = orderRows.length
+    const mailEvents = orderRows.length
       ? await db
-          .selectDistinct({ order_number: incidentLogs.order_number })
+          .select({
+            order_number: incidentLogs.order_number,
+            outcome: incidentLogs.outcome,
+          })
           .from(incidentLogs)
           .where(
             and(
               eq(incidentLogs.area, "email"),
-              eq(incidentLogs.outcome, "error"),
               eq(incidentLogs.stage, "customer_mail"),
               inArray(
                 incidentLogs.order_number,
@@ -79,10 +85,18 @@ export async function GET() {
               )
             )
           )
+          .orderBy(asc(incidentLogs.created_at))
       : [];
 
+    // 古い順に見て、同じ注文番号を上書きしていく。残るのは最後の結果。
+    const lastMailOutcome = new Map<string, string>();
+    for (const e of mailEvents) {
+      if (e.order_number) lastMailOutcome.set(e.order_number, e.outcome);
+    }
     const mailFailed = new Set(
-      mailFailures.map((r) => r.order_number).filter((n): n is string => !!n)
+      [...lastMailOutcome.entries()]
+        .filter(([, outcome]) => outcome === "error")
+        .map(([orderNumber]) => orderNumber)
     );
 
     return NextResponse.json({
