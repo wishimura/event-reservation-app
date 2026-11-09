@@ -55,7 +55,17 @@ export async function openPickupGroup(page: Page, text: string): Promise<Locator
     await header.click();
   }
   await expect(header).toHaveAttribute("aria-expanded", "true");
-  return group;
+
+  /*
+    開いたまとまりを、鍵で指し直して返す。
+
+    名前で引くと `.first()` になります。一覧は渡し終わった方を下に送るので、
+    渡すたびに並びが変わり、**同姓同名がいると「最初の一致」が別の方に
+    すり替わります**。見ているつもりの相手が入れ替わるテストは、通っても
+    通らなくても何も教えてくれません。
+  */
+  const key = await group.getAttribute("data-pickup-group");
+  return key ? page.locator(`[data-pickup-group="${key}"]`) : group;
 }
 
 /**
