@@ -221,6 +221,47 @@ test.describe("S-05 受取管理と名寄せ", () => {
     await expect(group).toContainText("2/3 受取済");
   });
 
+  test("先の受取日も見られるが、その日まで渡したことにはできない", async ({ page }) => {
+    /*
+      仕込みは前の日に始まります。何組の方が何件取りに来るのかを当日の朝に
+      初めて知るのでは、段取りが立ちません。
+
+      そのかわり、**まだ渡していないものに「渡した」と付けられては困る**ので、
+      当日以外は読むだけにしてあります。ここで見るのはその2つです。
+    */
+    const tomorrow = await reserve(page, {
+      product: FIXTURE.plenty.name,
+      name: "鬼太郎 太郎",
+      diningStyle: "takeout",
+      eventDateId: data.tomorrow.id,
+    });
+
+    await loginAsAdmin(page);
+    await page.goto("/admin/pickup");
+
+    // 既定は今日。明日の注文はまだ出てこない。
+    await expect(page.getByText(tomorrow.orderNumber)).toHaveCount(0);
+
+    const [, month, day] = data.tomorrow.date.split("-");
+    const chip = new RegExp(`^${Number(month)}/${Number(day)}`);
+    await page.getByRole("button", { name: chip }).click();
+
+    await expect(page.getByText(/先の日を見ています/)).toBeVisible();
+
+    // まとまりは畳んであるので、開いてから中身を見る。
+    const group = await openPickupGroup(page, "鬼太郎 太郎");
+    await expect(group).toContainText(tomorrow.orderNumber);
+
+    // 渡す操作は出ていないこと。
+    await expect(page.getByRole("button", { name: "受取完了" })).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: /まとめて受取完了/ })
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: /に変更$/ })
+    ).toHaveCount(0);
+  });
+
   test("注文一覧からも、渡し終わったものに印を付けられる", async ({ page }) => {
     /*
       当日は注文一覧を開いたまま進めることが多く、渡すたびに「受取管理」へ

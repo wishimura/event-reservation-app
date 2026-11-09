@@ -249,6 +249,35 @@ test.describe("S-04 管理画面", () => {
     expect(csv).toContain("10%");
   });
 
+  test("左の帯は畳めて、畳んだことを覚えている", async ({ page }) => {
+    /*
+      タブレットで文字を大きくすると、240px の帯のぶんだけ表が入りきらなく
+      なります。畳めるようにした理由がそれなので、**畳んだあとも行き先を
+      選べること**と、**画面を移っても畳んだままでいること**を見ます。
+      移るたびに畳み直すのでは、畳める意味がありません。
+    */
+    await loginAsAdmin(page);
+    await page.goto("/admin/orders");
+
+    const close = page.getByRole("button", { name: "メニューを閉じる" });
+    if ((await close.count()) === 0) return; // 狭い画面では帯そのものが出ない
+
+    await close.click();
+    await expect(
+      page.getByRole("button", { name: "メニューを開く" })
+    ).toBeVisible();
+    // 畳んでも行き先は選べること。
+    await expect(page.getByRole("link", { name: "受取管理" })).toBeVisible();
+
+    await page.goto("/admin/pickup");
+    await expect(
+      page.getByRole("button", { name: "メニューを開く" })
+    ).toBeVisible();
+
+    await page.getByRole("button", { name: "メニューを開く" }).click();
+    await expect(page.getByRole("heading", { name: "管理画面" })).toBeVisible();
+  });
+
   test("メールが届かなかった注文に印が付き、届いたら消える", async ({ page }) => {
     /*
       配信事業者の1日の上限に当たると、予約は通るのに確認メールだけが

@@ -5,8 +5,8 @@ import { ApiError, fetchJson } from "@/lib/api-client";
 import { LoadErrorNotice } from "@/components/LoadErrorNotice";
 import { groupByCustomer, matchedByLabel } from "@/lib/customer-grouping";
 import { diningStyleLabel } from "@/lib/tax";
-import { formatPrice } from "@/lib/utils";
-import type { DiningStyle, Order, OrderItem } from "@/lib/types";
+import { formatDate, formatPrice } from "@/lib/utils";
+import type { DiningStyle, EventDate, Order, OrderItem } from "@/lib/types";
 
 interface PickupOrder extends Order {
   order_items: OrderItem[];
@@ -19,6 +19,16 @@ export default function PickupPage() {
   const [loadError, setLoadError] = useState("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   /**
+   * いま見ている受取日と、選べる日。
+   *
+   * 既定は今日です。先の日も開けますが、**その日は見るだけ**にします
+   * （`isToday` を参照）。前もって何件来るかを知っておくための画面で、
+   * まだ渡していないものに「渡した」と付けられる必要はありません。
+   */
+  const [dates, setDates] = useState<EventDate[]>([]);
+  const [selectedDate, setSelectedDate] = useState("");
+  const [today, setToday] = useState("");
+  /**
    * 開いているまとまり。
    *
    * 当日は20件ほどが並びます。全部を広げたまま出すと、お客様1人ぶんが縦に
@@ -29,8 +39,13 @@ export default function PickupPage() {
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    loadTodayOrders();
+    loadOrders();
+    // 初回だけ。日を選び直したときは `selectDate` から読み直します。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /** 今日の分を見ているか。見ていなければ、この画面は読むだけになります。 */
+  const isToday = selectedDate !== "" && selectedDate === today;
 
   /**
    * 同じ方の注文をひとまとめにする。まとめるのはメールアドレスか電話番号が
@@ -61,6 +76,20 @@ export default function PickupPage() {
     );
   }, [groups, search]);
 
+  /**
+   * 見る日を変える。
+   *
+   * 畳んだ状態に戻してから読み直します。前の日で開いていたまとまりが
+   * そのまま開いているように見えると、別の日の内容と取り違えます。
+   */
+  function selectDate(date: string) {
+    if (date === selectedDate) return;
+    setOpenGroups(new Set());
+    setSearch("");
+    setLoading(true);
+    loadOrders(date);
+  }
+
   function toggleGroup(key: string) {
     setOpenGroups((prev) => {
       const next = new Set(prev);
@@ -70,13 +99,19 @@ export default function PickupPage() {
     });
   }
 
-  async function loadTodayOrders() {
+  async function loadOrders(date?: string) {
     setLoadError("");
     try {
-      const data = await fetchJson<{ orders: PickupOrder[] }>(
-        "/api/admin/pickup"
-      );
+      const data = await fetchJson<{
+        orders: PickupOrder[];
+        dates: EventDate[];
+        today: string;
+        selected_date: string;
+      }>(`/api/admin/pickup${date ? `?date=${encodeURIComponent(date)}` : ""}`);
       setOrders(data.orders);
+      setDates(data.dates ?? []);
+      setToday(data.today);
+      setSelectedDate(data.selected_date);
     } catch (err) {
       console.error("Pickup load error:", err);
       setLoadError(
@@ -172,7 +207,7 @@ export default function PickupPage() {
         message={loadError}
         onRetry={() => {
           setLoading(true);
-          loadTodayOrders();
+          loadOrders(selectedDate || undefined);
         }}
       />
     );
@@ -180,23 +215,102 @@ export default function PickupPage() {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-slate-800 mb-6">本日の受取管理</h2>
+      <h2 className="text-2xl font-bold text-slate-800 mb-1">
+        {isToday ? "本日の受取管理" : "受取管理"}
+      </h2>
+      {selectedDate && (
+        <p className="mb-4 text-sm text-slate-500">
+          {formatDate(selectedDate)}
+          {isToday && <span className="ml-2 font-medium text-indigo-700">本日</span>}
+        </p>
+      )}
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
-          <p className="text-xs text-slate-500">合計</p>
-          <p className="text-2xl font-bold text-slate-800">{totalCount}</p>
+      {/*
+        受取日を選ぶ。
+
+        既定は今日です。先の日を開けるのは、**仕込みの前にその日の受け渡しを
+        見ておく**ためで、まだ来ていない方に「渡した」と付ける画面では
+        ありません。当日以外は受取完了も区分の変更も出しません。
+
+        横に並べて、はみ出したぶんは横スクロールにします。会期は2週間ほど
+        あり、縦に積むと本題の一覧が画面の下に追いやられます。
+      */}
+      {dates.length > 1 && (
+        <div className="mb-6 -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          {dates.map((d) => {
+            const active = d.pickup_date === selectedDate;
+            const isTodayChip = d.pickup_date === today;
+            return (
+              <button
+                key={d.id}
+                type="button"
+                onClick={() => selectDate(d.pickup_date)}
+                aria-current={active ? "date" : undefined}
+                className={`shrink-0 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                  active
+                    ? "border-indigo-500 bg-indigo-600 text-white"
+                    : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                {formatDate(d.pickup_date)}
+                {isTodayChip && (
+                  <span
+                    className={`ml-1.5 text-xs ${
+                      active ? "text-indigo-100" : "text-indigo-600"
+                    }`}
+                  >
+                    本日
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
-        <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-4 text-center">
-          <p className="text-xs text-emerald-600">受取済み</p>
-          <p className="text-2xl font-bold text-emerald-700">{pickedUpCount}</p>
+      )}
+
+      {!isToday && selectedDate && (
+        <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <span className="font-medium">先の日を見ています。</span>
+          どなたが何件取りに来られるかの確認用です。受取完了やお召し上がり
+          方法の変更は、その日になってから行えます。
         </div>
-        <div className="bg-amber-50 rounded-xl border border-amber-200 p-4 text-center">
-          <p className="text-xs text-amber-600">残り</p>
-          <p className="text-2xl font-bold text-amber-700">{remainingCount}</p>
+      )}
+
+      {/*
+        その日の数。
+
+        当日は「あと何件渡すか」が知りたいので、受取済みと残りを出します。
+        先の日は全部が未受取なので、同じ3つを出しても意味がありません。
+        仕込みのために知りたいのは**何組のお客様が何件取りに来るか**なので、
+        そちらに差し替えます。
+      */}
+      {isToday ? (
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
+            <p className="text-xs text-slate-500">合計</p>
+            <p className="text-2xl font-bold text-slate-800">{totalCount}</p>
+          </div>
+          <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-4 text-center">
+            <p className="text-xs text-emerald-600">受取済み</p>
+            <p className="text-2xl font-bold text-emerald-700">{pickedUpCount}</p>
+          </div>
+          <div className="bg-amber-50 rounded-xl border border-amber-200 p-4 text-center">
+            <p className="text-xs text-amber-600">残り</p>
+            <p className="text-2xl font-bold text-amber-700">{remainingCount}</p>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
+            <p className="text-xs text-slate-500">ご予約</p>
+            <p className="text-2xl font-bold text-slate-800">{totalCount} 件</p>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
+            <p className="text-xs text-slate-500">お客様</p>
+            <p className="text-2xl font-bold text-slate-800">{groups.length} 組</p>
+          </div>
+        </div>
+      )}
 
       {/* Search */}
       <div className="mb-6">
@@ -209,8 +323,8 @@ export default function PickupPage() {
         />
       </div>
 
-      {/* Progress bar */}
-      {totalCount > 0 && (
+      {/* Progress bar — 渡し始める当日だけ。先の日はいつも 0% です。 */}
+      {isToday && totalCount > 0 && (
         <div className="mb-6">
           <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
             <div
@@ -383,25 +497,30 @@ export default function PickupPage() {
                         {/*
                           当日の切り替え。売値は変わらないので、決済済みでも
                           押せる。渡したあとでも直せるようにしてある。
+
+                          先の日では出しません。お客様が目の前にいて初めて
+                          決まることなので、前もって決めておくものではない。
                         */}
-                        <button
-                          onClick={() =>
-                            changeDiningStyle(
-                              order.id,
-                              order.dining_style === "eat_in" ? "takeout" : "eat_in"
-                            )
-                          }
-                          disabled={busy}
-                          className="mt-1.5 text-xs font-medium text-indigo-600 underline underline-offset-2 hover:text-indigo-800 disabled:opacity-50"
-                        >
-                          {order.dining_style === "eat_in"
-                            ? "テイクアウトに変更"
-                            : "イートインに変更"}
-                        </button>
+                        {isToday && (
+                          <button
+                            onClick={() =>
+                              changeDiningStyle(
+                                order.id,
+                                order.dining_style === "eat_in" ? "takeout" : "eat_in"
+                              )
+                            }
+                            disabled={busy}
+                            className="mt-1.5 text-xs font-medium text-indigo-600 underline underline-offset-2 hover:text-indigo-800 disabled:opacity-50"
+                          >
+                            {order.dining_style === "eat_in"
+                              ? "テイクアウトに変更"
+                              : "イートインに変更"}
+                          </button>
+                        )}
                       </div>
 
                       <div className="shrink-0">
-                        {isPickedUp ? (
+                        {!isToday ? null : isPickedUp ? (
                           <button
                             onClick={() => markNotPickedUp(order.id)}
                             disabled={busy}
@@ -433,7 +552,7 @@ export default function PickupPage() {
                       {formatPrice(groupTotal)}
                     </span>
                   </p>
-                  {remaining > 0 && (
+                  {isToday && remaining > 0 && (
                     <button
                       onClick={() => markGroupPickedUp(groupOrders)}
                       disabled={updatingId !== null}
@@ -451,7 +570,9 @@ export default function PickupPage() {
         {visibleGroups.length === 0 && (
           <div className="text-center py-12 text-slate-400">
             {orders.length === 0
-              ? "本日の受取予約はありません"
+              ? isToday
+                ? "本日の受取予約はありません"
+                : "この日の受取予約はまだありません"
               : "該当する注文が見つかりません"}
           </div>
         )}
