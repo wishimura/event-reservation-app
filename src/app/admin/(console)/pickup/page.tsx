@@ -27,6 +27,8 @@ export default function PickupPage() {
    */
   const [dates, setDates] = useState<EventDate[]>([]);
   const [selectedDate, setSelectedDate] = useState("");
+  /** イートインだけ・テイクアウトだけに絞る。既定は両方。 */
+  const [styleFilter, setStyleFilter] = useState<"all" | DiningStyle>("all");
   const [today, setToday] = useState("");
   /**
    * 開いているまとまり。
@@ -51,7 +53,39 @@ export default function PickupPage() {
    * 同じ方の注文をひとまとめにする。まとめるのはメールアドレスか電話番号が
    * 一致したときだけで、氏名ではまとめない（同姓同名の取り違えを防ぐため）。
    */
-  const groups = useMemo(() => groupByCustomer(orders), [orders]);
+  const allGroups = useMemo(() => groupByCustomer(orders), [orders]);
+
+  /*
+    お召し上がり方法で絞る。
+
+    まとめるのは**絞る前の全部**でやります。絞ったものだけで名寄せすると、
+    同姓同名の警告が片方だけ消えたり、まとまりの見分けが変わったりして、
+    絞り方ひとつで「誰が誰か」が揺れてしまいます。
+
+    絞るのは、まとまりの中で何を出すかだけ。隠れた注文がある方には、
+    その数を出します（`hidden`）。イートインだけを見ている最中に
+    「この方はこれで全部」と思い込んで渡し漏らすのを防ぐためです。
+  */
+  const groups = useMemo(() => {
+    if (styleFilter === "all") {
+      return allGroups.map((g) => ({ ...g, hidden: 0 }));
+    }
+    return allGroups
+      .map((g) => {
+        const kept = g.orders.filter((o) => o.dining_style === styleFilter);
+        return { ...g, orders: kept, hidden: g.orders.length - kept.length };
+      })
+      .filter((g) => g.orders.length > 0);
+  }, [allGroups, styleFilter]);
+
+  /** いま画面に出ている注文。合計や受取済みの数はこちらから数えます。 */
+  const shownOrders = useMemo(
+    () => groups.flatMap((g) => g.orders),
+    [groups]
+  );
+
+  const eatInCount = orders.filter((o) => o.dining_style === "eat_in").length;
+  const takeoutCount = orders.length - eatInCount;
 
   /**
    * 検索は1件でも当たれば、その方のまとまりごと表示する。
@@ -86,6 +120,7 @@ export default function PickupPage() {
     if (date === selectedDate) return;
     setOpenGroups(new Set());
     setSearch("");
+    setStyleFilter("all");
     setLoading(true);
     loadOrders(date);
   }
@@ -189,8 +224,10 @@ export default function PickupPage() {
     }
   }
 
-  const totalCount = orders.length;
-  const pickedUpCount = orders.filter((o) => o.pickup_status === "picked_up").length;
+  const totalCount = shownOrders.length;
+  const pickedUpCount = shownOrders.filter(
+    (o) => o.pickup_status === "picked_up"
+  ).length;
   const remainingCount = totalCount - pickedUpCount;
 
   if (loading) {
@@ -312,6 +349,49 @@ export default function PickupPage() {
         </div>
       )}
 
+      {/*
+        お召し上がり方法で絞る。
+
+        仕込みでは「イートインが何人ぶん」が要りますし、当日は席に出す分と
+        袋に詰める分を分けて数えたくなります。数を札に出しておくのは、
+        押さなくても分かるようにするためです。
+      */}
+      {orders.length > 0 && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          {(
+            [
+              ["all", "すべて", orders.length],
+              ["eat_in", "イートイン", eatInCount],
+              ["takeout", "テイクアウト", takeoutCount],
+            ] as const
+          ).map(([value, label, count]) => {
+            const active = styleFilter === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setStyleFilter(value)}
+                aria-pressed={active}
+                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                  active
+                    ? "border-indigo-500 bg-indigo-600 text-white"
+                    : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                {label}
+                <span
+                  className={`ml-1.5 text-xs ${
+                    active ? "text-indigo-100" : "text-slate-400"
+                  }`}
+                >
+                  {count}件
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Search */}
       <div className="mb-6">
         <input
@@ -404,6 +484,17 @@ export default function PickupPage() {
                   {multiple && (
                     <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-bold text-indigo-700">
                       {groupOrders.length}件まとめ
+                    </span>
+                  )}
+                  {/*
+                    絞り込みで隠れている注文があることを、必ず言う。
+
+                    イートインだけを見ているときに「この方はこれで全部」と
+                    思い込むと、袋のほうを渡し忘れます。
+                  */}
+                  {group.hidden > 0 && (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
+                      他に{group.hidden}件
                     </span>
                   )}
                   <span

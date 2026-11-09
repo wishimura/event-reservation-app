@@ -221,6 +221,45 @@ test.describe("S-05 受取管理と名寄せ", () => {
     await expect(group).toContainText("2/3 受取済");
   });
 
+  test("お召し上がり方法で絞れて、隠れた注文があることは隠さない", async ({ page }) => {
+    /*
+      仕込みでは「イートインが何人ぶん」が要ります。ただ、絞ったせいで
+      **その方の残りの注文が見えなくなる**のが怖いところです。席に出す分
+      だけを見ているあいだに「この方はこれで全部」と思い込むと、袋のほうを
+      渡し忘れます。だから隠れている件数は札で出します。
+    */
+    const eatIn = await reserve(page, {
+      product: FIXTURE.plenty.name,
+      name: NAME,
+      diningStyle: "eat_in",
+      eventDateId: data.today.id,
+      ...REPEATER,
+    });
+    const takeout = await reserve(page, {
+      product: FIXTURE.plenty.name,
+      name: NAME,
+      diningStyle: "takeout",
+      eventDateId: data.today.id,
+      ...REPEATER,
+    });
+
+    await loginAsAdmin(page);
+    await page.goto("/admin/pickup");
+
+    const group = await openPickupGroup(page, NAME);
+    await expect(group).toContainText(eatIn.orderNumber);
+    await expect(group).toContainText(takeout.orderNumber);
+
+    // 「イートインに変更」とは別物。件数の付いた絞り込みのほうを押す。
+    await page.getByRole("button", { name: /^イートイン\d+件$/ }).click();
+
+    const narrowed = await openPickupGroup(page, NAME);
+    await expect(narrowed).toContainText(eatIn.orderNumber);
+    await expect(narrowed).not.toContainText(takeout.orderNumber);
+    // 残りがあることは、押さなくても分かること。
+    await expect(narrowed).toContainText("他に1件");
+  });
+
   test("先の受取日も見られるが、その日まで渡したことにはできない", async ({ page }) => {
     /*
       仕込みは前の日に始まります。何組の方が何件取りに来るのかを当日の朝に
