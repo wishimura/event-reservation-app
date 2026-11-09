@@ -46,8 +46,20 @@ export default function PickupPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** 今日の分を見ているか。見ていなければ、この画面は読むだけになります。 */
+  /** 今日の分を見ているか。お召し上がり方法を変えられるのは今日だけです。 */
   const isToday = selectedDate !== "" && selectedDate === today;
+
+  /**
+   * 受取を記録してよい日か。
+   *
+   * 今日と、過ぎた日です。**過ぎた日を含めるのは、付け忘れを直すため**。
+   * 当日だけにすると「昨日渡したのに受取済にし忘れた」をどこからも直せなく
+   * なります（注文一覧からこの操作を外したので、ここが唯一の場所です）。
+   *
+   * 先の日は入れません。まだ渡していないものに「渡した」と付けられる画面を
+   * 用意する理由がありません。
+   */
+  const canRecordPickup = selectedDate !== "" && selectedDate <= today;
 
   /**
    * 同じ方の注文をひとまとめにする。まとめるのはメールアドレスか電話番号が
@@ -307,9 +319,18 @@ export default function PickupPage() {
 
       {!isToday && selectedDate && (
         <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <span className="font-medium">先の日を見ています。</span>
-          どなたが何件取りに来られるかの確認用です。受取完了やお召し上がり
-          方法の変更は、その日になってから行えます。
+          {canRecordPickup ? (
+            <>
+              <span className="font-medium">過ぎた日を見ています。</span>
+              付け忘れた受取を、ここで記録できます。
+            </>
+          ) : (
+            <>
+              <span className="font-medium">先の日を見ています。</span>
+              どなたが何件取りに来られるかの確認用です。受取完了やお召し上がり
+              方法の変更は、その日になってから行えます。
+            </>
+          )}
         </div>
       )}
 
@@ -321,7 +342,7 @@ export default function PickupPage() {
         仕込みのために知りたいのは**何組のお客様が何件取りに来るか**なので、
         そちらに差し替えます。
       */}
-      {isToday ? (
+      {canRecordPickup ? (
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
             <p className="text-xs text-slate-500">合計</p>
@@ -404,7 +425,7 @@ export default function PickupPage() {
       </div>
 
       {/* Progress bar — 渡し始める当日だけ。先の日はいつも 0% です。 */}
-      {isToday && totalCount > 0 && (
+      {canRecordPickup && totalCount > 0 && (
         <div className="mb-6">
           <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
             <div
@@ -611,7 +632,7 @@ export default function PickupPage() {
                       </div>
 
                       <div className="shrink-0">
-                        {!isToday ? null : isPickedUp ? (
+                        {!canRecordPickup ? null : isPickedUp ? (
                           <button
                             onClick={() => markNotPickedUp(order.id)}
                             disabled={busy}
@@ -643,7 +664,7 @@ export default function PickupPage() {
                       {formatPrice(groupTotal)}
                     </span>
                   </p>
-                  {isToday && remaining > 0 && (
+                  {canRecordPickup && remaining > 0 && (
                     <button
                       onClick={() => markGroupPickedUp(groupOrders)}
                       disabled={updatingId !== null}

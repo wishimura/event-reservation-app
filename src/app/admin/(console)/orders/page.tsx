@@ -55,8 +55,6 @@ export default function OrdersPage() {
   const [restoringId, setRestoringId] = useState<string | null>(null);
   /** お支払い状況を直している最中の注文。 */
   const [payingId, setPayingId] = useState<string | null>(null);
-  /** 受取ステータスを書き換え中の注文。二度押しを止めるためだけに持ちます。 */
-  const [pickingId, setPickingId] = useState<string | null>(null);
   /** 確認メールを再送中の注文。 */
   const [resendingId, setResendingId] = useState<string | null>(null);
 
@@ -262,43 +260,6 @@ export default function OrdersPage() {
       );
     } finally {
       setPayingId(null);
-    }
-  }
-
-  /**
-   * 渡したか、まだか。
-   *
-   * 「受取管理」にも同じ操作がありますが、当日はこの一覧を開いたまま
-   * 進めることが多く、渡すたびに画面を移るのは現実的ではありません。
-   * 押したところを書き換えるだけで、読み込み直しはしません——行が
-   * 並び替わると、次にどれを押すつもりだったか分からなくなります。
-   *
-   * 確認は出しません。取り違えてもすぐ戻せますし、カウンターでは
-   * 一度の操作で終わるほうが大事です。
-   */
-  async function handlePickupStatus(
-    order: OrderWithItems,
-    next: "picked_up" | "not_picked_up"
-  ) {
-    setPickingId(order.id);
-    try {
-      await fetchJson(`/api/admin/orders/${order.id}/pickup`, {
-        method: "PATCH",
-        body: JSON.stringify({ pickup_status: next }),
-      });
-      // 絞り込みは `orders` から引き直されるので、元の配列だけ直せば足ります。
-      setOrders((list) =>
-        list.map((o) => (o.id === order.id ? { ...o, pickup_status: next } : o))
-      );
-    } catch (err) {
-      console.error("Pickup update error:", err);
-      alert(
-        err instanceof ApiError
-          ? err.message
-          : "受取ステータスの変更に失敗しました"
-      );
-    } finally {
-      setPickingId(null);
     }
   }
 
@@ -695,32 +656,6 @@ export default function OrdersPage() {
                               </div>
                             ) : (
                               <div className="flex flex-wrap items-center gap-3">
-                                {/*
-                                  渡し終わったものから印を付けていけるように。
-
-                                  ネット予約でも店頭販売でも同じです。当日の
-                                  残りが見えていないと、閉店まぎわに「まだ来て
-                                  いないのは誰か」を数え直すことになります。
-                                */}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handlePickupStatus(
-                                      order,
-                                      order.pickup_status === "picked_up"
-                                        ? "not_picked_up"
-                                        : "picked_up"
-                                    );
-                                  }}
-                                  disabled={pickingId === order.id}
-                                  className="rounded-lg border border-indigo-300 bg-white px-4 py-1.5 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-50 disabled:opacity-50"
-                                >
-                                  {pickingId === order.id
-                                    ? "処理中..."
-                                    : order.pickup_status === "picked_up"
-                                      ? "「未受取」に戻す"
-                                      : "「受取済」にする"}
-                                </button>
                                 {/*
                                   店頭販売だけ、お支払い状況を直せます。
 

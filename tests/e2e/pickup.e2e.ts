@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
   closeE2eDb,
+  e2eDb,
   FIXTURE,
   loginAsAdmin,
   openPickupGroup,
@@ -301,11 +302,16 @@ test.describe("S-05 受取管理と名寄せ", () => {
     ).toHaveCount(0);
   });
 
-  test("注文一覧からも、渡し終わったものに印を付けられる", async ({ page }) => {
+  test("渡す操作は受取管理だけにあり、注文一覧には無い", async ({ page }) => {
     /*
-      当日は注文一覧を開いたまま進めることが多く、渡すたびに「受取管理」へ
-      移るのは現実的ではありません。同じことが一覧の中でもできること、
-      押し間違えたら戻せることを見ます。
+      渡す単位はお客様であって、注文ではありません。
+
+      注文一覧にも同じボタンを置いていた時期がありますが、1件ずつ並ぶ画面で
+      消し込むと、**同じ方の2件目を渡し忘れます**。受取管理なら「0/2 受取済」
+      と出て、まとめて渡せて、同姓同名の警告も出ます。場所を1つに戻しました。
+
+      一覧では**状態は読める**こと（渡し終わったかどうかは一覧でも知りたい）、
+      ただし**変えられない**ことを見ます。
     */
     const { first } = await placeOrders(page);
 
@@ -315,10 +321,58 @@ test.describe("S-05 受取管理と名寄せ", () => {
     await expect(row).toContainText("未受取");
     await row.click();
 
-    await page.getByRole("button", { name: "「受取済」にする" }).click();
-    await expect(rowContaining(page, first.orderNumber)).toContainText("受取済");
+    await expect(
+      page.getByRole("button", { name: "「受取済」にする" })
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "「未受取」に戻す" })
+    ).toHaveCount(0);
+  });
 
-    await page.getByRole("button", { name: "「未受取」に戻す" }).click();
-    await expect(rowContaining(page, first.orderNumber)).toContainText("未受取");
+  test("過ぎた日の付け忘れは、受取管理から直せる", async ({ page }) => {
+    /*
+      注文一覧から受取の操作を外した以上、**ここが唯一の直し場所**です。
+      先の日は書けないままですが、過ぎた日まで書けなくすると
+      「昨日渡したのに付け忘れた」をどこからも直せなくなります。
+    */
+    /*
+      前提データに過ぎた日はありません（当日・翌日・受付停止日だけ）。
+      他のテストが数える日数を変えたくないので、この1本のぶんだけ
+      ここで足します。
+    */
+    const d = new Date(`${data.today.date}T00:00:00`);
+    d.setDate(d.getDate() - 1);
+    const yesterday = d.toISOString().slice(0, 10);
+
+    const { rows: dateRows } = await e2eDb().query<{ id: string }>(
+      `insert into event_dates (event_id, pickup_date, reservation_open, reservation_status)
+       values ($1, $2, false, 'closed') returning id`,
+      [data.eventId, yesterday]
+    );
+    await e2eDb().query(
+      `insert into orders
+         (event_id, event_date_id, order_number, customer_name, customer_email,
+          customer_phone, total_amount, dining_style, payment_method,
+          payment_status, order_status, pickup_status, source)
+       values ($1, $2, 'ORD-PAST-0001', 'ねずみ 男', 'nezumi@example.com',
+               '090-9999-0000', 1000, 'takeout', 'credit_card', 'paid',
+               'confirmed', 'not_picked_up', 'online')`,
+      [data.eventId, dateRows[0].id]
+    );
+
+    await loginAsAdmin(page);
+    await page.goto("/admin/pickup");
+
+    const [, month, day] = yesterday.split("-");
+    await page
+      .getByRole("button", { name: new RegExp(`^${Number(month)}/${Number(day)}`) })
+      .click();
+
+    await expect(page.getByText(/過ぎた日を見ています/)).toBeVisible();
+
+    const group = await openPickupGroup(page, "ねずみ 男");
+    await expect(group).toContainText("ORD-PAST-0001");
+    await group.getByRole("button", { name: "受取完了" }).click();
+    await expect(group).toContainText("1/1 受取済");
   });
 });
