@@ -302,6 +302,53 @@ test.describe("S-05 受取管理と名寄せ", () => {
     ).toHaveCount(0);
   });
 
+  test("まだ渡していない方が先に並び、その数が出る", async ({ page }) => {
+    /*
+      昼を過ぎると、済んだ方が上に積もります。そのままだと「まだ来て
+      いないのは誰か」を一覧から拾うのに、毎回スクロールし続けることに
+      なります。残りが**先頭に来ること**と、**数が押す前から見えること**。
+    */
+    const waiting = await reserve(page, {
+      product: FIXTURE.plenty.name,
+      name: "砂かけ 婆",
+      diningStyle: "takeout",
+      eventDateId: data.today.id,
+      email: "suna@example.com",
+      phone: "090-7777-1111",
+    });
+    const done = await reserve(page, {
+      product: FIXTURE.plenty.name,
+      name: "ねこ 娘",
+      diningStyle: "takeout",
+      eventDateId: data.today.id,
+      email: "neko@example.com",
+      phone: "090-5555-6666",
+    });
+
+    await loginAsAdmin(page);
+    await page.goto("/admin/pickup");
+
+    const pending = page.getByRole("button", { name: /^未受取のみ\d+件$/ });
+    await expect(pending).toContainText("2件");
+
+    // 1人に渡す。
+    const neko = await openPickupGroup(page, "ねこ 娘");
+    await neko.getByRole("button", { name: "受取完了" }).click();
+    await expect(neko).toContainText("1/1 受取済");
+    await expect(pending).toContainText("1件");
+
+    // 渡していない方が先頭にいること。
+    const names = page.locator("[data-pickup-group]");
+    await expect(names.first()).toContainText("砂かけ 婆");
+
+    // 絞れば、渡していない方だけが残ること。
+    await pending.click();
+    await expect(page.getByText("ねこ 娘")).toHaveCount(0);
+    const only = await openPickupGroup(page, "砂かけ 婆");
+    await expect(only).toContainText(waiting.orderNumber);
+    expect(done.orderNumber).not.toEqual(waiting.orderNumber);
+  });
+
   test("渡す操作は受取管理だけにあり、注文一覧には無い", async ({ page }) => {
     /*
       渡す単位はお客様であって、注文ではありません。

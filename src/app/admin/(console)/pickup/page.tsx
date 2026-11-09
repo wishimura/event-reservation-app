@@ -29,6 +29,8 @@ export default function PickupPage() {
   const [selectedDate, setSelectedDate] = useState("");
   /** イートインだけ・テイクアウトだけに絞る。既定は両方。 */
   const [styleFilter, setStyleFilter] = useState<"all" | DiningStyle>("all");
+  /** まだ渡していないものだけに絞る。 */
+  const [onlyPending, setOnlyPending] = useState(false);
   const [today, setToday] = useState("");
   /**
    * 開いているまとまり。
@@ -79,16 +81,41 @@ export default function PickupPage() {
     「この方はこれで全部」と思い込んで渡し漏らすのを防ぐためです。
   */
   const groups = useMemo(() => {
-    if (styleFilter === "all") {
-      return allGroups.map((g) => ({ ...g, hidden: 0 }));
-    }
-    return allGroups
+    const narrowed = allGroups
       .map((g) => {
-        const kept = g.orders.filter((o) => o.dining_style === styleFilter);
+        const kept = g.orders.filter(
+          (o) =>
+            (styleFilter === "all" || o.dining_style === styleFilter) &&
+            (!onlyPending || o.pickup_status !== "picked_up")
+        );
         return { ...g, orders: kept, hidden: g.orders.length - kept.length };
       })
       .filter((g) => g.orders.length > 0);
-  }, [allGroups, styleFilter]);
+
+    /*
+      渡していない方を先に。
+
+      昼を過ぎると、済んだ方が上に積もって、残っている方を探すのに
+      スクロールし続けることになります。**まだ来ていないのは誰か**が
+      いつも手前にあるようにします。並びは元の順を崩しません。
+    */
+    return [...narrowed].sort(
+      (a, b) =>
+        Number(a.orders.every((o) => o.pickup_status === "picked_up")) -
+        Number(b.orders.every((o) => o.pickup_status === "picked_up"))
+    );
+  }, [allGroups, styleFilter, onlyPending]);
+
+  /** いま選んでいるお召し上がり方法のうち、まだ渡していない数。 */
+  const pendingCount = useMemo(
+    () =>
+      orders.filter(
+        (o) =>
+          (styleFilter === "all" || o.dining_style === styleFilter) &&
+          o.pickup_status !== "picked_up"
+      ).length,
+    [orders, styleFilter]
+  );
 
   /** いま画面に出ている注文。合計や受取済みの数はこちらから数えます。 */
   const shownOrders = useMemo(
@@ -133,6 +160,7 @@ export default function PickupPage() {
     setOpenGroups(new Set());
     setSearch("");
     setStyleFilter("all");
+    setOnlyPending(false);
     setLoading(true);
     loadOrders(date);
   }
@@ -410,6 +438,34 @@ export default function PickupPage() {
               </button>
             );
           })}
+          {/*
+            まだ渡していない方だけ。
+
+            済んだ方が増えてくると、残っているのが誰かを一覧から拾うのが
+            だんだん難しくなります。数は押す前から出しておきます——
+            「あと何人来るのか」は、押さなくても知りたい数字なので。
+          */}
+          {canRecordPickup && (
+            <button
+              type="button"
+              onClick={() => setOnlyPending((v) => !v)}
+              aria-pressed={onlyPending}
+              className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                onlyPending
+                  ? "border-amber-500 bg-amber-500 text-white"
+                  : "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+              }`}
+            >
+              未受取のみ
+              <span
+                className={`ml-1.5 text-xs ${
+                  onlyPending ? "text-amber-50" : "text-amber-600"
+                }`}
+              >
+                {pendingCount}件
+              </span>
+            </button>
+          )}
         </div>
       )}
 
