@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { IncidentReporter } from "@/components/IncidentReporter";
-import { allowSearchIndexing, NOINDEX } from "@/lib/indexing";
+// 掲載の決まりは `src/lib/indexing.ts` に。ここでは何も指示しません。
 
 export const metadata: Metadata = {
   title: "ご予約 | となりのと commons kitchen",
@@ -9,13 +9,12 @@ export const metadata: Metadata = {
     "となりのと commons kitchen の期間限定メニューを、受取日を選んで事前にご予約いただけます。",
   icons: { icon: "/logo-mark.png" },
   /*
-    公開前のあいだは検索エンジンに載せません。
+    検索エンジンへの指示は書きません。書かないことが「載せてよい」です。
 
-    既定が「載せない」です。公開前に載ってしまうのは取り返しがつかず
-    （消してもしばらく検索結果に残ります）、公開後の載せ忘れは後から
-    直せるからです。公開するときの手順は `src/lib/indexing.ts` に。
+    公開前は全ページに noindex を付けていました。公開したので外します。
+    管理画面だけは `src/app/admin/layout.tsx` で noindex を上書きしていて、
+    こちらの変更とは関係なく、ずっと載りません。
   */
-  robots: allowSearchIndexing() ? undefined : NOINDEX,
 };
 
 export default function RootLayout({

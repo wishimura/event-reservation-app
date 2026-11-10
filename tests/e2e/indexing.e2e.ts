@@ -12,23 +12,29 @@ test.afterAll(async () => {
 });
 
 /**
- * 公開前なので、検索エンジンに載せません。
+ * 公開したので、お客様向けの画面は検索エンジンに載せます。
  *
  * 見落としやすいところです。Vercel はデプロイ用の URL
  * （`...-bh6ss0ty4-...vercel.app`）には noindex を自動で付けますが、
- * **本番の URL には付けません**。ヘッダーだけ見て「付いている」と思い込むと、
- * 公開前の店名・メニュー・価格がそのまま拾われます。一度拾われると、
- * 消してもしばらく検索結果に残ります。
+ * **本番の URL には付けません**。ヘッダーだけ見て判断はできないので、
+ * 本番と同じ作りのページを開いて中身を見ます。
  */
 test.describe("S-10 検索エンジンへの掲載", () => {
-  test("お客様向けの画面が、公開前は載らないようになっている", async ({ page }) => {
+  test("お客様向けの画面が、検索エンジンに載るようになっている", async ({ page }) => {
+    /*
+      公開前は全ページに noindex を付けていました。外し忘れると、
+      **誰にも見つけてもらえないまま会期が終わります**。消し忘れても
+      画面は何も変わらないので、ここで見ておきます。
+    */
     const paths = ["/", `/reserve/${data.today.id}`, "/legal/tokushoho"];
 
     for (const path of paths) {
       await page.goto(path);
       const robots = page.locator('meta[name="robots"]');
-      await expect(robots, `${path} に noindex が無い`).toHaveAttribute(
-        "content",
+      const content = (await robots.count())
+        ? await robots.getAttribute("content")
+        : null;
+      expect(content ?? "", `${path} に noindex が残っている`).not.toMatch(
         /noindex/
       );
     }
@@ -36,9 +42,9 @@ test.describe("S-10 検索エンジンへの掲載", () => {
 
   test("管理画面は、いつでも載らない", async ({ page }) => {
     /*
-      お客様向けの画面は公開時に載るようになりますが、管理画面はそれとは
-      関係なく、ずっと載りません。入られれば予約全部の氏名・メール・電話が
-      見えるところです。
+      お客様向けの画面は載るようになりましたが、管理画面はそれとは関係なく、
+      ずっと載りません。入られれば予約全部の氏名・メール・電話が見える
+      ところです。**この1本だけは、公開しても緩めません。**
     */
     await page.goto("/admin/login");
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
