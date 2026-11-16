@@ -105,6 +105,40 @@ test.describe("S-03 在庫", () => {
     await expect(productCard(page, FIXTURE.plenty.name)).toContainText("SOLD OUT");
   });
 
+  test("受取日の札は、その日ぜんぶの残り割合で決まる", async ({ page }) => {
+    /*
+      前は「1商品でも残り3個以下なら残りわずか」でした。これが実体と逆に
+      動きます。**売り切れた商品は残り0なので、その数え上げから外れる**。
+      売れるほど条件から外れて「受付中」に戻り、全部売り切れて初めて
+      閉じる、という作りでした。
+
+      本番の 2026-11-21 は10商品中8つが売り切れ・残り1割強で「受付中」、
+      11/19 は46%残っているのに脇役1品のせいで「残りわずか」。6日のうち
+      4日が逆でした。
+
+      前提データの今日は、余裕のある商品10個・残り1個の商品・売切の商品で
+      残り 11/21＝52%。**1商品が残り1個でも、日としてはまだ余裕がある**。
+    */
+    await page.goto("/");
+    const card = page.locator(`a[href="/reserve/${data.today.id}"]`);
+    await expect(card).toContainText("受付中");
+
+    // 余裕のあるほうを売切にすると、残りは 1/21＝5%。
+    await loginAsAdmin(page);
+    await page.goto("/admin/inventory");
+    await page.getByRole("button", { name: /\(今日\)$/ }).click();
+    const row = rowContaining(page, FIXTURE.plenty.name);
+    await expect(row).toBeVisible();
+    await row.getByRole("button", { name: "販売中" }).click();
+    await page.getByRole("button", { name: "保存", exact: true }).click();
+    await expect(page.getByText(/件を保存しました/)).toBeVisible();
+
+    await page.goto("/");
+    await expect(
+      page.locator(`a[href="/reserve/${data.today.id}"]`)
+    ).toContainText("残りわずか");
+  });
+
   test("当日店頭だけの商品は、売切と区別して並び、予約には進めない", async ({ page }) => {
     /*
       「売り切れ」と「はじめから予約を受けない」は別物です。
