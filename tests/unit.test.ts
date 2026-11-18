@@ -26,9 +26,22 @@ import { resolveSoldOut } from "../src/lib/inventory";
 
 /* ------------------------------------------------------------------ 締切 */
 
+/**
+ * 締切まわりのテストが見る「いま」。
+ *
+ * `defaultReservationCloseAt` は、前日15:00をもう過ぎていればその受取日の
+ * 終わりを返します（当日ぶんの受取日を足した瞬間に閉じてしまうのを避ける
+ * ため）。「いま」を渡さないと**本物の時計**を見るので、カレンダーが
+ * 受取日に追いつくとテストの前提が崩れます。
+ *
+ * 2026-11-18 に実際に落ちました。日付を未来に書き換えても同じことが
+ * 起きるだけなので、「いま」のほうを固定します。
+ */
+const BEFORE_DEADLINE = new Date("2026-11-10T00:00:00+09:00");
+
 test("締切：前日15:00（日本時間）になる", () => {
   // お店の運用も、ご案内文も、特商法のページも前日15:00。既定もそこに揃える。
-  const d = defaultReservationCloseAt("2026-11-18");
+  const d = defaultReservationCloseAt("2026-11-18", BEFORE_DEADLINE);
   assert.equal(d.toISOString(), "2026-11-17T06:00:00.000Z");
 });
 
@@ -111,7 +124,7 @@ test("締切：うるう年の2/29も正しく前日を指す", () => {
 });
 
 test("締切判定：境界の前後", () => {
-  const deadline = defaultReservationCloseAt("2026-11-18");
+  const deadline = defaultReservationCloseAt("2026-11-18", BEFORE_DEADLINE);
   const at = (s: string) => new Date(s);
 
   // 前日15:00ちょうどまでは受け付ける。1秒でも過ぎたら締切。
@@ -129,7 +142,7 @@ test("締切なしの受取日は締切済みにならない", () => {
 });
 
 test("締切を過ぎた受取日は受付終了として見える", () => {
-  const close = defaultReservationCloseAt("2026-11-18");
+  const close = defaultReservationCloseAt("2026-11-18", BEFORE_DEADLINE);
   const open = { reservation_status: "open" as const, reservation_close_at: close };
 
   assert.equal(effectiveReservationStatus(open, new Date("2026-11-17T10:00:00+09:00")), "open");
@@ -141,7 +154,7 @@ test("締切を過ぎた受取日は受付終了として見える", () => {
 test("締切前でも売切なら受付終了のまま", () => {
   const closed = {
     reservation_status: "closed" as const,
-    reservation_close_at: defaultReservationCloseAt("2026-11-18"),
+    reservation_close_at: defaultReservationCloseAt("2026-11-18", BEFORE_DEADLINE),
   };
   assert.equal(effectiveReservationStatus(closed, new Date("2026-11-17T10:00:00+09:00")), "closed");
 });
