@@ -50,7 +50,14 @@ jobs:
 
   e2e:
     name: E2E と結合テスト
-    runs-on: ubuntu-latest
+    # ubuntu-latest を指すと、GitHub が実行環境を上げたとたんに Playwright が
+    # ブラウザを入れられなくなる。2026年11月16日に ubuntu-latest が 26.04 に
+    # 変わり、「Playwright does not support chromium on ubuntu26.04-x64」で
+    # テストが始まる前に落ちた。それから3日間、E2E は一度も走らないまま本番に
+    # 出ていた。ブラウザを入れる仕事がある以上、実行環境は Playwright が対応を
+    # 明言しているものに固定する。Playwright を上げるときに、この行も一緒に
+    # 新しい LTS へ動かすこと。
+    runs-on: ubuntu-24.04
     # 正常なら10分前後。超えたら何かがおかしいので打ち切る
     timeout-minutes: 30
 
