@@ -365,6 +365,35 @@ test("製造計画に全商品と全受取日が出る", async () => {
   }
 });
 
+test("製造計画のテイクアウト・イートイン内訳を足すと予約数に一致する", async () => {
+  const { status, body } = await api("/api/admin/production");
+  assert.equal(status, 200);
+  const data = body as {
+    inventory: Array<{ event_date_id: string; product_id: string; reserved_quantity: number }>;
+    by_style: Array<{
+      event_date_id: string;
+      product_id: string;
+      dining_style: "takeout" | "eat_in";
+      quantity: number;
+    }>;
+  };
+  assert.ok(Array.isArray(data.by_style), "内訳（by_style）が返っていない");
+
+  const sums = new Map<string, number>();
+  for (const r of data.by_style) {
+    assert.ok(["takeout", "eat_in"].includes(r.dining_style));
+    const key = `${r.event_date_id}:${r.product_id}`;
+    sums.set(key, (sums.get(key) ?? 0) + r.quantity);
+  }
+  for (const inv of data.inventory) {
+    assert.equal(
+      sums.get(`${inv.event_date_id}:${inv.product_id}`) ?? 0,
+      inv.reserved_quantity,
+      "テイクアウト＋イートインが予約数と合わない"
+    );
+  }
+});
+
 test("ダッシュボードが受付枠0の商品を警告する", async () => {
   const event = await loadEvent();
   const date = futureDate(event);

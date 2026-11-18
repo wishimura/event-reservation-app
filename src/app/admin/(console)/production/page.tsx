@@ -3,12 +3,37 @@
 import { useEffect, useMemo, useState } from "react";
 import { ApiError, fetchJson } from "@/lib/api-client";
 import { LoadErrorNotice } from "@/components/LoadErrorNotice";
+import { DINING_STYLE_LABELS } from "@/lib/tax";
 import { formatDate, formatPrice, todayInJST } from "@/lib/utils";
-import type { EventDate, DailyProductInventory, Product } from "@/lib/types";
+import type {
+  DailyProductInventory,
+  DiningStyle,
+  EventDate,
+  Product,
+} from "@/lib/types";
 
 type InventoryWithProduct = DailyProductInventory & {
   product: Product;
 };
+
+/** 受取日×商品×提供区分ごとの個数（キャンセルを除く注文から数えたもの）。 */
+interface StyleCountRow {
+  event_date_id: string;
+  product_id: string;
+  dining_style: DiningStyle;
+  quantity: number;
+}
+
+type StyleFilter = "all" | DiningStyle;
+
+const STYLE_TABS: ReadonlyArray<readonly [StyleFilter, string]> = [
+  ["all", "すべて"],
+  ["takeout", DINING_STYLE_LABELS.takeout],
+  ["eat_in", DINING_STYLE_LABELS.eat_in],
+];
+
+const styleKey = (dateId: string, productId: string) =>
+  `${dateId}:${productId}`;
 
 export default function ProductionPage() {
   const [eventDates, setEventDates] = useState<EventDate[]>([]);
@@ -19,6 +44,17 @@ export default function ProductionPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [viewMode, setViewMode] = useState<"single" | "all">("all");
+  /**
+   * テイクアウト・イートインで絞る。
+   *
+   * 「すべて」は従来どおり予約数と受付上限を出します。絞ったときは、その
+   * 区分の個数だけを出します。受付上限は両方に共通の枠なので、片方だけの
+   * 数と並べると「あと何個」が嘘になるため出しません。
+   */
+  const [styleFilter, setStyleFilter] = useState<StyleFilter>("all");
+  const [styleCounts, setStyleCounts] = useState<
+    Map<string, Record<DiningStyle, number>>
+  >(new Map());
 
   useEffect(() => {
     loadProductionPlan();
@@ -28,10 +64,20 @@ export default function ProductionPage() {
   async function loadProductionPlan() {
     setLoadError("");
     try {
-      const { dates, inventory } = await fetchJson<{
+      const { dates, inventory, by_style } = await fetchJson<{
         dates: EventDate[];
         inventory: InventoryWithProduct[];
+        by_style?: StyleCountRow[];
       }>("/api/admin/production");
+
+      const counts = new Map<string, Record<DiningStyle, number>>();
+      for (const row of by_style ?? []) {
+        const key = styleKey(row.event_date_id, row.product_id);
+        const entry = counts.get(key) ?? { takeout: 0, eat_in: 0 };
+        entry[row.dining_style] += row.quantity;
+        counts.set(key, entry);
+      }
+      setStyleCounts(counts);
 
       setEventDates(dates);
 
@@ -92,6 +138,59 @@ export default function ProductionPage() {
     return [...byId.values()].sort((a, b) => a.sort - b.sort);
   }, [allInventories]);
 
+  /** ある日・ある商品の、いま選んでいる区分の個数。「すべて」なら予約数。 */
+  const countFor = (dateId: string, productId: string): number => {
+    if (styleFilter === "all") {
+      return (
+        allInventories.get(dateId)?.find((i) => i.product.id === productId)
+          ?.reserved_quantity ?? 0
+      );
+    }
+    return styleCounts.get(styleKey(dateId, productId))?.[styleFilter] ?? 0;
+  };
+
+  const breakdownFor = (dateId: string, productId: string) =>
+    styleCounts.get(styleKey(dateId, productId)) ?? { takeout: 0, eat_in: 0 };
+
+  const filtered = styleFilter !== "all";
+  const styleLabel = filtered ? DINING_STYLE_LABELS[styleFilter] : "";
+
+  /*
+    絞ったときは、その区分で1個もない商品を外します。「テイクアウトの
+    商品だけ」を見たいときに 0 の行が並ぶと、目当ての行を探しにくいためです。
+    「すべて」では従来どおり全商品を出します（予約0でも枠の確認に要る）。
+  */
+  const overviewRows = filtered
+    ? productNames.filter((p) =>
+        eventDates.some((d) => countFor(d.id, p.id) > 0)
+      )
+    : productNames;
+
+  const singleRows = filtered
+    ? inventories.filter(
+        (inv) => inv.product && countFor(selectedDateId, inv.product.id) > 0
+      )
+    : inventories;
+
+  /** 切替ボタンに添える個数。全日程一覧なら全日程、日別詳細ならその日。 */
+  const tabTotal = (style: StyleFilter): number => {
+    const dateIds =
+      viewMode === "all" ? eventDates.map((d) => d.id) : [selectedDateId];
+    let total = 0;
+    for (const dateId of dateIds) {
+      for (const p of productNames) {
+        if (style === "all") {
+          total +=
+            allInventories.get(dateId)?.find((i) => i.product.id === p.id)
+              ?.reserved_quantity ?? 0;
+        } else {
+          total += breakdownFor(dateId, p.id)[style];
+        }
+      }
+    }
+    return total;
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -147,19 +246,58 @@ export default function ProductionPage() {
         </div>
       </div>
 
+      {/* テイクアウト・イートインの切替 */}
+      <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="提供区分で絞り込み">
+        {STYLE_TABS.map(([value, label]) => {
+          const active = styleFilter === value;
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setStyleFilter(value)}
+              aria-pressed={active}
+              className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                active
+                  ? "border-indigo-500 bg-indigo-600 text-white"
+                  : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              {label}
+              <span
+                className={`ml-1.5 text-xs ${
+                  active ? "text-indigo-100" : "text-slate-400"
+                }`}
+              >
+                {tabTotal(value)}個
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       {viewMode === "all" ? (
         /* ===== All Dates Overview ===== */
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="border-b border-slate-100 bg-slate-50 px-4 py-3 md:px-5">
-            <p className="text-xs text-slate-500">
-              ※ 受注生産のため、<span className="font-medium text-slate-700">予約数 ＝ 製造数</span>です。受付上限はその日に受け付けられる最大数を示します。
-            </p>
+            {filtered ? (
+              <p className="text-xs text-slate-500">
+                ※ <span className="font-medium text-slate-700">{styleLabel}</span>の予約数（＝製造数）だけを表示しています。受付上限はテイクアウト・イートイン共通の枠のため、ここには出しません。
+              </p>
+            ) : (
+              <p className="text-xs text-slate-500">
+                ※ 受注生産のため、<span className="font-medium text-slate-700">予約数 ＝ 製造数</span>です。受付上限はその日に受け付けられる最大数を示します。
+              </p>
+            )}
             <p className="mt-1 text-xs text-slate-400 md:hidden">
               表は横にスクロールできます。左端の商品名は固定されています。
             </p>
           </div>
           {allLoading ? (
             <div className="p-12 text-center text-slate-400">読み込み中...</div>
+          ) : filtered && overviewRows.length === 0 ? (
+            <div className="p-12 text-center text-slate-400">
+              {styleLabel}の予約はまだありません
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs md:text-sm">
@@ -182,7 +320,7 @@ export default function ProductionPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {productNames.map((p: { id: string; name: string }) => (
+                  {overviewRows.map((p: { id: string; name: string }) => (
                     <tr key={p.id} className="border-t border-slate-100 hover:bg-slate-50/50">
                       <td className="sticky left-0 z-10 bg-white px-3 py-3 font-medium text-slate-800 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.12)] md:px-4">
                         {p.name}
@@ -191,36 +329,38 @@ export default function ProductionPage() {
                         const inv = allInventories
                           .get(d.id)
                           ?.find((i) => i.product.id === p.id);
-                        const reserved = inv?.reserved_quantity ?? 0;
+                        const reserved = countFor(d.id, p.id);
                         const limit = inv?.production_quantity ?? 0;
                         return (
                           <td key={d.id} className="px-2 py-3 text-center md:px-3">
                             <div className={`text-sm font-bold md:text-base ${reserved > 0 ? "text-indigo-700" : "text-slate-300"}`}>
                               {reserved}
                             </div>
-                            <div className="text-xs text-slate-400 mt-0.5">
-                              / {limit}
-                            </div>
+                            {!filtered && (
+                              <div className="text-xs text-slate-400 mt-0.5">
+                                / {limit}
+                              </div>
+                            )}
                           </td>
                         );
                       })}
                       <td className="bg-indigo-50/50 px-2 py-3 text-center md:px-4">
                         <div className="font-bold text-indigo-700">
-                          {eventDates.reduce((sum, d) => {
-                            const inv = allInventories
-                              .get(d.id)
-                              ?.find((i) => i.product.id === p.id);
-                            return sum + (inv?.reserved_quantity ?? 0);
-                          }, 0)}
+                          {eventDates.reduce(
+                            (sum, d) => sum + countFor(d.id, p.id),
+                            0
+                          )}
                         </div>
-                        <div className="text-xs text-slate-400 mt-0.5">
-                          / {eventDates.reduce((sum, d) => {
-                            const inv = allInventories
-                              .get(d.id)
-                              ?.find((i) => i.product.id === p.id);
-                            return sum + (inv?.production_quantity ?? 0);
-                          }, 0)}
-                        </div>
+                        {!filtered && (
+                          <div className="text-xs text-slate-400 mt-0.5">
+                            / {eventDates.reduce((sum, d) => {
+                              const inv = allInventories
+                                .get(d.id)
+                                ?.find((i) => i.product.id === p.id);
+                              return sum + (inv?.production_quantity ?? 0);
+                            }, 0)}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -231,8 +371,8 @@ export default function ProductionPage() {
                     </td>
                     {eventDates.map((d) => {
                       const invs = allInventories.get(d.id) || [];
-                      const totalReserved = invs.reduce(
-                        (s, i) => s + i.reserved_quantity,
+                      const totalReserved = productNames.reduce(
+                        (s, p) => s + countFor(d.id, p.id),
                         0
                       );
                       const totalLimit = invs.reduce(
@@ -244,17 +384,24 @@ export default function ProductionPage() {
                           <div className={`${totalReserved > 0 ? "text-slate-800" : "text-slate-300"}`}>
                             {totalReserved}
                           </div>
-                          <div className="text-xs text-slate-400 mt-0.5">
-                            / {totalLimit}
-                          </div>
+                          {!filtered && (
+                            <div className="text-xs text-slate-400 mt-0.5">
+                              / {totalLimit}
+                            </div>
+                          )}
                         </td>
                       );
                     })}
                     <td className="bg-indigo-50/50 px-2 py-3 text-center text-indigo-700 md:px-4">
-                      {eventDates.reduce((sum, d) => {
-                        const invs = allInventories.get(d.id) || [];
-                        return sum + invs.reduce((s, i) => s + i.reserved_quantity, 0);
-                      }, 0)}
+                      {eventDates.reduce(
+                        (sum, d) =>
+                          sum +
+                          productNames.reduce(
+                            (s, p) => s + countFor(d.id, p.id),
+                            0
+                          ),
+                        0
+                      )}
                     </td>
                   </tr>
                 </tbody>
@@ -264,8 +411,14 @@ export default function ProductionPage() {
           {/* Legend */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 bg-slate-50 px-4 py-3 text-xs text-slate-500 md:px-5">
             <span>表の見方：</span>
-            <span><span className="font-bold text-indigo-700">太字</span> ＝ 予約数（＝製造数）</span>
-            <span><span className="text-slate-400">/ 数字</span> ＝ 受付上限</span>
+            {filtered ? (
+              <span><span className="font-bold text-indigo-700">太字</span> ＝ {styleLabel}の予約数（＝製造数）</span>
+            ) : (
+              <>
+                <span><span className="font-bold text-indigo-700">太字</span> ＝ 予約数（＝製造数）</span>
+                <span><span className="text-slate-400">/ 数字</span> ＝ 受付上限</span>
+              </>
+            )}
           </div>
         </div>
       ) : (
@@ -299,14 +452,57 @@ export default function ProductionPage() {
 
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
             <p className="text-sm text-amber-800">
-              受注生産のため、<span className="font-bold">予約数 ＝ その日の製造数</span>です。
+              {filtered ? (
+                <>
+                  <span className="font-bold">{styleLabel}</span>の予約数（＝製造数）だけを表示しています。
+                </>
+              ) : (
+                <>
+                  受注生産のため、<span className="font-bold">予約数 ＝ その日の製造数</span>です。
+                </>
+              )}
             </p>
           </div>
 
+          {filtered && singleRows.length === 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white p-12 text-center text-slate-400">
+              この日の{styleLabel}の予約はまだありません
+            </div>
+          )}
+
           {/* Production Detail Cards */}
           <div className="space-y-4">
-            {inventories.map((inv) => {
+            {singleRows.map((inv) => {
               if (!inv.product) return null;
+              const split = breakdownFor(selectedDateId, inv.product.id);
+
+              if (filtered) {
+                const count = split[styleFilter];
+                return (
+                  <div
+                    key={inv.id}
+                    className="flex items-start justify-between rounded-xl border border-slate-200 bg-white p-4 md:p-5"
+                  >
+                    <div>
+                      <h3 className="text-base font-bold text-slate-800 md:text-lg">
+                        {inv.product.name}
+                      </h3>
+                      <p className="text-sm text-slate-400 mt-0.5">
+                        {formatPrice(inv.product.price)} / 個
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-indigo-600 md:text-3xl">
+                        {count}
+                      </div>
+                      <div className="text-xs text-indigo-500">
+                        個 {styleLabel}
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
               const remaining = inv.production_quantity - inv.reserved_quantity;
 
               return (
@@ -329,6 +525,9 @@ export default function ProductionPage() {
                           {inv.reserved_quantity}
                         </div>
                         <div className="text-xs text-indigo-500">個 つくる</div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          テイクアウト {split.takeout}・イートイン {split.eat_in}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -423,7 +622,26 @@ export default function ProductionPage() {
           </div>
 
           {/* Daily Summary */}
-          {inventories.length > 0 && (
+          {filtered && singleRows.length > 0 && (
+            <div className="mt-6 rounded-xl border border-indigo-200 bg-indigo-50 p-4 md:p-5">
+              <h3 className="text-sm font-bold text-indigo-800 mb-3">
+                この日の{styleLabel}
+              </h3>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-indigo-700">
+                  {singleRows.reduce(
+                    (s, i) => s + countFor(selectedDateId, i.product.id),
+                    0
+                  )}
+                </div>
+                <div className="mt-1 text-[11px] leading-tight text-indigo-500 md:text-xs">
+                  製造数（{styleLabel}）
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!filtered && inventories.length > 0 && (
             <div className="mt-6 rounded-xl border border-indigo-200 bg-indigo-50 p-4 md:p-5">
               <h3 className="text-sm font-bold text-indigo-800 mb-3">
                 この日のサマリー
