@@ -20,7 +20,7 @@ SELECT
   o.source,
   o.created_at AT TIME ZONE 'Asia/Tokyo' AS 注文日時_JST,
   o.paid_at    AT TIME ZONE 'Asia/Tokyo' AS 決済日時_JST,
-  d.event_date AS 受取日,
+  d.pickup_date AS 受取日,
   o.square_payment_id
 FROM orders o
 JOIN event_dates d ON d.id = o.event_date_id
@@ -34,7 +34,7 @@ SELECT
   o.payment_status,
   o.total_amount,
   o.created_at AT TIME ZONE 'Asia/Tokyo' AS 注文日時_JST,
-  d.event_date AS 受取日
+  d.pickup_date AS 受取日
 FROM orders o
 JOIN event_dates d ON d.id = o.event_date_id
 WHERE o.customer_email = (
