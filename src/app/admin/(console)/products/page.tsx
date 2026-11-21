@@ -6,6 +6,7 @@ import { LoadErrorNotice } from "@/components/LoadErrorNotice";
 import { ExtraProductImages } from "@/components/ExtraProductImages";
 import { ProductImageField } from "@/components/ProductImageField";
 import { Toast } from "@/components/Toast";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { formatPrice } from "@/lib/utils";
 import type { Product } from "@/lib/types";
 
@@ -67,6 +68,13 @@ export default function ProductsPage() {
   useEffect(() => {
     load();
   }, []);
+
+  /**
+   * 「よろしいですか？」を画面の中に出します。`window.confirm` は端末の
+   * 設定次第で出ないまま「いいえ」が返り、押した人には無反応にしか
+   * 見えません。詳しくは `@/components/ConfirmDialog`。
+   */
+  const { confirm, dialog } = useConfirm();
 
   function notify(text: string, ok: boolean) {
     setMessage({ text, ok });
@@ -155,13 +163,12 @@ export default function ProductsPage() {
   }
 
   async function handleDelete(p: ProductWithCount) {
-    if (
-      !window.confirm(
-        `「${p.name}」を削除します。全受取日の受付枠設定も消えます。よろしいですか？`
-      )
-    ) {
-      return;
-    }
+    const ok = await confirm({
+      title: `「${p.name}」を削除します`,
+      confirmLabel: "削除する",
+      lines: ["全受取日の受付枠設定も消えます。"],
+    });
+    if (!ok) return;
     setBusyId(p.id);
     try {
       await fetchJson(`/api/admin/products/${p.id}`, { method: "DELETE" });
@@ -301,6 +308,7 @@ export default function ProductsPage() {
       </p>
 
       <Toast message={message} />
+      {dialog}
 
       {adding && (
         <div className="bg-white rounded-xl border border-indigo-300 p-5 mb-6">

@@ -352,6 +352,52 @@ test.describe("S-04 管理画面", () => {
     await expect(page.getByRole("heading", { name: "管理画面" })).toBeVisible();
   });
 
+  test("削除の確認も、ブラウザ任せにせず画面の中に出る", async ({ page }) => {
+    /*
+      注文一覧と同じ穴が、受取日と商品の削除にも開いていました。こちらは
+      出なければ何も消えない（安全側に倒れる）ので急ぎではありませんでしたが、
+      押しても無反応なのは同じです。
+
+      ここでもダイアログは承認しません。拾い手が無ければ Playwright が
+      自動で閉じるので、それが「出ない端末」そのものになります。
+    */
+    const dialogs: string[] = [];
+    page.on("dialog", (d) => {
+      dialogs.push(d.message());
+      void d.dismiss();
+    });
+
+    await loginAsAdmin(page);
+
+    // 受取日：やめれば残り、進めれば消えること。
+    await page.goto("/admin/settings");
+    const dateDelete = page.getByRole("button", { name: "削除", disabled: false });
+    const dates = await dateDelete.count();
+    expect(dates).toBeGreaterThan(0);
+
+    await dateDelete.first().click();
+    await page.getByRole("dialog").getByRole("button", { name: "やめる" }).click();
+    await expect(dateDelete).toHaveCount(dates);
+
+    await dateDelete.first().click();
+    await confirmInDialog(page, "削除する");
+    await expect(dateDelete).toHaveCount(dates - 1);
+
+    // 商品：確認が画面の中に出て、Esc でやめられること。
+    await page.goto("/admin/products");
+    const productDelete = page.getByRole("button", { name: "削除", disabled: false });
+    const products = await productDelete.count();
+    expect(products).toBeGreaterThan(0);
+
+    await productDelete.first().click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(productDelete).toHaveCount(products);
+
+    expect(dialogs, "ブラウザのダイアログに頼っている").toEqual([]);
+  });
+
   test("いま見ている画面のバージョンが、帯に出ている", async ({ page }) => {
     /*
       直したものが本番に出たかどうかを、画面を見るだけで確かめられること。

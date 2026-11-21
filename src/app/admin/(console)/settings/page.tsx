@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ApiError, fetchJson } from "@/lib/api-client";
 import { LoadErrorNotice } from "@/components/LoadErrorNotice";
 import { Toast } from "@/components/Toast";
+import { useConfirm } from "@/components/ConfirmDialog";
 import {
   formatDate,
   fromJstInputValue,
@@ -80,6 +81,13 @@ export default function SettingsPage() {
       minute: "2-digit",
     });
   }
+
+  /**
+   * 「よろしいですか？」を画面の中に出します。`window.confirm` は端末の
+   * 設定次第で出ないまま「いいえ」が返り、押した人には無反応にしか
+   * 見えません。詳しくは `@/components/ConfirmDialog`。
+   */
+  const { confirm, dialog } = useConfirm();
 
   function notify(text: string, ok: boolean) {
     setMessage({ text, ok });
@@ -245,13 +253,12 @@ export default function SettingsPage() {
   }
 
   async function handleDeleteDate(date: DateWithCount) {
-    if (
-      !window.confirm(
-        `${formatDate(date.pickup_date)} を削除します。この日の受付枠の設定も消えます。よろしいですか？`
-      )
-    ) {
-      return;
-    }
+    const ok = await confirm({
+      title: `${formatDate(date.pickup_date)} を削除します`,
+      confirmLabel: "削除する",
+      lines: ["この日の受付枠の設定も消えます。"],
+    });
+    if (!ok) return;
     setBusyDateId(date.id);
     try {
       await fetchJson(`/api/admin/event/dates/${date.id}`, {
@@ -300,6 +307,7 @@ export default function SettingsPage() {
       </p>
 
       <Toast message={message} />
+      {dialog}
 
       {/* Basics */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">

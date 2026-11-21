@@ -74,10 +74,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen bg-slate-50 flex">
       {/* Sidebar */}
+      {/*
+        画面に貼り付けます。中身が長い画面だと、帯ごと上へ流れていって
+        しまい、移動も、いま見ている版も、一番下まで送らないと見えません。
+      */}
       <aside
         className={`${
           collapsed ? "w-16" : "w-60"
-        } bg-indigo-900 text-white flex-shrink-0 hidden md:flex flex-col transition-[width] duration-200`}
+        } sticky top-0 h-screen self-start bg-indigo-900 text-white flex-shrink-0 hidden md:flex flex-col transition-[width] duration-200`}
       >
         <div
           className={`flex items-center border-b border-indigo-800 ${
@@ -116,7 +120,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </svg>
           </button>
         </div>
-        <nav className="flex-1 py-4">
+        <nav className="flex-1 overflow-y-auto py-4">
           {navItems.map((item) => {
             const isActive =
               item.href === "/admin"
@@ -178,7 +182,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Mobile header */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* 入る項目が増えても横にはみ出さないよう、折り返す。 */}
-        <header className="md:hidden flex flex-wrap items-center justify-between gap-y-2 bg-indigo-900 px-4 py-3 text-white">
+        <header className="md:hidden sticky top-0 z-30 flex flex-wrap items-center justify-between gap-y-2 bg-indigo-900 px-4 py-3 text-white">
           {/*
             狭い画面には左の帯が無いので、版の表示もここに置きます。置かないと、
             スマホから見ている人だけ反映を確かめられません。幅を取らないよう
