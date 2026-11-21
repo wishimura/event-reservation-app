@@ -21,7 +21,9 @@ export function Toast({
     <div
       role="status"
       aria-live="polite"
-      className={`fixed inset-x-4 bottom-4 z-50 rounded-lg px-4 py-3 text-sm shadow-lg md:inset-x-auto md:bottom-auto md:right-6 md:top-6 md:max-w-sm ${
+      // 改行を残すのは、在庫が足りないときの「どの商品がいくつ」のように、
+      // 複数行で返ってくる理由をそのまま出すためです。
+      className={`fixed inset-x-4 bottom-4 z-50 whitespace-pre-line rounded-lg px-4 py-3 text-sm shadow-lg md:inset-x-auto md:bottom-auto md:right-6 md:top-6 md:max-w-sm ${
         message.ok
           ? "bg-emerald-600 text-white"
           : "bg-red-600 text-white"

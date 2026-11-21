@@ -4,6 +4,7 @@ import {
   e2eDb,
   expectNoHorizontalOverflow,
   FIXTURE,
+  confirmInDialog,
   loginAsAdmin,
   reserve,
   resetFixture,
@@ -186,8 +187,8 @@ test.describe("S-04 管理画面", () => {
     const row = rowContaining(page, placed.orderNumber);
     await row.click();
 
-    page.once("dialog", (d) => d.accept());
     await page.getByRole("button", { name: "この注文をキャンセル" }).click();
+    await confirmInDialog(page, "キャンセルする");
 
     /*
       キャンセルできたことは、取り消すボタンが出たことで分かります。
@@ -196,8 +197,8 @@ test.describe("S-04 管理画面", () => {
     const restore = page.getByRole("button", { name: "キャンセルを取り消す" });
     await expect(restore).toBeVisible();
 
-    page.once("dialog", (d) => d.accept());
     await restore.click();
+    await confirmInDialog(page, "キャンセルを取り消す");
 
     // 戻ったら、またキャンセルできる状態に戻っていること。
     await expect(
@@ -210,6 +211,79 @@ test.describe("S-04 管理画面", () => {
     await expect(page.locator("main")).toContainText(
       new RegExp(`1\\s*/\\s*(上限\\s*)?${FIXTURE.plenty.capacity}`)
     );
+  });
+
+  test("ブラウザのダイアログが出ない端末でも、キャンセルできる", async ({ page }) => {
+    /*
+      お店から「キャンセルボタンが押せない」と来た日の再現です。
+
+      原因はボタンではなく `window.confirm` でした。アプリ内ブラウザや
+      「このページではダイアログを表示しない」を押した端末では出ないまま
+      false が返り、`if (!ok) return;` で黙って終わります。注文はまったく
+      手つかずのまま、押した人には無反応にしか見えませんでした。
+
+      このテストは `page.on("dialog", ...)` を**わざと書きません**。
+      Playwright は拾い手のないダイアログを自動で閉じるので、ここを書かない
+      ことが「ダイアログの出ない端末」そのものになります。以前の書き方
+      （毎回 accept する）では、この不具合を永久に踏めませんでした。
+    */
+    const dialogs: string[] = [];
+    page.on("dialog", (d) => {
+      dialogs.push(d.message());
+      void d.dismiss();
+    });
+
+    const placed = await reserve(page, {
+      product: FIXTURE.plenty.name,
+      name: "ダイアログ 無子",
+      diningStyle: "takeout",
+      eventDateId: data.today.id,
+      email: "nodialog@example.com",
+    });
+
+    await loginAsAdmin(page);
+    await page.goto("/admin/orders");
+    await rowContaining(page, placed.orderNumber).click();
+    await page.getByRole("button", { name: "この注文をキャンセル" }).click();
+
+    // 確認はブラウザ任せではなく、画面の中に出ること。
+    await confirmInDialog(page, "キャンセルする");
+
+    await expect(rowContaining(page, placed.orderNumber)).toContainText(
+      "キャンセル"
+    );
+    expect(dialogs, "ブラウザのダイアログに頼っている").toEqual([]);
+  });
+
+  test("やめる方を選んだら、注文はそのまま残る", async ({ page }) => {
+    /*
+      取り消しのきかない操作なので、閉じ方が「実行」に倒れていないことまで
+      見ます。背景を押したときも Esc のときも、やめる側に倒します。
+    */
+    const placed = await reserve(page, {
+      product: FIXTURE.plenty.name,
+      name: "やめる 太郎",
+      diningStyle: "takeout",
+      eventDateId: data.today.id,
+      email: "keep@example.com",
+    });
+
+    await loginAsAdmin(page);
+    await page.goto("/admin/orders");
+    await rowContaining(page, placed.orderNumber).click();
+
+    await page.getByRole("button", { name: "この注文をキャンセル" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "やめる" }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "この注文をキャンセル" }).click();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    await expect(rowContaining(page, placed.orderNumber)).toContainText("確定");
+    await expect(
+      page.getByRole("button", { name: "キャンセルを取り消す" })
+    ).toHaveCount(0);
   });
 
   test("CSV に、納める消費税の根拠が入っている", async ({ page }) => {

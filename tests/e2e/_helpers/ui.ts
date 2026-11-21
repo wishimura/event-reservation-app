@@ -170,3 +170,22 @@ export async function reserve(page: Page, options: ReserveOptions): Promise<Plac
 
   return { orderNumber, email, phone };
 }
+
+/**
+ * 画面の中に出る確認パネルで「実行する」側を押す。
+ *
+ * ブラウザのダイアログ（`window.confirm`）をやめた経緯は
+ * `src/components/ConfirmDialog.tsx` に書いてあります。テスト側も
+ * `page.on("dialog", ...)` で承認するのをやめました。あれは**本物の画面で
+ * ダイアログが出なくても素通りする**ので、お店で起きた不具合
+ * （押しても無反応）をテストが一度も踏めませんでした。
+ *
+ * パネルの中に絞って探します。実行する側の文字は、押す前のボタンと同じに
+ * なることがあるためです（「「決済済み」にする」など）。
+ */
+export async function confirmInDialog(page: Page, label: string) {
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: label }).click();
+  await expect(dialog).toHaveCount(0);
+}

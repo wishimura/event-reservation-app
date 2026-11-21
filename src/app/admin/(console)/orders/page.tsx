@@ -4,6 +4,7 @@ import { Fragment, useEffect, useState } from "react";
 import { ApiError, fetchJson } from "@/lib/api-client";
 import { LoadErrorNotice } from "@/components/LoadErrorNotice";
 import { Toast } from "@/components/Toast";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { WalkInOrderForm } from "@/components/WalkInOrderForm";
 import { formatDate, formatPrice } from "@/lib/utils";
 import type { Order, OrderItem, EventDate } from "@/lib/types";
@@ -75,6 +76,27 @@ export default function OrdersPage() {
    */
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
+  /**
+   * 「よろしいですか？」を画面の中に出します。
+   *
+   * `window.confirm` だと、端末の設定次第で出ないまま「いいえ」が返り、
+   * 押した人には無反応にしか見えません（2026-11-21 にお店で実際に起きました）。
+   * 詳しくは `@/components/ConfirmDialog`。
+   */
+  const { confirm, dialog } = useConfirm();
+
+  /**
+   * 結果を知らせる。`alert` を置き換えたもの。
+   *
+   * 失敗したときに `alert` を使っていたので、ダイアログが出ない端末では
+   * エラーの理由まで消えていました。何が起きても無反応に見える、という
+   * 一番たちの悪い状態です。画面の中に出せば必ず残ります。
+   */
+  function notify(text: string, ok: boolean) {
+    setMessage({ text, ok });
+    if (ok) setTimeout(() => setMessage(null), 4000);
+  }
+
   useEffect(() => {
     loadOrders();
   }, []);
@@ -136,9 +158,11 @@ export default function OrdersPage() {
   }
 
   async function handleCancel(order: OrderWithItems) {
-    const ok = window.confirm(
-      [
-        `${order.customer_name} 様の注文 ${order.order_number} をキャンセルします。`,
+    const ok = await confirm({
+      title: `${order.customer_name} 様の注文をキャンセルします`,
+      confirmLabel: "キャンセルする",
+      lines: [
+        order.order_number,
         "",
         "押さえていた在庫は受付枠に戻ります。",
         ...(order.square_payment_id
@@ -151,10 +175,8 @@ export default function OrdersPage() {
         "",
         "押し間違えたときは、このあと「キャンセルを取り消す」で戻せます。",
         "（ただし、他の方のご予約が入って在庫が無くなっていると戻せません）",
-        "",
-        "よろしいですか？",
-      ].join("\n")
-    );
+      ],
+    });
     if (!ok) return;
 
     setCancellingId(order.id);
@@ -165,8 +187,9 @@ export default function OrdersPage() {
       await loadOrders();
     } catch (err) {
       console.error("Cancel error:", err);
-      alert(
-        err instanceof ApiError ? err.message : "キャンセル処理に失敗しました"
+      notify(
+        err instanceof ApiError ? err.message : "キャンセル処理に失敗しました",
+        false
       );
     } finally {
       setCancellingId(null);
@@ -174,9 +197,12 @@ export default function OrdersPage() {
   }
 
   async function handleRestore(order: OrderWithItems) {
-    const ok = window.confirm(
-      [
-        `${order.customer_name} 様の注文 ${order.order_number} のキャンセルを取り消します。`,
+    const ok = await confirm({
+      title: `${order.customer_name} 様の注文のキャンセルを取り消します`,
+      confirmLabel: "キャンセルを取り消す",
+      tone: "normal",
+      lines: [
+        order.order_number,
         "",
         "受付枠から在庫を取り直します。",
         "他の方のご予約で埋まっていた場合は戻せません（その場合は何も変わりません）。",
@@ -188,10 +214,8 @@ export default function OrdersPage() {
               "　 Square 側と食い違わないかご確認ください。",
             ]
           : []),
-        "",
-        "よろしいですか？",
-      ].join("\n")
-    );
+      ],
+    });
     if (!ok) return;
 
     setRestoringId(order.id);
@@ -208,13 +232,14 @@ export default function OrdersPage() {
       */
       const details =
         err instanceof ApiError && Array.isArray(err.details) ? err.details : [];
-      alert(
+      notify(
         [
           err instanceof ApiError
             ? err.message
             : "キャンセルの取り消しに失敗しました",
           ...details,
-        ].join("\n")
+        ].join("\n"),
+        false
       );
     } finally {
       setRestoringId(null);
@@ -231,17 +256,22 @@ export default function OrdersPage() {
     order: OrderWithItems,
     next: "paid" | "pending"
   ) {
-    const ok = window.confirm(
-      next === "paid"
-        ? `${order.order_number} を「決済済み」にします。よろしいですか？`
-        : [
-            `${order.order_number} を「未決済」に戻します。`,
-            "",
-            "※ お金は動きません。実際に返金する場合は別途お願いします。",
-            "",
-            "よろしいですか？",
-          ].join("\n")
-    );
+    const ok = await confirm({
+      title:
+        next === "paid"
+          ? "「決済済み」にします"
+          : "「未決済」に戻します",
+      confirmLabel: next === "paid" ? "「決済済み」にする" : "「未決済」に戻す",
+      tone: "normal",
+      lines:
+        next === "paid"
+          ? [order.order_number]
+          : [
+              order.order_number,
+              "",
+              "※ お金は動きません。実際に返金する場合は別途お願いします。",
+            ],
+    });
     if (!ok) return;
 
     setPayingId(order.id);
@@ -253,10 +283,11 @@ export default function OrdersPage() {
       await loadOrders();
     } catch (err) {
       console.error("Payment status error:", err);
-      alert(
+      notify(
         err instanceof ApiError
           ? err.message
-          : "お支払い状況の変更に失敗しました"
+          : "お支払い状況の変更に失敗しました",
+        false
       );
     } finally {
       setPayingId(null);
@@ -275,14 +306,12 @@ export default function OrdersPage() {
    * どれがまだ終わっていないかの目印になります。
    */
   async function handleResendMail(order: OrderWithItems) {
-    const ok = window.confirm(
-      [
-        `${order.customer_name} 様（${order.customer_email}）に`,
-        "確認メールをもう一度送ります。",
-        "",
-        "よろしいですか？",
-      ].join("\n")
-    );
+    const ok = await confirm({
+      title: "確認メールをもう一度送ります",
+      confirmLabel: "再送する",
+      tone: "normal",
+      lines: [`${order.customer_name} 様（${order.customer_email}）`],
+    });
     if (!ok) return;
 
     setResendingId(order.id);
@@ -290,14 +319,15 @@ export default function OrdersPage() {
       await fetchJson(`/api/admin/orders/${order.id}/resend-mail`, {
         method: "POST",
       });
-      setMessage({ text: "確認メールを再送しました", ok: true });
+      notify("確認メールを再送しました", true);
       await loadOrders();
     } catch (err) {
       console.error("Resend mail error:", err);
-      alert(
+      notify(
         err instanceof ApiError
           ? err.message
-          : "確認メールの再送に失敗しました"
+          : "確認メールの再送に失敗しました",
+        false
       );
     } finally {
       setResendingId(null);
@@ -322,7 +352,7 @@ export default function OrdersPage() {
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error("CSV download error:", err);
-      alert("CSVダウンロードに失敗しました");
+      notify("CSVダウンロードに失敗しました", false);
     } finally {
       setCsvDownloading(false);
     }
@@ -368,6 +398,7 @@ export default function OrdersPage() {
       </div>
 
       <Toast message={message} />
+      {dialog}
 
       <WalkInOrderForm
         dates={eventDates}

@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
   closeE2eDb,
+  confirmInDialog,
   FIXTURE,
   loginAsAdmin,
   resetFixture,
@@ -83,8 +84,8 @@ test.describe("S-06 店頭販売", () => {
 
     // あとから直せること。
     await row.click();
-    page.once("dialog", (d) => d.accept());
     await page.getByRole("button", { name: "「決済済み」にする" }).click();
+    await confirmInDialog(page, "「決済済み」にする");
 
     await expect(rowContaining(page, "店頭のお客様")).toContainText("決済済み");
   });

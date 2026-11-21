@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
   closeE2eDb,
+  confirmInDialog,
   e2eDb,
   FIXTURE,
   loginAsAdmin,
@@ -33,8 +34,8 @@ async function cancelOrder(page: Page, orderNumber: string) {
   await expect(row).toBeVisible();
   await row.click();
 
-  page.on("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "この注文をキャンセル" }).click();
+  await confirmInDialog(page, "キャンセルする");
   await expect(rowContaining(page, orderNumber)).toContainText("キャンセル");
 }
 
