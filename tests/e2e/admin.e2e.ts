@@ -372,8 +372,9 @@ test.describe("S-04 管理画面", () => {
     // 受取日：やめれば残り、進めれば消えること。
     await page.goto("/admin/settings");
     const dateDelete = page.getByRole("button", { name: "削除", disabled: false });
+    // count() は待ってくれないので、出そろうのを先に待つ。
+    await expect(dateDelete.first()).toBeVisible();
     const dates = await dateDelete.count();
-    expect(dates).toBeGreaterThan(0);
 
     await dateDelete.first().click();
     await page.getByRole("dialog").getByRole("button", { name: "やめる" }).click();
@@ -386,8 +387,8 @@ test.describe("S-04 管理画面", () => {
     // 商品：確認が画面の中に出て、Esc でやめられること。
     await page.goto("/admin/products");
     const productDelete = page.getByRole("button", { name: "削除", disabled: false });
+    await expect(productDelete.first()).toBeVisible();
     const products = await productDelete.count();
-    expect(products).toBeGreaterThan(0);
 
     await productDelete.first().click();
     await expect(page.getByRole("dialog")).toBeVisible();
