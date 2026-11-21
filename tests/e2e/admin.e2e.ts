@@ -352,6 +352,35 @@ test.describe("S-04 管理画面", () => {
     await expect(page.getByRole("heading", { name: "管理画面" })).toBeVisible();
   });
 
+  test("いま見ている画面のバージョンが、帯に出ている", async ({ page }) => {
+    /*
+      直したものが本番に出たかどうかを、画面を見るだけで確かめられること。
+      これが無いと「まだ反映されていない」と「反映済みだが直っていない」を
+      区別できず、確かめる手段がもう一度試すことしかなくなります。
+
+      中身の文字そのものは見ません。ビルドのたびに変わる値なので、照合すると
+      テストの方が毎回落ちます。見るのは「空でないこと」と「畳んでも残ること」。
+    */
+    await loginAsAdmin(page);
+    await page.goto("/admin/orders");
+
+    /*
+      広い画面は左の帯に、狭い画面は上の帯に出ます。どちらの作りも常に
+      置いてあるので、「見えているものが1つだけある」ことで確かめます。
+    */
+    const stamp = page.locator('[data-testid="build-stamp"]:visible');
+    await expect(stamp).toHaveCount(1);
+    await expect(stamp).not.toBeEmpty();
+
+    // 左の帯がある画面では、畳んでも分からなくならないこと。
+    const collapse = page.getByRole("button", { name: "メニューを閉じる" });
+    if (await collapse.isVisible()) {
+      await collapse.click();
+      await expect(stamp).toHaveCount(1);
+      await expect(stamp).not.toBeEmpty();
+    }
+  });
+
   test("メールが届かなかった注文に印が付き、届いたら消える", async ({ page }) => {
     /*
       配信事業者の1日の上限に当たると、予約は通るのに確認メールだけが

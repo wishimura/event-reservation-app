@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Icon, type IconName } from "@/components/Icon";
+import { BuildStamp } from "@/components/BuildStamp";
 
 /**
  * 左の帯を畳んだかどうか。
@@ -164,6 +165,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           >
             {collapsed ? <span aria-label="ログアウト">出</span> : "ログアウト"}
           </button>
+          {/*
+            いま見ている画面がどのコミットのものか。直したものが本番に出たか
+            どうかを、画面を見るだけで確かめられるようにしておきます。
+          */}
+          <div className={collapsed ? "" : "pt-1"}>
+            <BuildStamp compact={collapsed} />
+          </div>
         </div>
       </aside>
 
@@ -171,7 +179,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <div className="flex-1 flex flex-col min-w-0">
         {/* 入る項目が増えても横にはみ出さないよう、折り返す。 */}
         <header className="md:hidden flex flex-wrap items-center justify-between gap-y-2 bg-indigo-900 px-4 py-3 text-white">
-          <h1 className="text-base font-bold">管理画面</h1>
+          {/*
+            狭い画面には左の帯が無いので、版の表示もここに置きます。置かないと、
+            スマホから見ている人だけ反映を確かめられません。幅を取らないよう
+            コミットの印だけにします。
+          */}
+          <div className="min-w-0">
+            <h1 className="text-base font-bold">管理画面</h1>
+            <BuildStamp compact />
+          </div>
           {/*
             項目が増えても横にはみ出さないよう、ここも折り返す。
             調査ログを足したときに、アイコン1つぶんで溢れました。
